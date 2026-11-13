@@ -14,19 +14,19 @@ import (
 func TestFixTemplateVariables(t *testing.T) {
 	t.Run("empty slice gets the default", func(t *testing.T) {
 		got := []string(nil)
-		require.NoError(t, fixTemplateVariables(&got, ""))
+		require.NoError(t, fixTemplateVariables(&got, "", fromCommandLine))
 		assert.Equal(t, []string{defaultTemplatesVariableName}, got)
 	})
 
 	t.Run("default slice with deprecated flag adopts the deprecated value", func(t *testing.T) {
 		got := []string{defaultTemplatesVariableName}
-		require.NoError(t, fixTemplateVariables(&got, "myTemplates"))
+		require.NoError(t, fixTemplateVariables(&got, "myTemplates", fromCommandLine))
 		assert.Equal(t, []string{"myTemplates"}, got)
 	})
 
 	t.Run("deprecated flag combined with non-default new flag is rejected", func(t *testing.T) {
 		got := []string{"adminTemplates", "publicTemplates"}
-		err := fixTemplateVariables(&got, "legacyTemplates")
+		err := fixTemplateVariables(&got, "legacyTemplates", fromCommandLine)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), deprecatedTemplatesVariable)
 		assert.Contains(t, err.Error(), useTemplatesVariable)
@@ -34,13 +34,13 @@ func TestFixTemplateVariables(t *testing.T) {
 
 	t.Run("explicit user values pass through", func(t *testing.T) {
 		got := []string{"adminTemplates", "publicTemplates"}
-		require.NoError(t, fixTemplateVariables(&got, ""))
+		require.NoError(t, fixTemplateVariables(&got, "", fromCommandLine))
 		assert.Equal(t, []string{"adminTemplates", "publicTemplates"}, got)
 	})
 
 	t.Run("duplicate user values are rejected", func(t *testing.T) {
 		got := []string{"adminTemplates", "adminTemplates"}
-		err := fixTemplateVariables(&got, "")
+		err := fixTemplateVariables(&got, "", fromCommandLine)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "duplicate template variable")
 		assert.Contains(t, err.Error(), "adminTemplates")
@@ -48,7 +48,7 @@ func TestFixTemplateVariables(t *testing.T) {
 
 	t.Run("empty user value is rejected", func(t *testing.T) {
 		got := []string{""}
-		err := fixTemplateVariables(&got, "")
+		err := fixTemplateVariables(&got, "", fromCommandLine)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), useTemplatesVariable)
 		assert.Contains(t, err.Error(), "must not be empty")

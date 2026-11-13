@@ -135,7 +135,7 @@ type generateEnv struct {
 // with, so every source of a configuration meets the same rules. g is what the
 // source gave, because an empty value is a mistake only where it was given.
 func finalizeGenerate(config *generate.RoutesFileConfiguration, g givenSettings, from settingSource, env generateEnv) error {
-	if err := fixTemplateVariables(&config.TemplatesVariables, env.DeprecatedTemplatesVar); err != nil {
+	if err := fixTemplateVariables(&config.TemplatesVariables, env.DeprecatedTemplatesVar, from); err != nil {
 		return err
 	}
 	config.SilenceHTTPResponseWarning, _ = strconv.ParseBool(env.GetEnv(envSilenceHTTPResponseWarning))

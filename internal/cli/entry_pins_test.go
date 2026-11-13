@@ -24,12 +24,12 @@ func TestGenerateReportsTheFirstErrorOfAFile(t *testing.T) {
 		{
 			name: "two entries",
 			file: `{"packages": {"example.com/m/b": {"output_routes_func": "1x"}, "example.com/m/a": {"output_htmx": true, "output_datastar": true}}}`,
-			want: `packages["example.com/m/a"]: --output-htmx and --output-datastar are mutually exclusive; a package targets one frontend library (to mix frontends, generate separate packages that share a mux)`,
+			want: `packages["example.com/m/a"]: output_htmx and output_datastar are mutually exclusive; a package targets one frontend library (to mix frontends, generate separate packages that share a mux)`,
 		},
 		{
 			name: "one entry",
 			file: `{"packages": {"example.com/m/a": {"output_routes_func": "1x", "output_htmx": true, "output_datastar": true, "output_receiver_interface": ""}}}`,
-			want: `packages["example.com/m/a"]: --output-receiver-interface value must not be empty`,
+			want: `packages["example.com/m/a"]: output_receiver_interface value must not be empty`,
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {

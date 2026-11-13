@@ -110,7 +110,7 @@ The documentation for this version is in the binary:
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cmd.SilenceUsage = true
-			if err := fixTemplateVariables(&rootCommandConfig.TemplatesVariables, deprecatedTemplatesVar); err != nil {
+			if err := fixTemplateVariables(&rootCommandConfig.TemplatesVariables, deprecatedTemplatesVar, fromCommandLine); err != nil {
 				return err
 			}
 			if err := checkFormat(cmd); err != nil {

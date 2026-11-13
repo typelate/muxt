@@ -26,7 +26,7 @@ func checkCommand(workingDirectory *string, getEnv func(string) string, run func
 		Short:   "Check templates for errors",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cmd.SilenceUsage = true
-			if err := fixTemplateVariables(&config.TemplatesVariables, deprecatedTemplatesVar); err != nil {
+			if err := fixTemplateVariables(&config.TemplatesVariables, deprecatedTemplatesVar, fromCommandLine); err != nil {
 				return err
 			}
 			if err := checkTemplatesVariables(config.TemplatesVariables); err != nil {
@@ -125,7 +125,7 @@ func listTemplateCallersCommand(wd *string, getEnv func(string) string, run func
 		Short:   "List template callers",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cmd.SilenceUsage = true
-			if err := fixTemplateVariables(&config.TemplatesVariables, deprecatedTemplatesVar); err != nil {
+			if err := fixTemplateVariables(&config.TemplatesVariables, deprecatedTemplatesVar, fromCommandLine); err != nil {
 				return err
 			}
 			if err := checkFormat(cmd); err != nil {
@@ -173,7 +173,7 @@ func listTemplateCallsCommand(wd *string, getEnv func(string) string, run func(*
 		Short:   "List template calls",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cmd.SilenceUsage = true
-			if err := fixTemplateVariables(&config.TemplatesVariables, deprecatedTemplatesVar); err != nil {
+			if err := fixTemplateVariables(&config.TemplatesVariables, deprecatedTemplatesVar, fromCommandLine); err != nil {
 				return err
 			}
 			if err := checkFormat(cmd); err != nil {

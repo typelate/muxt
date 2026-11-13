@@ -431,14 +431,14 @@ func TestGenerateRejectsMuxtJSONEntryFlagConflict(t *testing.T) {
 
 	called, err := generateFailureOf(t, dir)
 
-	const flagMessage = "--output-htmx and --output-datastar are mutually exclusive; a package targets one frontend library (to mix frontends, generate separate packages that share a mux)"
+	const keyMessage = "output_htmx and output_datastar are mutually exclusive; a package targets one frontend library (to mix frontends, generate separate packages that share a mux)"
 	var invalid *composite.InvalidEntryError
 	require.ErrorAs(t, err, &invalid, "error %v", err)
 	path := filepath.Join(dir, composite.FileName)
 	assert.Equal(t, path, invalid.Path, "path")
 	assert.Equal(t, `packages["example.com/m"]`, invalid.Where, "where")
-	assert.EqualError(t, invalid.Err, flagMessage, "flag error")
-	assert.Equal(t, path+`: packages["example.com/m"]: `+flagMessage, err.Error(), "message")
+	assert.EqualError(t, invalid.Err, keyMessage, "rule error")
+	assert.Equal(t, path+`: packages["example.com/m"]: `+keyMessage, err.Error(), "message")
 	assert.False(t, called, "generate runner called")
 }
 
@@ -681,13 +681,13 @@ func TestGenerateEveryMuxtJSONEntryValidatesEachEntry(t *testing.T) {
 
 	called, err := generateFailureOf(t, dir)
 
-	const flagMessage = "--output-htmx and --output-datastar are mutually exclusive; a package targets one frontend library (to mix frontends, generate separate packages that share a mux)"
+	const keyMessage = "output_htmx and output_datastar are mutually exclusive; a package targets one frontend library (to mix frontends, generate separate packages that share a mux)"
 	var invalid *composite.InvalidEntryError
 	require.ErrorAs(t, err, &invalid, "error %v", err)
 	path := filepath.Join(dir, composite.FileName)
 	assert.Equal(t, path, invalid.Path, "path")
 	assert.Equal(t, `packages["example.com/m/workspace"]`, invalid.Where, "where")
-	assert.Equal(t, path+`: packages["example.com/m/workspace"]: `+flagMessage, err.Error(), "message")
+	assert.Equal(t, path+`: packages["example.com/m/workspace"]: `+keyMessage, err.Error(), "message")
 	assert.False(t, called, "generate runner called")
 }
 

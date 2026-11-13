@@ -29,7 +29,7 @@ func markDeprecated(flagSet *pflag.FlagSet, name, replacement string) {
 	}
 }
 
-func fixTemplateVariables(templateVariables *[]string, deprecatedTemplatesVar string) error {
+func fixTemplateVariables(templateVariables *[]string, deprecatedTemplatesVar string, from settingSource) error {
 	if deprecatedTemplatesVar != "" {
 		if !isDefaultTemplatesVariable(templateVariables) {
 			return fmt.Errorf("deprecated flag %s not permitted along with %s", deprecatedTemplatesVariable, useTemplatesVariable)
@@ -43,7 +43,7 @@ func fixTemplateVariables(templateVariables *[]string, deprecatedTemplatesVar st
 	}
 	for _, tv := range *templateVariables {
 		if tv == "" {
-			return fmt.Errorf("--%s value must not be empty", useTemplatesVariable)
+			return &RuleError{Settings: []string{from.flag(useTemplatesVariable)}, Rule: emptyRule}
 		}
 	}
 	return findDuplicateVariables(*templateVariables)

@@ -152,7 +152,7 @@ func selectJobs(spec jobSpec, dir string, flags *pflag.FlagSet, getEnv func(stri
 			return selection{}, err
 		}
 		entry, _ := f.Resolve(key)
-		config, err := entryConfiguration(entry, fromCommandLine, generateEnv{Dir: entryDir, GetEnv: getEnv, Version: version})
+		config, err := entryConfiguration(entry, fromMuxtJSON, generateEnv{Dir: entryDir, GetEnv: getEnv, Version: version})
 		if err != nil {
 			return selection{}, &composite.InvalidEntryError{Path: f.Name, Where: fmt.Sprintf("packages[%q]", key), Err: err}
 		}

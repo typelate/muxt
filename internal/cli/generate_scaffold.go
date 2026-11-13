@@ -74,7 +74,7 @@ func scaffoldPackage(out io.Writer, wd, name string, flags *pflag.FlagSet, confi
 	if _, exists := f.Packages[key]; exists {
 		return &composite.ExistsError{Path: f.Name, Where: fmt.Sprintf("packages[%q]", key)}
 	}
-	if err := fixTemplateVariables(&config.TemplatesVariables, deprecatedTemplatesVar); err != nil {
+	if err := fixTemplateVariables(&config.TemplatesVariables, deprecatedTemplatesVar, fromCommandLine); err != nil {
 		return err
 	}
 	settings := generateSettings(config)

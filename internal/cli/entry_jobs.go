@@ -104,8 +104,6 @@ func entryConfiguration(e composite.Entry, from settingSource, env generateEnv) 
 	if err := decode(settings, e); err != nil {
 		return generate.RoutesFileConfiguration{}, err
 	}
-	// The entry meets the command-line rules, and their text, until a file's
-	// rule errors name the key instead.
 	if err := finalizeGenerate(&config, givenKeys(e, settings), from, env); err != nil {
 		return generate.RoutesFileConfiguration{}, err
 	}

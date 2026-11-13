@@ -32,6 +32,6 @@ Only a flagless `muxt generate` needs an entry. In a directory with none, the ot
 
 `muxt generate config` creates the file, `muxt generate package NAME` adds an entry, `muxt generate def NAME` adds a route template.
 
-Errors name the file and the fix: `packages key "workspace" is not an import path; write "example.com/m/workspace"`, `key "use-receiver-type" uses dashes; write "use_receiver_type"`, `unknown key "KEY"; did you mean "KNOWN"?`, `key "output_htmx" takes a JSON boolean`, `no packages entry "KEY"; add one to generate this directory`.
+Errors name the file and the fix: `packages key "workspace" is not an import path; write "example.com/m/workspace"`, `key "use-receiver-type" uses dashes; write "use_receiver_type"`, `unknown key "KEY"; did you mean "KNOWN"?`, `key "output_htmx" takes a JSON boolean`, `packages["KEY"]: output_routes_func value must not be empty`, `no packages entry "KEY"; add one to generate this directory`.
 
 Steps: [move generate flags](../how-to/muxt-json.md).
