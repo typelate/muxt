@@ -109,16 +109,22 @@ func newDefinitionSet(ordered []Definition) definitionSet {
 // applies the rule newDefinitionSet does, so Kept is the definition the set
 // holds: a definition with an empty body leaves the earlier one in place and
 // replaces nothing. Two definitions both in the analyzed package are not an
-// override: the package wrote both.
+// override: the package wrote both. When the package then defines a name
+// again after an override, that override's Kept moves to the later
+// definition, so each name is listed once and Kept is what renders.
 func overridesIn(ordered []Definition) []muxtsource.Override {
 	var overrides []muxtsource.Override
 	kept := make(map[string]Definition, len(ordered))
+	listed := make(map[string]int, len(ordered))
 	for _, def := range ordered {
 		prev, ok := kept[def.Name]
 		if ok && !displaces(prev, def) {
 			continue
 		}
-		if ok && (prev.Package != "" || def.Package != "") {
+		if i, isListed := listed[def.Name]; ok && isListed && prev.Package == "" && def.Package == "" {
+			overrides[i].Kept = muxtsource.Site{Package: def.Package, Position: def.Define.Position}
+		} else if ok && (prev.Package != "" || def.Package != "") {
+			listed[def.Name] = len(overrides)
 			overrides = append(overrides, muxtsource.Override{
 				Name:     def.Name,
 				Replaced: muxtsource.Site{Package: prev.Package, Position: prev.Define.Position},

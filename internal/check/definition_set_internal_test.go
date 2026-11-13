@@ -139,3 +139,27 @@ func TestDefinitionSet(t *testing.T) {
 		}
 	})
 }
+
+func TestOverridesIn(t *testing.T) {
+	t.Run("a name the package defines twice after a shared file is listed once", func(t *testing.T) {
+		tree := defineTree(t, "body")
+		shared := definitionOnLine(1, tree)
+		shared.Package = "example.com/m/fragments"
+		a := definitionOnLine(2, tree)
+		a.Define.Filename = "a.gohtml"
+		b := definitionOnLine(3, tree)
+		b.Define.Filename = "b.gohtml"
+
+		got := overridesIn([]Definition{shared, a, b})
+
+		if len(got) != 1 {
+			t.Fatalf("overridesIn(shared, a, b) = %d overrides, want 1: %+v", len(got), got)
+		}
+		if got[0].Replaced.Package != "example.com/m/fragments" {
+			t.Errorf("Replaced.Package = %q, want %q", got[0].Replaced.Package, "example.com/m/fragments")
+		}
+		if got[0].Kept.Position.Filename != "b.gohtml" {
+			t.Errorf("Kept.Position.Filename = %q, want %q", got[0].Kept.Position.Filename, "b.gohtml")
+		}
+	})
+}
