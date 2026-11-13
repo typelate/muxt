@@ -440,7 +440,7 @@ func TestParseTemplateNames(t *testing.T) {
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.expected, parseTemplateNames(tt.input))
+			assert.Equal(t, tt.expected, ParseEmbedPatterns(tt.input))
 		})
 	}
 }

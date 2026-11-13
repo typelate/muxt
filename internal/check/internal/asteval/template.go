@@ -651,7 +651,7 @@ func embedFSFilePaths(dir string, fileSet *token.FileSet, decls []*ast.GenDecl, 
 			}
 			var comment strings.Builder
 			commentNode := readComments(&comment, decl.Doc, spec.Doc)
-			templateNames := parseTemplateNames(comment.String())
+			templateNames := ParseEmbedPatterns(comment.String())
 			absMat, err := embeddedFilesMatchingTemplateNameList(dir, fileSet, commentNode, templateNames, embeddedFiles)
 			if err != nil {
 				return nil, err
@@ -732,7 +732,10 @@ func readComments(s *strings.Builder, groups ...*ast.CommentGroup) ast.Node {
 	return n
 }
 
-func parseTemplateNames(input string) []string {
+// ParseEmbedPatterns splits the text of a //go:embed line, after the
+// directive, into its patterns. A pattern in double quotes or backquotes may
+// hold a space.
+func ParseEmbedPatterns(input string) []string {
 	var (
 		templateNames       []string
 		currentTemplateName strings.Builder

@@ -117,6 +117,15 @@ var others = template.Must(template.ParseFS(fs, "other.gohtml"))
 			want:      &load.UnreadFileError{Variable: "pages", EmbedPatterns: []string{"*.gohtml"}, ParsePatterns: []string{"page.gohtml"}},
 		},
 		{
+			name: "a quoted embed pattern may hold a space",
+			source: `//go:embed "my page.gohtml"
+var fs embed.FS
+
+var templates = template.Must(template.ParseFS(fs, "my page.gohtml"))
+`,
+			file: "my page.gohtml",
+		},
+		{
 			name: "an all: prefix is ignored for a file in the directory",
 			source: `//go:embed all:*.gohtml
 var fs embed.FS

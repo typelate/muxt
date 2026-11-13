@@ -10,6 +10,8 @@ import (
 	"strings"
 
 	"golang.org/x/tools/go/packages"
+
+	"github.com/typelate/muxt/internal/check"
 )
 
 // UnreadFileError reports a template file, by absolute path, that the
@@ -193,12 +195,7 @@ func embedPatterns(pkg *packages.Package, name string) ([]string, bool) {
 			if !ok {
 				continue
 			}
-			for _, field := range strings.Fields(rest) {
-				if unquoted, err := strconv.Unquote(field); err == nil {
-					field = unquoted
-				}
-				patterns = append(patterns, field)
-			}
+			patterns = append(patterns, check.EmbedPatterns(rest)...)
 		}
 	}
 	return patterns, len(patterns) > 0
