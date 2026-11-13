@@ -780,6 +780,8 @@ func TestCommandLineRejections(t *testing.T) {
 		args    string
 		wantErr string
 	}{
+		{name: "a misspelled generate sub-command", args: "generate packge api", wantErr: `unknown command "packge" for "muxt generate"`},
+		{name: "a package directory given to generate", args: "generate ./web", wantErr: `unknown command "./web" for "muxt generate"`},
 		{name: "a templates variable that is not an identifier", args: "generate --use-templates-variable=not-ok", wantErr: "variable not-ok value must be a well-formed Go identifier"},
 		{name: "a routes function that is not an identifier", args: "generate --output-routes-func=1Routes", wantErr: "output-routes-func value must be a well-formed Go identifier"},
 		{name: "a receiver type that is not an identifier", args: "generate --use-receiver-type=a.b", wantErr: "use-receiver-type value must be a well-formed Go identifier"},
