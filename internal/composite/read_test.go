@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -172,6 +173,54 @@ func TestFindRejectsAWrongOuterShape(t *testing.T) {
 			path := filepath.Join(dir, composite.FileName)
 			assert.Equal(t, fmt.Sprintf("%s:%d:%d: %s", path, tt.line, tt.col, tt.want), err.Error(), "message")
 			assert.Equal(t, path, typed.Path, "path")
+		})
+	}
+}
+
+// TestFindRejectsARepeatedKey states that a key written twice in one object,
+// at the top, in packages, in package_defaults or in an entry, is an error
+// naming the key and the position of the second one, not a silent last-wins.
+func TestFindRejectsARepeatedKey(t *testing.T) {
+	for _, tt := range []struct {
+		name, file, at, want string
+	}{
+		{
+			name: "top-level key",
+			file: `{"packages": {}, "packages": {}}`,
+			at:   `"packages": {}}`,
+			want: `key "packages" is repeated`,
+		},
+		{
+			name: "packages key",
+			file: `{"packages": {"example.com/m": {}, "example.com/m": {}}}`,
+			at:   `"example.com/m": {}}}`,
+			want: `packages: key "example.com/m" is repeated`,
+		},
+		{
+			name: "entry key",
+			file: "{\"packages\": {\"example.com/m\": {\n\t\"output_htmx\": true,\n\t\"output_htmx\": false}}}",
+			at:   `"output_htmx": false`,
+			want: `packages["example.com/m"]: key "output_htmx" is repeated`,
+		},
+		{
+			name: "package defaults key",
+			file: `{"package_defaults": {"output_htmx": true, "output_htmx": true}, "packages": {}}`,
+			at:   `"output_htmx": true}`,
+			want: `package_defaults: key "output_htmx" is repeated`,
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := writeFile(t, tt.file)
+
+			_, _, err := composite.Find(dir, testKeys())
+
+			var typed *composite.RepeatedKeyError
+			require.ErrorAs(t, err, &typed, "Find error %v", err)
+			offset := strings.Index(tt.file, tt.at)
+			line := 1 + strings.Count(tt.file[:offset], "\n")
+			col := offset - strings.LastIndex(tt.file[:offset], "\n")
+			path := filepath.Join(dir, composite.FileName)
+			assert.Equal(t, fmt.Sprintf("%s:%d:%d: %s", path, line, col, tt.want), err.Error(), "message")
 		})
 	}
 }

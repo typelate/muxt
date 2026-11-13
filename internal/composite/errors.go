@@ -68,6 +68,27 @@ func (e *ShapeError) Error() string {
 	return fmt.Sprintf("%s:%d:%d: %s must be %s", e.Path, e.Line, e.Col, e.Where, e.Want)
 }
 
+// RepeatedKeyError reports a key written twice in one object of a muxt.json.
+// The json package keeps the last and drops the first without a word, which
+// would drop a whole set of entries when the key is packages. Line and Col are
+// the 1-based position of the second key. Where names the object, such as
+// "packages" or packages["example.com/m"], and is empty for the file's own
+// keys.
+type RepeatedKeyError struct {
+	Path      string
+	Line, Col int
+	Where     string
+	Key       string
+}
+
+// Error returns the path, the position, the object and the key on one line.
+func (e *RepeatedKeyError) Error() string {
+	if e.Where == "" {
+		return fmt.Sprintf("%s:%d:%d: key %q is repeated", e.Path, e.Line, e.Col, e.Key)
+	}
+	return fmt.Sprintf("%s:%d:%d: %s: key %q is repeated", e.Path, e.Line, e.Col, e.Where, e.Key)
+}
+
 // UnknownKeyError reports a key in a muxt.json that nothing reads: a key of an
 // entry that no generate flag reads, or a top-level key other than
 // package_defaults and packages. Where names the entry, such as

@@ -8,8 +8,11 @@ import (
 
 // checkShape walks data, which is valid JSON, and returns a *ShapeError for
 // the first value in document order that is not an object where the file needs
-// one. It reads tokens, not Go types, so a message never names a struct of
-// this package. A null is an absent object and passes.
+// one, or a *RepeatedKeyError for the first key an object holds twice. It
+// reads tokens, not Go types, so a message never names a struct of this
+// package, and it reads the duplicate itself because the json package drops
+// the first value without an offset to name. A null is an absent object and
+// passes.
 func checkShape(path string, data []byte) error {
 	w := shapeWalker{
 		path: path,
@@ -18,6 +21,10 @@ func checkShape(path string, data []byte) error {
 	}
 	return w.file()
 }
+
+// fileWhere names the top-level object in a ShapeError. Its keys have no
+// enclosing object to name in a RepeatedKeyError.
+const fileWhere = "muxt.json"
 
 // shapeWalker reads the tokens of data once, from the start.
 type shapeWalker struct {
@@ -28,7 +35,7 @@ type shapeWalker struct {
 
 // file walks the top-level object.
 func (w *shapeWalker) file() error {
-	return w.object("muxt.json", "a JSON object", func(name string) error {
+	return w.object(fileWhere, "a JSON object", func(name string) error {
 		switch name {
 		case "package_defaults":
 			return w.object("package_defaults", "a JSON object", w.skipMember)
@@ -67,12 +74,24 @@ func (w *shapeWalker) object(where, want string, member func(name string) error)
 	if _, err := w.dec.ReadToken(); err != nil {
 		return fmt.Errorf("reading %s: %w", w.path, err)
 	}
+	seen := map[string]bool{}
 	for w.dec.PeekKind() != '}' {
-		name, err := w.dec.ReadToken()
+		start := w.valueStart()
+		token, err := w.dec.ReadToken()
 		if err != nil {
 			return fmt.Errorf("reading %s: %w", w.path, err)
 		}
-		if err := member(name.String()); err != nil {
+		name := token.String()
+		if seen[name] {
+			line, col := position(w.data, start+1)
+			where := where
+			if where == fileWhere {
+				where = ""
+			}
+			return &RepeatedKeyError{Path: w.path, Line: line, Col: col, Where: where, Key: name}
+		}
+		seen[name] = true
+		if err := member(name); err != nil {
 			return err
 		}
 	}
