@@ -75,20 +75,47 @@ func TestFindRejectsDeprecatedKeys(t *testing.T) {
 // TestFindRejectsKeyWithOtherLetterCase states that a packages key that names a
 // directory by a different letter case than the disk spells it is an error
 // naming the spelling on disk, so two spellings of one directory on a
-// case-insensitive file system never become two packages.
+// case-insensitive file system never become two packages. The key is compared
+// with the names in the directory listing, so the test creates the directory
+// under its own spelling and runs on a case-sensitive file system too.
 func TestFindRejectsKeyWithOtherLetterCase(t *testing.T) {
-	dir := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module example.com/m\n"), 0o644))
-	require.NoError(t, os.MkdirAll(filepath.Join(dir, "contacts"), 0o755))
-	if _, err := os.Stat(filepath.Join(dir, "Contacts")); err != nil {
-		t.Skip("file system is case sensitive")
+	for _, tt := range []struct {
+		name, key, want string
+	}{
+		{name: "one element", key: "example.com/m/Contacts", want: "example.com/m/contacts"},
+		{name: "a later element", key: "example.com/m/internal/Hypertext", want: "example.com/m/internal/hypertext"},
+		{name: "every element", key: "example.com/m/INTERNAL/HYPERTEXT", want: "example.com/m/internal/hypertext"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			require.NoError(t, os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module example.com/m\n"), 0o644))
+			require.NoError(t, os.MkdirAll(filepath.Join(dir, "contacts"), 0o755))
+			require.NoError(t, os.MkdirAll(filepath.Join(dir, "internal", "hypertext"), 0o755))
+			path := filepath.Join(dir, composite.FileName)
+			require.NoError(t, os.WriteFile(path, []byte(`{"packages": {"`+tt.key+`": {}}}`), 0o644))
+
+			_, _, err := composite.Find(dir, testKeys())
+
+			var typed *composite.KeyCaseError
+			require.ErrorAs(t, err, &typed, "Find error %v", err)
+			assert.Equal(t, path+`: packages key "`+tt.key+`" is spelled "`+tt.want+`" on disk; write that`, err.Error(), "message")
+		})
 	}
-	path := filepath.Join(dir, composite.FileName)
-	require.NoError(t, os.WriteFile(path, []byte(`{"packages": {"example.com/m/Contacts": {}}}`), 0o644))
+}
 
-	_, _, err := composite.Find(dir, testKeys())
+// TestFindAcceptsKeysSpelledAsOnDisk states that a key spelled as its directory
+// is, or naming a directory that does not exist, is not a letter-case error:
+// whether the package is there is for the go command to say.
+func TestFindAcceptsKeysSpelledAsOnDisk(t *testing.T) {
+	for _, key := range []string{"example.com/m/contacts", "example.com/m/Missing", "example.com/m"} {
+		t.Run(key, func(t *testing.T) {
+			dir := writeFile(t, `{"packages": {"`+key+`": {}}}`)
+			require.NoError(t, os.MkdirAll(filepath.Join(dir, "contacts"), 0o755))
 
-	var typed *composite.KeyCaseError
-	require.ErrorAs(t, err, &typed, "Find error %v", err)
-	assert.Equal(t, path+`: packages key "example.com/m/Contacts" is spelled "example.com/m/contacts" on disk; write that`, err.Error(), "message")
+			_, found, err := composite.Find(dir, testKeys())
+
+			require.NoError(t, err, "Find with key %q", key)
+			assert.True(t, found, "found")
+		})
+	}
 }
