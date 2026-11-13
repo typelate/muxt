@@ -15,7 +15,6 @@ func addGenerateFlags(flagSet *pflag.FlagSet, config *generate.RoutesFileConfigu
 	addVerboseFlagToFlagSet(flagSet, &config.Verbose)
 
 	addOutputFlagsToFlagSet(flagSet, config)
-	addDeprecatedOutputFlagsToFlagSet(flagSet, config)
 }
 
 func isDefaultTemplatesVariable(in *[]string) bool {
@@ -37,7 +36,6 @@ func addUseReceiverTypePackageVarToFlagSet(flagSet *pflag.FlagSet, out *string) 
 }
 
 func addOutputFlagsToFlagSet(flagSet *pflag.FlagSet, g *generate.RoutesFileConfiguration) {
-	flagSet.BoolVar(&g.OutputHTMX, outputHTMX, false, outputHTMXHelp)
 	flagSet.BoolVar(&g.OutputDatastar, outputDatastar, false, outputDatastarHelp)
 	flagSet.BoolVar(&g.OutputExportedDefaultIdentifiers, outputExportedDefaultIdentifiers, true, outputExportedDefaultIdentifiersHelp)
 	flagSet.BoolVar(&g.OutputMuxtVersion, outputMuxtVersion, true, outputMuxtVersionHelp)
@@ -48,12 +46,6 @@ func addOutputFlagsToFlagSet(flagSet *pflag.FlagSet, g *generate.RoutesFileConfi
 
 func addVerboseFlagToFlagSet(flagSet *pflag.FlagSet, out *bool) {
 	flagSet.BoolVarP(out, "verbose", "v", false, "verbose log output")
-}
-
-func addDeprecatedOutputFlagsToFlagSet(flagSet *pflag.FlagSet, g *generate.RoutesFileConfiguration) {
-	flagSet.BoolVar(&g.OutputHTMX, outputHTMXHelpers, false, "DEPRECATED: use --"+outputHTMX+" instead. "+outputHTMXHelp)
-
-	markDeprecated(flagSet, outputHTMXHelpers, outputHTMX)
 }
 
 func markDeprecated(flagSet *pflag.FlagSet, name, replacement string) {

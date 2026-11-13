@@ -69,6 +69,10 @@ This function also receives an argument with a type matching the name given by o
 			Name: outputMultipleFiles, Example: "true",
 			Usage: `Split generated routes into separate files per template source file. By default, all routes are written to a single file.`,
 		}),
+		boolSetting(&c.OutputHTMX, spec[bool]{
+			Name: outputHTMX, Deprecated: []string{outputHTMXHelpers}, Example: "true",
+			Usage: `Adds HTMX helper methods to TemplateData for setting response headers (HX-Location, HX-Redirect, etc.) and reading request headers (HX-Request, HX-Boosted, etc.).`,
+		}),
 	}
 }
 
