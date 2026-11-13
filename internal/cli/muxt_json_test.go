@@ -132,9 +132,9 @@ func TestMuxtJSONEntryNameSurvivesUnexportedDefaults(t *testing.T) {
 // configuration of the one job it is handed. Nothing is loaded.
 func generateConfigurationOf(t *testing.T, dir, commandLine string) generate.RoutesFileConfiguration {
 	t.Helper()
-	var jobs []generateJob
+	var jobs []packageJob
 	err := commands(dir, strings.Fields(commandLine), func(string) string { return "" }, func() (string, bool) { return "v1.2.3", true }, strings.NewReader(""), io.Discard, io.Discard, runners{
-		generate: func(_ *cobra.Command, got []generateJob) error {
+		generate: func(_ *cobra.Command, got []packageJob) error {
 			jobs = got
 			return nil
 		},
@@ -161,9 +161,9 @@ func TestGenerateWithMuxtJSONEntry(t *testing.T) {
 	defaults.ReceiverType = "Server"
 	defaults.RoutesFunction = "templateRoutes"
 
-	var jobs []generateJob
+	var jobs []packageJob
 	err = commands(dir, strings.Fields("generate"), func(string) string { return "" }, func() (string, bool) { return "v1.2.3", true }, strings.NewReader(""), io.Discard, io.Discard, runners{
-		generate: func(_ *cobra.Command, got []generateJob) error {
+		generate: func(_ *cobra.Command, got []packageJob) error {
 			jobs = got
 			return nil
 		},
@@ -286,9 +286,9 @@ func TestGenerateIgnoresMuxtJSONAboveModuleRoot(t *testing.T) {
 	const file = `{"packages": {"module": {"use_receiver_type": "T1"}}}`
 	require.NoError(t, os.WriteFile(filepath.Join(parent, "muxt.json"), []byte(file), 0o644))
 
-	var jobs []generateJob
+	var jobs []packageJob
 	err := commands(module, strings.Fields("generate"), func(string) string { return "" }, func() (string, bool) { return "v1.2.3", true }, strings.NewReader(""), io.Discard, io.Discard, runners{
-		generate: func(_ *cobra.Command, got []generateJob) error {
+		generate: func(_ *cobra.Command, got []packageJob) error {
 			jobs = got
 			return nil
 		},
@@ -578,9 +578,9 @@ func TestGenerateVerboseGeneratesFromConfiguredDirectory(t *testing.T) {
 	const file = `{"packages": {"example.com/m": {"use_receiver_type": "Server"}}}`
 	require.NoError(t, os.WriteFile(filepath.Join(dir, composite.FileName), []byte(file), 0o644))
 
-	var jobs []generateJob
+	var jobs []packageJob
 	err := commands(dir, strings.Fields("generate -v"), func(string) string { return "" }, func() (string, bool) { return "v1.2.3", true }, strings.NewReader(""), io.Discard, io.Discard, runners{
-		generate: func(_ *cobra.Command, got []generateJob) error {
+		generate: func(_ *cobra.Command, got []packageJob) error {
 			jobs = got
 			return nil
 		},
@@ -631,9 +631,9 @@ func TestGenerateChangeDirectorySelectsMuxtJSONEntry(t *testing.T) {
 	const file = `{"packages": {"example.com/m": {"use_receiver_type": "Root"}, "example.com/m/workspace": {"use_receiver_type": "T1"}}}`
 	require.NoError(t, os.WriteFile(filepath.Join(parent, composite.FileName), []byte(file), 0o644))
 
-	var jobs []generateJob
+	var jobs []packageJob
 	err := commands(parent, strings.Fields("-C workspace generate"), func(string) string { return "" }, func() (string, bool) { return "v1.2.3", true }, strings.NewReader(""), io.Discard, io.Discard, runners{
-		generate: func(_ *cobra.Command, got []generateJob) error {
+		generate: func(_ *cobra.Command, got []packageJob) error {
 			jobs = got
 			return nil
 		},
@@ -759,11 +759,11 @@ func TestGenerateRejectsMissingMuxtJSONDirectory(t *testing.T) {
 
 // generateJobsOf runs a generate command line in dir and returns the jobs the
 // generate runner is handed. Nothing is loaded.
-func generateJobsOf(t *testing.T, dir, commandLine string) []generateJob {
+func generateJobsOf(t *testing.T, dir, commandLine string) []packageJob {
 	t.Helper()
-	var jobs []generateJob
+	var jobs []packageJob
 	err := commands(dir, strings.Fields(commandLine), func(string) string { return "" }, func() (string, bool) { return "v1.2.3", true }, strings.NewReader(""), io.Discard, io.Discard, runners{
-		generate: func(_ *cobra.Command, got []generateJob) error {
+		generate: func(_ *cobra.Command, got []packageJob) error {
 			jobs = got
 			return nil
 		},
@@ -784,7 +784,7 @@ func generateFailureOf(t *testing.T, dir string) (called bool, err error) {
 func generateFailureOfLine(t *testing.T, dir, commandLine string) (called bool, err error) {
 	t.Helper()
 	err = commands(dir, strings.Fields(commandLine), func(string) string { return "" }, func() (string, bool) { return "v1.2.3", true }, strings.NewReader(""), io.Discard, io.Discard, runners{
-		generate: func(_ *cobra.Command, _ []generateJob) error {
+		generate: func(_ *cobra.Command, _ []packageJob) error {
 			called = true
 			return nil
 		},
@@ -804,9 +804,9 @@ func TestGenerateWithMuxtJSONInParentDirectory(t *testing.T) {
 	const file = `{"packages": {"example.com/m/workspace": {"use_receiver_type": "T1"}}}`
 	require.NoError(t, os.WriteFile(filepath.Join(parent, "muxt.json"), []byte(file), 0o644))
 
-	var jobs []generateJob
+	var jobs []packageJob
 	err := commands(workspace, strings.Fields("generate"), func(string) string { return "" }, func() (string, bool) { return "v1.2.3", true }, strings.NewReader(""), io.Discard, io.Discard, runners{
-		generate: func(_ *cobra.Command, got []generateJob) error {
+		generate: func(_ *cobra.Command, got []packageJob) error {
 			jobs = got
 			return nil
 		},

@@ -14,14 +14,16 @@ import (
 	"github.com/typelate/muxt/internal/generate"
 )
 
-// generateJob is one package directory and what to generate it with. Key is
+// packageJob is one package directory and what to run a command with. Key is
 // the packages key the configuration came from, and File the absolute path of
 // the muxt.json holding it; both are empty when flags gave the configuration.
-type generateJob struct {
+// Given is the setting flags that did, so a report can name them.
+type packageJob struct {
 	File   string
 	Key    string
 	Dir    string
 	Config generate.RoutesFileConfiguration
+	Given  []string
 }
 
 // givenGenerateFlags returns the sorted names of the generate flags passed.
@@ -125,7 +127,7 @@ func requireEntry(wd string) error {
 // when the file has no entry for wd (see requireEntry). file
 // is the muxt.json the jobs came from, for a caller that says where each
 // setting came from.
-func entryJobs(wd string, getEnv func(string) string, version func() (string, bool)) (file *composite.File, jobs []generateJob, found bool, err error) {
+func entryJobs(wd string, getEnv func(string) string, version func() (string, bool)) (file *composite.File, jobs []packageJob, found bool, err error) {
 	lookup, err := lookupMuxtJSONEntry(wd)
 	if err != nil || lookup.File == nil {
 		return nil, nil, false, err
@@ -156,7 +158,7 @@ func entryJobs(wd string, getEnv func(string) string, version func() (string, bo
 		if err != nil {
 			return nil, nil, false, &composite.InvalidEntryError{Path: f.Name, Where: fmt.Sprintf("packages[%q]", k), Err: err}
 		}
-		jobs = append(jobs, generateJob{File: f.Name, Key: k, Dir: dir, Config: config})
+		jobs = append(jobs, packageJob{File: f.Name, Key: k, Dir: dir, Config: config})
 	}
 	return f, jobs, true, nil
 }
@@ -169,23 +171,23 @@ func entryJobs(wd string, getEnv func(string) string, version func() (string, bo
 // reads it. A directory below a muxt.json with no entry for it is not found,
 // so the command's own flags and defaults apply. The command takes only the
 // settings it has flags for from the job.
-func entryJobFor(command, dir string, flagNames []string, getEnv func(string) string) (generateJob, bool, error) {
+func entryJobFor(command, dir string, flagNames []string, getEnv func(string) string) (packageJob, bool, error) {
 	// A path that is not a directory has no entry. The command's runner is
 	// what says so, and a search for muxt.json under a file would fail first
 	// with a message about muxt.json.
 	if info, err := os.Stat(dir); err != nil || !info.IsDir() {
-		return generateJob{}, false, nil
+		return packageJob{}, false, nil
 	}
 	if len(flagNames) > 0 {
-		return generateJob{}, false, rejectConfiguredDirectory(command, dir, flagNames)
+		return packageJob{}, false, rejectConfiguredDirectory(command, dir, flagNames)
 	}
 	lookup, err := lookupMuxtJSONEntry(dir)
 	if err != nil || lookup.File == nil {
-		return generateJob{}, false, err
+		return packageJob{}, false, err
 	}
 	_, jobs, found, err := entryJobs(dir, getEnv, noVersion)
 	if err != nil || !found {
-		return generateJob{}, false, err
+		return packageJob{}, false, err
 	}
 	// entryJobs returns every entry when dir is the file's own directory, so
 	// the job for dir is the one whose key is dir's.
@@ -194,7 +196,7 @@ func entryJobFor(command, dir string, flagNames []string, getEnv func(string) st
 			return job, true, nil
 		}
 	}
-	return generateJob{}, false, nil
+	return packageJob{}, false, nil
 }
 
 // requireEntryDirectory returns a *composite.MissingDirectoryError unless dir,

@@ -14,14 +14,14 @@ import (
 type jobVisitor struct {
 	// Ready, when set, sees every job against the first load before any
 	// Visit, so a refusal comes before the first write.
-	Ready func(i int, job generateJob, l *load.Loaded) error
+	Ready func(i int, job packageJob, l *load.Loaded) error
 	// Begin, when set, runs before job's load is refreshed, so what it prints
 	// comes before a failed reload's error.
-	Begin func(i int, job generateJob)
+	Begin func(i int, job packageJob)
 	// Visit does one job and reports whether it wrote files in the job's
 	// output directory. Its error is returned as it is; naming the job is
 	// the visitor's to do.
-	Visit func(i int, job generateJob, l *load.Loaded, several bool) (wrote bool, err error)
+	Visit func(i int, job packageJob, l *load.Loaded, several bool) (wrote bool, err error)
 }
 
 // runJobs requires each job's directory, loads every directory and receiver
@@ -30,7 +30,7 @@ type jobVisitor struct {
 // saw its package without the new files, so a job importing a package
 // written since needs a fresh load; one that imports none keeps the load it
 // has.
-func runJobs(cmd *cobra.Command, loadPackages packageLoader, jobs []generateJob, v jobVisitor) error {
+func runJobs(cmd *cobra.Command, loadPackages packageLoader, jobs []packageJob, v jobVisitor) error {
 	if len(jobs) == 0 {
 		return nil
 	}

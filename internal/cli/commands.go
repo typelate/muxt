@@ -51,7 +51,7 @@ func Commands(wd string, args []string, getEnv func(string) string, stdin io.Rea
 type runners struct {
 	routes    func(cmd *cobra.Command, jobs []routesJob) error
 	check     func(cmd *cobra.Command, wd string, config analysis.CheckConfiguration) error
-	generate  func(cmd *cobra.Command, jobs []generateJob) error
+	generate  func(cmd *cobra.Command, jobs []packageJob) error
 	callers   func(cmd *cobra.Command, wd string, config analysis.TemplateCallersConfiguration) error
 	calls     func(cmd *cobra.Command, wd string, config analysis.TemplateCallsConfiguration) error
 	mutations func(cmd *cobra.Command, wd string, config mutation.Configuration) error

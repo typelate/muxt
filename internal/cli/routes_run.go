@@ -10,23 +10,23 @@ import (
 )
 
 // routesJob is one package directory the route listing reads. It is a
-// generateJob because the listing reads what generate reads: the same
+// packageJob because the listing reads what generate reads: the same
 // directories, in the same order, resolved the same way.
 type routesJob struct {
-	generateJob
+	packageJob
 	// Report is the Configuration section the listing starts with.
 	Report configurationReport
 }
 
-// newRoutesJob is the job for a generateJob, with the report of its
+// newRoutesJob is the job for a packageJob, with the report of its
 // configuration. f is the muxt.json the job's entry came from, nil when flags
 // configured it, and flagNames are the flags that did.
-func newRoutesJob(f *composite.File, flagNames []string, job generateJob) (routesJob, error) {
+func newRoutesJob(f *composite.File, flagNames []string, job packageJob) (routesJob, error) {
 	report, err := newConfigurationReport(f, job.Key, flagNames, job.Config)
 	if err != nil {
 		return routesJob{}, err
 	}
-	return routesJob{generateJob: job, Report: report}, nil
+	return routesJob{packageJob: job, Report: report}, nil
 }
 
 // definitions is the part of the job's configuration the listing resolves with.
@@ -75,7 +75,7 @@ func routesJobs(wd string, flags *pflag.FlagSet, flagConfig analysis.Definitions
 	config.ReceiverPackage = flagConfig.ReceiverPackage
 	config.ReceiverType = flagConfig.ReceiverType
 	config.TemplatesVariables = flagConfig.TemplatesVariables
-	job, err := newRoutesJob(nil, flagNames, generateJob{Dir: wd, Config: config})
+	job, err := newRoutesJob(nil, flagNames, packageJob{Dir: wd, Config: config})
 	if err != nil {
 		return nil, err
 	}
@@ -86,9 +86,9 @@ func routesJobs(wd string, flags *pflag.FlagSet, flagConfig analysis.Definitions
 // imports.
 func routesRunner(loadPackages packageLoader) func(*cobra.Command, []routesJob) error {
 	return func(cmd *cobra.Command, jobs []routesJob) error {
-		packageJobs := make([]generateJob, len(jobs))
+		packageJobs := make([]packageJob, len(jobs))
 		for i, job := range jobs {
-			packageJobs[i] = job.generateJob
+			packageJobs[i] = job.packageJob
 		}
 		var (
 			asJSON, formatKnown bool
@@ -96,7 +96,7 @@ func routesRunner(loadPackages packageLoader) func(*cobra.Command, []routesJob) 
 			collected []routesListing
 		)
 		err := runJobs(cmd, loadPackages, packageJobs, jobVisitor{
-			Visit: func(i int, job generateJob, l *load.Loaded, several bool) (bool, error) {
+			Visit: func(i int, job packageJob, l *load.Loaded, several bool) (bool, error) {
 				if !formatKnown {
 					var err error
 					if asJSON, err = isJSON(cmd); err != nil {

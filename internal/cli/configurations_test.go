@@ -35,7 +35,7 @@ func configurationOf(t *testing.T, commandLine string, env map[string]string) (a
 			return record(jobs[0].definitions())
 		},
 		check: func(_ *cobra.Command, _ string, c analysis.CheckConfiguration) error { return record(c) },
-		generate: func(_ *cobra.Command, jobs []generateJob) error {
+		generate: func(_ *cobra.Command, jobs []packageJob) error {
 			if len(jobs) != 1 {
 				return fmt.Errorf("got %d generate jobs, want 1", len(jobs))
 			}
@@ -757,7 +757,7 @@ func TestChangeDirectory(t *testing.T) {
 			}
 			err := commands("/work", strings.Fields(tt.args), func(string) string { return "" }, func() (string, bool) { return "v1.2.3", true }, strings.NewReader(""), io.Discard, io.Discard, runners{
 				check: func(_ *cobra.Command, wd string, _ analysis.CheckConfiguration) error { return record(wd) },
-				generate: func(_ *cobra.Command, jobs []generateJob) error {
+				generate: func(_ *cobra.Command, jobs []packageJob) error {
 					if len(jobs) != 1 {
 						return fmt.Errorf("got %d generate jobs, want 1", len(jobs))
 					}

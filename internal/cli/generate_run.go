@@ -23,7 +23,7 @@ import (
 // and a muxt.json entry for wd, the entry configures the run; otherwise the
 // flags do. Flags win outright so a command line never half-merges with a
 // file. It reads the file itself, since nothing else needs it yet.
-func generateJobs(wd string, flags *pflag.FlagSet, flagConfig *generate.RoutesFileConfiguration, deprecatedTemplatesVar string, getEnv func(string) string, version func() (string, bool)) ([]generateJob, error) {
+func generateJobs(wd string, flags *pflag.FlagSet, flagConfig *generate.RoutesFileConfiguration, deprecatedTemplatesVar string, getEnv func(string) string, version func() (string, bool)) ([]packageJob, error) {
 	if flagNames := givenGenerateFlags(flags); len(flagNames) > 0 {
 		if err := rejectConfiguredDirectory(generateCommandName, wd, flagNames); err != nil {
 			return nil, err
@@ -48,7 +48,7 @@ func generateJobs(wd string, flags *pflag.FlagSet, flagConfig *generate.RoutesFi
 	if err := finalizeGenerate(flagConfig, flags, deprecatedTemplatesVar, wd, getEnv, version); err != nil {
 		return nil, err
 	}
-	return []generateJob{{Dir: wd, Config: *flagConfig}}, nil
+	return []packageJob{{Dir: wd, Config: *flagConfig}}, nil
 }
 
 // packageLoader is the only way a run asks for packages, so one go command
@@ -65,8 +65,8 @@ func loadFromGoCommand(root string, dirs, patterns []string) (*load.Loaded, erro
 // generateRunner generates jobs from one load, one directory at a time, a
 // package after the packages it imports. A job's files are all written before
 // the next job is resolved, so a failure leaves the earlier jobs written.
-func generateRunner(loadPackages packageLoader) func(*cobra.Command, []generateJob) error {
-	return func(cmd *cobra.Command, jobs []generateJob) error {
+func generateRunner(loadPackages packageLoader) func(*cobra.Command, []packageJob) error {
+	return func(cmd *cobra.Command, jobs []packageJob) error {
 		if len(jobs) == 0 {
 			return nil
 		}
@@ -81,7 +81,7 @@ func generateRunner(loadPackages packageLoader) func(*cobra.Command, []generateJ
 		stderr := log.New(cmd.ErrOrStderr(), "", 0)
 		// With several directories a failure names its package, since
 		// nothing else says which one it was.
-		failed := func(job generateJob, err error) error {
+		failed := func(job packageJob, err error) error {
 			if several {
 				return fmt.Errorf("%s: %w", job.Key, err)
 			}
@@ -90,7 +90,7 @@ func generateRunner(loadPackages packageLoader) func(*cobra.Command, []generateJ
 		return runJobs(cmd, loadPackages, jobs, jobVisitor{
 			// The first load already holds a package that did not load, so it
 			// is refused before an earlier entry is written.
-			Ready: func(_ int, job generateJob, l *load.Loaded) error {
+			Ready: func(_ int, job packageJob, l *load.Loaded) error {
 				err := l.CheckLoaded(job.Config.OutputDirectory(job.Dir))
 				if err == nil {
 					return nil
@@ -106,14 +106,14 @@ func generateRunner(loadPackages packageLoader) func(*cobra.Command, []generateJ
 				}
 				return &composite.InvalidEntryError{Path: job.File, Where: fmt.Sprintf("packages[%q]", job.Key), Err: err}
 			},
-			Begin: func(_ int, job generateJob) {
+			Begin: func(_ int, job packageJob) {
 				if several && verbose {
 					// Several directories write to one stream, so each
 					// says whose lines follow.
 					_, _ = fmt.Fprintln(stdout, job.Key)
 				}
 			},
-			Visit: func(_ int, job generateJob, l *load.Loaded, several bool) (bool, error) {
+			Visit: func(_ int, job packageJob, l *load.Loaded, several bool) (bool, error) {
 				files, err := resolveJob(cmd, l, job, several)
 				if err != nil {
 					return false, failed(job, err)
@@ -136,7 +136,7 @@ func generateRunner(loadPackages packageLoader) func(*cobra.Command, []generateJ
 // failure that explains itself over several lines is printed before it is
 // returned, after job's key when several jobs run, since that printed text
 // replaces the returned error.
-func resolveJob(cmd *cobra.Command, l *load.Loaded, job generateJob, several bool) ([]generate.GeneratedFile, error) {
+func resolveJob(cmd *cobra.Command, l *load.Loaded, job packageJob, several bool) ([]generate.GeneratedFile, error) {
 	report := func(err error) {
 		if _, ok := errors.AsType[muxt.MultiLineError](err); ok && several {
 			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "%s:\n", job.Key)
@@ -170,7 +170,7 @@ func resolveJob(cmd *cobra.Command, l *load.Loaded, job generateJob, several boo
 // writeJob writes files to job's directory and removes the generated files of
 // an earlier run that files no longer holds. changed is whether any file it
 // wrote or removed differs from what was on disk before.
-func writeJob(stdout io.Writer, stderr *log.Logger, job generateJob, files []generate.GeneratedFile) (changed bool, err error) {
+func writeJob(stdout io.Writer, stderr *log.Logger, job packageJob, files []generate.GeneratedFile) (changed bool, err error) {
 	owned, err := ownedGeneratedFiles(job.Dir, job.Config.RoutesFunction, stderr)
 	if err != nil {
 		return false, err

@@ -114,7 +114,7 @@ func (r *selectionRecord) line(format string, args ...any) {
 func recordSelection(base, wd string, args ...string) (string, error) {
 	r := &selectionRecord{base: base}
 	err := commands(wd, args, func(string) string { return "" }, func() (string, bool) { return "v1.2.3", true }, strings.NewReader(""), new(bytes.Buffer), new(bytes.Buffer), runners{
-		generate: func(_ *cobra.Command, jobs []generateJob) error {
+		generate: func(_ *cobra.Command, jobs []packageJob) error {
 			for _, job := range jobs {
 				r.line("generate key=%q file=%q dir=%q receiver=%q receiver-package=%q templates=%v output=%q htmx=%t logger=%t verbose=%t",
 					job.Key, r.rel(job.File), r.rel(job.Dir), job.Config.ReceiverType, job.Config.ReceiverPackage, job.Config.TemplatesVariables,
