@@ -95,7 +95,7 @@ working tree is never written to.`,
 		},
 	}
 
-	register(cmd.Flags(), settings)
+	registerSettings(cmd.Flags(), settings)
 	addDeprecatedTemplatesVariable(cmd.Flags(), &deprecatedTemplatesVar)
 	cmd.Flags().StringVar(&templatePattern, "template-pattern", "", "only mutate templates whose name matches this regular expression")
 	cmd.Flags().StringVar(&runPattern, "run", "", "only run tests matching this regular expression (passed to go test -run)")

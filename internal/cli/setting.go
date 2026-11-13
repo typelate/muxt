@@ -308,9 +308,9 @@ func setDefaults(settings []setting) {
 	}
 }
 
-// register adds each setting's current name to fs. Registering sets the
+// registerSettings adds each setting's current name to fs. Registering sets the
 // field to its default.
-func register(fs *pflag.FlagSet, settings []setting) {
+func registerSettings(fs *pflag.FlagSet, settings []setting) {
 	for _, s := range settings {
 		s.register(fs)
 	}
@@ -319,7 +319,7 @@ func register(fs *pflag.FlagSet, settings []setting) {
 // registerWithDeprecated is register, then each deprecated spelling, hidden
 // and marked, so the old command lines keep working.
 func registerWithDeprecated(fs *pflag.FlagSet, settings []setting) {
-	register(fs, settings)
+	registerSettings(fs, settings)
 	for _, s := range settings {
 		for _, spelling := range s.deprecated {
 			s.registerDeprecated(fs, spelling)
@@ -388,9 +388,9 @@ func settingNamed(settings []setting, spelling string) (string, bool) {
 	return "", false
 }
 
-// derive writes the Derived value of each setting that has one and was not
+// deriveDefaults writes the Derived value of each setting that has one and was not
 // given, in list order, so a later setting sees the earlier ones.
-func derive(settings []setting, g givenSettings) {
+func deriveDefaults(settings []setting, g givenSettings) {
 	for _, s := range settings {
 		if s.derive != nil && !g.has(s.name) {
 			s.derive()
@@ -398,10 +398,10 @@ func derive(settings []setting, g givenSettings) {
 	}
 }
 
-// args returns the generated-file header arguments that record a finalized
+// headerArguments returns the generated-file header arguments that record a finalized
 // configuration, in list order, leaving out each setting that has the value a
 // run would use anyway.
-func args(settings []setting) []string {
+func headerArguments(settings []setting) []string {
 	var out []string
 	for _, s := range settings {
 		out = append(out, s.arg()...)

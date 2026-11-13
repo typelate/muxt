@@ -145,7 +145,7 @@ func TestGeneratedHeaderRoundTrip(t *testing.T) {
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			got := parseGeneratedHeader(t, args(generateSettings(&tt.config)))
+			got := parseGeneratedHeader(t, headerArguments(generateSettings(&tt.config)))
 			assert.Equal(t, recorded(tt.want), recorded(got), "the header read back")
 		})
 	}
@@ -226,7 +226,7 @@ func TestConfigToArgsOrder(t *testing.T) {
 		"--input-static-assets-directory=assets",
 		"--output-static-assets-path=/static",
 	}
-	assert.Equal(t, want, args(generateSettings(&config)), "args")
+	assert.Equal(t, want, headerArguments(generateSettings(&config)), "args")
 }
 
 // TestConfigToArgsRecordsWhatDiffersFromTheDefaults states that the header
@@ -235,7 +235,7 @@ func TestConfigToArgsOrder(t *testing.T) {
 func TestConfigToArgsRecordsWhatDiffersFromTheDefaults(t *testing.T) {
 	t.Run("the defaults record nothing", func(t *testing.T) {
 		defaults := defaultsConfig()
-		assert.Empty(t, args(generateSettings(&defaults)), "args(defaults)")
+		assert.Empty(t, headerArguments(generateSettings(&defaults)), "args(defaults)")
 	})
 
 	for _, tt := range []struct {
@@ -307,7 +307,7 @@ func TestConfigToArgsRecordsWhatDiffersFromTheDefaults(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			config := defaultsConfig()
 			tt.change(&config)
-			assert.Equal(t, tt.want, args(generateSettings(&config)), "args")
+			assert.Equal(t, tt.want, headerArguments(generateSettings(&config)), "args")
 		})
 	}
 }

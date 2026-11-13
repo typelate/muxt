@@ -352,7 +352,7 @@ func applyDefaults(config *generate.RoutesFileConfiguration, settings []setting,
 	// The route type is named after the paths type, and the route builder
 	// after the route type, unless their own settings say otherwise. Their
 	// Derived functions are the only place those conventions are applied.
-	derive(settings, g)
+	deriveDefaults(settings, g)
 }
 
 // routeTypeSuffix is appended to a route paths type name that is not the

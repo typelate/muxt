@@ -45,7 +45,7 @@ func checkCommand(workingDirectory *string, getEnv func(string) string, run func
 		},
 	}
 
-	register(cmd.Flags(), settings)
+	registerSettings(cmd.Flags(), settings)
 	addDeprecatedTemplatesVariable(cmd.Flags(), &deprecatedTemplatesVar)
 	addVerboseFlagToFlagSet(cmd.Flags(), &config.Verbose)
 	cmd.Flags().BoolVar(&config.AllowUnused, "allow-unused", false, "list templates nothing executes without failing; for templates rendered outside muxt")
@@ -149,7 +149,7 @@ func listTemplateCallersCommand(wd *string, getEnv func(string) string, run func
 		},
 	}
 
-	register(cmd.Flags(), settings)
+	registerSettings(cmd.Flags(), settings)
 	addDeprecatedTemplatesVariable(cmd.Flags(), &deprecatedTemplatesVar)
 	addVerboseFlagToFlagSet(cmd.Flags(), new(bool)) // accepted for consistency with sibling commands; the listing has nothing more to say
 	cmd.Flags().StringArrayVar(&patterns, "match", nil, "filter by template name (can specify multiple regular expressions)")
@@ -197,7 +197,7 @@ func listTemplateCallsCommand(wd *string, getEnv func(string) string, run func(*
 		},
 	}
 
-	register(cmd.Flags(), settings)
+	registerSettings(cmd.Flags(), settings)
 	addDeprecatedTemplatesVariable(cmd.Flags(), &deprecatedTemplatesVar)
 	addVerboseFlagToFlagSet(cmd.Flags(), new(bool)) // accepted for consistency with sibling commands; the listing has nothing more to say
 	cmd.Flags().StringArrayVar(&patterns, "match", nil, "filter by template name (can specify multiple regular expressions)")

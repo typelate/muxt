@@ -129,7 +129,7 @@ func writeGeneratedFiles(stdout io.Writer, files []generate.GeneratedFile, confi
 func writeGeneratedFilesWith(stdout io.Writer, files []generate.GeneratedFile, config generate.RoutesFileConfiguration, replace func(path string, content []byte) (undo func() error, err error)) (map[string]bool, error) {
 	written := make(map[string]bool, len(files))
 	var undos []func() error
-	headerArgs := args(generateSettings(&config))
+	headerArgs := headerArguments(generateSettings(&config))
 	for _, file := range files {
 		content := header.Format(headerArgs, config.MuxtVersion) + file.Content
 		undo, err := replace(file.Path, []byte(content))

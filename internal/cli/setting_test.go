@@ -62,7 +62,7 @@ func TestRegisterSetsDefaults(t *testing.T) {
 func TestRegisterAddsCurrentNamesOnly(t *testing.T) {
 	var c toy
 	fs := pflag.NewFlagSet("toy", pflag.ContinueOnError)
-	register(fs, toySettings(&c))
+	registerSettings(fs, toySettings(&c))
 
 	assert.NotNil(t, fs.Lookup("name"), "name")
 	assert.Nil(t, fs.Lookup("old-name"), "old-name")
@@ -106,23 +106,23 @@ func TestArgsRecordWhatDiffersFromTheDefault(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			c, fs, settings := parsedToy(t, tt.commandLine...)
-			derive(settings, givenFlags(fs, settings))
-			assert.Equal(t, tt.want, args(settings), "args after %v, configuration %+v", tt.commandLine, c)
+			deriveDefaults(settings, givenFlags(fs, settings))
+			assert.Equal(t, tt.want, headerArguments(settings), "args after %v, configuration %+v", tt.commandLine, c)
 		})
 	}
 }
 
 func TestArgsFollowListOrder(t *testing.T) {
 	_, fs, settings := parsedToy(t, "--limit=1KB", "--loud", "--name=N", "--use-templates-variable=v")
-	derive(settings, givenFlags(fs, settings))
+	deriveDefaults(settings, givenFlags(fs, settings))
 
-	assert.Equal(t, []string{"--use-templates-variable=v", "--name=N", "--loud", "--limit=1000"}, args(settings))
+	assert.Equal(t, []string{"--use-templates-variable=v", "--name=N", "--loud", "--limit=1000"}, headerArguments(settings))
 }
 
 func TestDeriveKeepsAGivenValue(t *testing.T) {
 	c, fs, settings := parsedToy(t, "--name=N", "--route=Mine")
 
-	derive(settings, givenFlags(fs, settings))
+	deriveDefaults(settings, givenFlags(fs, settings))
 
 	assert.Equal(t, "Mine", c.Route, "route given")
 }
@@ -130,7 +130,7 @@ func TestDeriveKeepsAGivenValue(t *testing.T) {
 func TestDeriveFillsWhatWasNotGiven(t *testing.T) {
 	c, fs, settings := parsedToy(t, "--name=N")
 
-	derive(settings, givenFlags(fs, settings))
+	deriveDefaults(settings, givenFlags(fs, settings))
 
 	assert.Equal(t, "NRoute", c.Route, "route derived from the name given")
 }
@@ -211,7 +211,7 @@ func TestReceiverSettings(t *testing.T) {
 	require.NoError(t, fs.Parse([]string{"--find-receiver-type=T", "--receiver-type-package=p"}))
 	assert.Equal(t, "T", typeName, "type")
 	assert.Equal(t, "p", pkg, "package")
-	assert.Equal(t, []string{"--use-receiver-type=T", "--use-receiver-type-package=p"}, args([]setting{typ, pk}), "args")
+	assert.Equal(t, []string{"--use-receiver-type=T", "--use-receiver-type-package=p"}, headerArguments([]setting{typ, pk}), "args")
 }
 
 // toyEntry is an entry holding the given keys, each value as JSON text.
