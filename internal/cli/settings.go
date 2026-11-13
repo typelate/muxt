@@ -10,6 +10,7 @@ import (
 func generateSettings(c *generate.RoutesFileConfiguration) []setting {
 	return []setting{
 		templatesVariableSetting(&c.TemplatesVariables),
+		receiverTypeSetting(&c.ReceiverType),
 	}
 }
 
