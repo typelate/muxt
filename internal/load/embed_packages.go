@@ -5,6 +5,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"maps"
 	"path/filepath"
 	"slices"
 
@@ -28,7 +29,9 @@ import (
 // does not keep the syntax of an import.
 func embedPackages(pkg *packages.Package) (map[string]source.EmbedPackage, error) {
 	result := make(map[string]source.EmbedPackage)
-	for path, imported := range pkg.Imports {
+	// Sorted, so the first error is the same on every run.
+	for _, path := range slices.Sorted(maps.Keys(pkg.Imports)) {
+		imported := pkg.Imports[path]
 		ep := source.EmbedPackage{
 			ImportPath: imported.PkgPath,
 			EmbedFiles: slices.Sorted(slices.Values(imported.EmbedFiles)),

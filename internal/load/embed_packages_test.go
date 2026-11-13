@@ -75,6 +75,39 @@ import _ "example.com/m/fragments"
 		"the declaration is positioned in the load's token.FileSet")
 }
 
+// TestEmbedPackagesReportsFirstImportByPath states that when several imports
+// that embed files fail to parse, the error names the one first by import
+// path, on every run, not whichever the imports map yields first.
+func TestEmbedPackagesReportsFirstImportByPath(t *testing.T) {
+	if testing.Short() {
+		t.Skip("loads packages with the go command")
+	}
+	broken := func(name string) string {
+		return "package " + name + "\n\nimport \"embed\"\n\n//go:embed *.gohtml\nvar FS embed.FS\n\nvar X = (\n"
+	}
+	dir := writeModule(t, map[string]string{
+		"go.mod":                 "module example.com/m\n\ngo 1.24\n",
+		"a/a.go":                 broken("a"),
+		"a/a.gohtml":             "",
+		"b/b.go":                 broken("b"),
+		"b/b.gohtml":             "",
+		"c/c.go":                 broken("c"),
+		"c/c.gohtml":             "",
+		"workspace/workspace.go": "package workspace\n\nimport (\n\t_ \"example.com/m/a\"\n\t_ \"example.com/m/b\"\n\t_ \"example.com/m/c\"\n)\n",
+	})
+	_, pl, err := Packages(filepath.Join(dir, "workspace"))
+	require.NoError(t, err, "Packages")
+	pkg, ok := packageInDirectory(pl, filepath.Join(dir, "workspace"))
+	require.True(t, ok, "packageInDirectory")
+
+	for range 20 {
+		_, err := embedPackages(pkg)
+
+		require.Error(t, err, "embedPackages")
+		assert.ErrorContains(t, err, "reading package example.com/m/a:", "embedPackages error")
+	}
+}
+
 // sharedFSModule is a module whose workspace package parses the files of
 // argument, written as the first argument of ParseFS, and imports lib, a
 // package of the same module that declares extra.
