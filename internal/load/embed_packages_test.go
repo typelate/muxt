@@ -74,3 +74,55 @@ import _ "example.com/m/fragments"
 	assert.Equal(t, filepath.Join(dir, "fragments", "fragments.go"), pkg.Fset.Position(spec.Pos()).Filename,
 		"the declaration is positioned in the load's token.FileSet")
 }
+
+// sharedFSModule is a module whose workspace package parses the files of
+// argument, written as the first argument of ParseFS, and imports lib, a
+// package of the same module that declares extra.
+func sharedFSModule(t *testing.T, argument, extra string) (dir string) {
+	t.Helper()
+	return writeModule(t, map[string]string{
+		"go.mod": "module example.com/m\n\ngo 1.24\n",
+		"lib/lib.go": `package lib
+
+import "embed"
+
+` + extra + `
+`,
+		"workspace/workspace.go": `package workspace
+
+import (
+	"html/template"
+	"os"
+
+	"example.com/m/lib"
+)
+
+var (
+	_ = os.Stdin
+	_ = lib.FS
+)
+
+var templates = template.Must(template.ParseFS(` + argument + `, "*.gohtml"))
+`,
+		"workspace/workspace.gohtml": `{{define "GET / Home()"}}{{end}}`,
+	})
+}
+
+// TestPackageSharedFSInStandardLibrary states that a ParseFS argument naming a
+// variable of a standard library package gets the standard-library message,
+// which says a shared embed.FS must come from this module, and not the advice
+// to run muxt on the module, which a run on the module has already followed.
+func TestPackageSharedFSInStandardLibrary(t *testing.T) {
+	if testing.Short() {
+		t.Skip("loads packages with the go command")
+	}
+	dir := sharedFSModule(t, "os.Stdin", "var FS embed.FS")
+	_, pl, err := Packages(filepath.Join(dir, "workspace"))
+	require.NoError(t, err, "Packages")
+
+	_, err = Package(filepath.Join(dir, "workspace"), pl, []string{"templates"})
+
+	require.Error(t, err, "Package")
+	assert.ErrorContains(t, err, "package os is in the standard library", "Package error")
+	assert.NotContains(t, err.Error(), "run muxt on the module", "Package error")
+}

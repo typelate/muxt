@@ -18,26 +18,28 @@ import (
 // load and returns plain data, so reading another package's embedded files
 // costs no second load.
 //
-// An import with no module (the standard library) is skipped. An import in
-// another module, or one that embeds nothing, is returned with Vars nil: it
-// is described, so the evaluator can say why it cannot be read, but its files
-// are not parsed. For the rest the package's Go files are parsed with
+// An import with no module (the standard library) is described with an empty
+// ModulePath. It and an import in another module, or one that embeds
+// nothing, are returned with Vars nil: they are described, so the evaluator
+// can say why they cannot be read, but their files are not parsed. For the
+// rest the package's Go files are parsed with
 // comments into pkg's token.FileSet, because the //go:embed comment that
 // decides which files a variable holds is on the declaration, and the load
 // does not keep the syntax of an import.
 func embedPackages(pkg *packages.Package) (map[string]source.EmbedPackage, error) {
 	result := make(map[string]source.EmbedPackage)
 	for path, imported := range pkg.Imports {
-		if imported.Module == nil || len(imported.GoFiles) == 0 {
-			continue
-		}
 		ep := source.EmbedPackage{
 			ImportPath: imported.PkgPath,
-			ModulePath: imported.Module.Path,
-			Dir:        filepath.Dir(imported.GoFiles[0]),
 			EmbedFiles: slices.Sorted(slices.Values(imported.EmbedFiles)),
 		}
-		if pkg.Module != nil && imported.Module.Path == pkg.Module.Path && len(imported.EmbedFiles) > 0 {
+		if len(imported.GoFiles) > 0 {
+			ep.Dir = filepath.Dir(imported.GoFiles[0])
+		}
+		if imported.Module != nil {
+			ep.ModulePath = imported.Module.Path
+		}
+		if pkg.Module != nil && imported.Module != nil && imported.Module.Path == pkg.Module.Path && len(imported.EmbedFiles) > 0 {
 			vars, err := varDeclarations(pkg.Fset, imported.GoFiles)
 			if err != nil {
 				return nil, fmt.Errorf("reading package %s: %w", path, err)
