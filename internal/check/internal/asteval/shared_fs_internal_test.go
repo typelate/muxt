@@ -13,6 +13,12 @@ import (
 	"github.com/typelate/muxt/internal/source"
 )
 
+// argumentPosition is where sharedArgument's selector is, by absolute path
+// as every shared embed.FS error prints it.
+func argumentPosition() string {
+	return filepath.Join(filepath.FromSlash("/m/workspace"), "workspace.go") + ":5:9"
+}
+
 // namedType is the named type path.name, as the analyzed package's type
 // information names a variable's type.
 func namedType(path, name string) types.Type {
@@ -68,7 +74,7 @@ func TestSharedFilesUnexportedVariable(t *testing.T) {
 	if !errors.As(err, &typed) {
 		t.Fatalf("sharedFiles(fragments.templateSource) error = %v (%T), want UnexportedSharedFSError", err, err)
 	}
-	const want = "workspace.go:5:9: fragments.templateSource is unexported; ParseFS reads only an exported embed.FS variable of another package"
+	want := argumentPosition() + ": fragments.templateSource is unexported; ParseFS reads only an exported embed.FS variable of another package"
 	if got := err.Error(); got != want {
 		t.Errorf("sharedFiles(fragments.templateSource) error = %q, want %q", got, want)
 	}
@@ -92,7 +98,7 @@ func TestSharedFilesNotEmbedFSVariable(t *testing.T) {
 	if !errors.As(err, &typed) {
 		t.Fatalf("sharedFiles(fragments.Other) error = %v (%T), want NotEmbedFSError", err, err)
 	}
-	const want = "workspace.go:5:9: fragments.Other is a io/fs.FS, not an embed.FS; ParseFS reads an exported embed.FS variable of another package"
+	want := argumentPosition() + ": fragments.Other has type io/fs.FS, not embed.FS; ParseFS reads an exported embed.FS variable of another package"
 	if got := err.Error(); got != want {
 		t.Errorf("sharedFiles(fragments.Other) error = %q, want %q", got, want)
 	}
@@ -113,7 +119,7 @@ func TestSharedFilesOtherModuleError(t *testing.T) {
 	if !errors.As(err, &typed) {
 		t.Fatalf("sharedFiles(fragments.TemplateSource) error = %v (%T), want OtherModuleError", err, err)
 	}
-	const want = "workspace.go:5:9: package example.org/other/fragments is in module example.org/other, not in this module (example.com/m); a shared embed.FS must come from a package of this module"
+	want := argumentPosition() + ": package example.org/other/fragments is in module example.org/other, not in this module (example.com/m); a shared embed.FS must come from a package of this module"
 	if got := err.Error(); got != want {
 		t.Errorf("sharedFiles(fragments.TemplateSource) error = %q, want %q", got, want)
 	}
@@ -134,7 +140,7 @@ func TestSharedFilesStandardLibraryPackage(t *testing.T) {
 	if !errors.As(err, &typed) {
 		t.Fatalf("sharedFiles(fragments.TemplateSource) error = %v (%T), want OtherModuleError", err, err)
 	}
-	const want = "workspace.go:5:9: package net/http is in the standard library, which holds no embed.FS muxt can read; a shared embed.FS must come from a package of this module (example.com/m)"
+	want := argumentPosition() + ": package net/http is in the standard library, which holds no embed.FS muxt can read; a shared embed.FS must come from a package of this module (example.com/m)"
 	if got := err.Error(); got != want {
 		t.Errorf("sharedFiles(fragments.TemplateSource) error = %q, want %q", got, want)
 	}
@@ -155,7 +161,7 @@ func TestSharedFilesUnavailablePackage(t *testing.T) {
 	if !errors.As(err, &typed) {
 		t.Fatalf("sharedFiles(fragments.TemplateSource) error = %v (%T), want SharedPackageUnavailableError", err, err)
 	}
-	const want = "workspace.go:5:9: muxt has no embedded files for package example.com/m/fragments; run muxt on the module so its packages are loaded together"
+	want := argumentPosition() + ": muxt has no embedded files for package example.com/m/fragments; run muxt on the module so its packages are loaded together"
 	if got := err.Error(); got != want {
 		t.Errorf("sharedFiles(fragments.TemplateSource) error = %q, want %q", got, want)
 	}

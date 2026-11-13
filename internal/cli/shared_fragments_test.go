@@ -441,7 +441,7 @@ var templateSource embed.FS
 	output, err := runMuxt(t, filepath.Join(dir, "workspace"), "generate")
 
 	require.Error(t, err, "generate: %s", output)
-	assert.Contains(t, output, "workspace.go:14:10: fragments.templateSource is unexported; ParseFS reads only an exported embed.FS variable of another package", "generate output")
+	assert.Contains(t, output, filepath.Join(dir, "workspace", "workspace.go")+":14:10: fragments.templateSource is unexported; ParseFS reads only an exported embed.FS variable of another package", "generate output")
 }
 
 // TestGenerateReportsSharedVariableThatIsNotEmbedFS states that a ParseFS
@@ -470,7 +470,7 @@ var Other fs.FS = TemplateSource
 	output, err := runMuxt(t, filepath.Join(dir, "workspace"), "generate")
 
 	require.Error(t, err, "generate: %s", output)
-	assert.Contains(t, output, "workspace.go:14:10: fragments.Other is a io/fs.FS, not an embed.FS; ParseFS reads an exported embed.FS variable of another package", "generate output")
+	assert.Contains(t, output, filepath.Join(dir, "workspace", "workspace.go")+":14:10: fragments.Other has type io/fs.FS, not embed.FS; ParseFS reads an exported embed.FS variable of another package", "generate output")
 }
 
 // TestGenerateReportsSharedFSCall states that a ParseFS first argument that is
@@ -515,7 +515,7 @@ var TemplateSource embed.FS
 	output, err := runMuxt(t, filepath.Join(dir, "workspace"), "generate")
 
 	require.Error(t, err, "generate: %s", output)
-	assert.Contains(t, output, "workspace.go:14:10: package example.org/other/fragments is in module example.org/other, not in this module (example.com/m); a shared embed.FS must come from a package of this module", "generate output")
+	assert.Contains(t, output, filepath.Join(dir, "workspace", "workspace.go")+":14:10: package example.org/other/fragments is in module example.org/other, not in this module (example.com/m); a shared embed.FS must come from a package of this module", "generate output")
 }
 
 // overriddenFooter is a module where the shared package defines "footer" with

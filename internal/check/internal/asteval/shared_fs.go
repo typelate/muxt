@@ -32,18 +32,18 @@ func sharedFiles(scope Scope, arg *ast.SelectorExpr) (paths []string, importPath
 	importPath = pkgName.Imported().Path()
 	other, ok := scope.Imports[importPath]
 	if !ok {
-		return nil, "", SharedPackageUnavailableError{Position: relativePosition(scope.Dir, scope.Fset, arg.Pos()), ImportPath: importPath}
+		return nil, "", SharedPackageUnavailableError{Position: scope.Fset.Position(arg.Pos()), ImportPath: importPath}
 	}
 	if other.ModulePath != scope.ModulePath {
-		return nil, "", OtherModuleError{Position: relativePosition(scope.Dir, scope.Fset, arg.Pos()), ImportPath: importPath, OtherModule: other.ModulePath, ThisModule: scope.ModulePath}
+		return nil, "", OtherModuleError{Position: scope.Fset.Position(arg.Pos()), ImportPath: importPath, OtherModule: other.ModulePath, ThisModule: scope.ModulePath}
 	}
 	if !arg.Sel.IsExported() {
-		return nil, "", UnexportedSharedFSError{Position: relativePosition(scope.Dir, scope.Fset, arg.Pos()), Package: pkgIdent.Name, Name: arg.Sel.Name}
+		return nil, "", UnexportedSharedFSError{Position: scope.Fset.Position(arg.Pos()), Package: pkgIdent.Name, Name: arg.Sel.Name}
 	}
 	// The analyzed package's type information types the selector; a var
 	// that is not an embed.FS has no embedded files this function can read.
 	if v, ok := scope.Info.Uses[arg.Sel].(*types.Var); ok && !isEmbedFS(v.Type()) {
-		return nil, "", NotEmbedFSError{Position: relativePosition(scope.Dir, scope.Fset, arg.Pos()), Package: pkgIdent.Name, Name: arg.Sel.Name, Type: types.TypeString(v.Type(), nil)}
+		return nil, "", NotEmbedFSError{Position: scope.Fset.Position(arg.Pos()), Package: pkgIdent.Name, Name: arg.Sel.Name, Type: types.TypeString(v.Type(), nil)}
 	}
 	relative, err := RelativeFilePaths(other.Dir, other.EmbedFiles...)
 	if err != nil {

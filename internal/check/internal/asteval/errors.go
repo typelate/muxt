@@ -23,7 +23,7 @@ func relativePosition(workingDirectory string, set *token.FileSet, pos token.Pos
 // unexported variable of another package. Go rejects that reference too, but
 // only with its own message, so muxt reports the rule and the fix first.
 type UnexportedSharedFSError struct {
-	// Position is the argument, relative to the package directory.
+	// Position is the argument, with its file by absolute path.
 	Position token.Position
 
 	// Package is the argument's qualifier, as written.
@@ -42,7 +42,7 @@ func (e UnexportedSharedFSError) Error() string {
 // the analyzed package's module. Its files are not part of this module's build
 // as the embed patterns were written, so muxt does not read them.
 type OtherModuleError struct {
-	// Position is the argument, relative to the package directory.
+	// Position is the argument, with its file by absolute path.
 	Position token.Position
 
 	// ImportPath is the argument's package.
@@ -69,7 +69,7 @@ func (e OtherModuleError) Error() string {
 // for. That is a fact about the run, not about the package's module: the
 // package may well be in this module, so the message must not say it is not.
 type SharedPackageUnavailableError struct {
-	// Position is the argument, relative to the package directory.
+	// Position is the argument, with its file by absolute path.
 	Position token.Position
 
 	// ImportPath is the argument's package.
@@ -85,7 +85,7 @@ func (e SharedPackageUnavailableError) Error() string {
 // variable of another package whose type is not embed.FS. Only an embed.FS
 // carries the files its //go:embed matched, so any other fs.FS is refused.
 type NotEmbedFSError struct {
-	// Position is the argument, relative to the package directory.
+	// Position is the argument, with its file by absolute path.
 	Position token.Position
 
 	// Package is the argument's qualifier, as written.
@@ -100,7 +100,7 @@ type NotEmbedFSError struct {
 
 // Error is one line: the position, what failed and how to fix it.
 func (e NotEmbedFSError) Error() string {
-	return fmt.Sprintf("%s: %s.%s is a %s, not an embed.FS; ParseFS reads an exported embed.FS variable of another package", e.Position, e.Package, e.Name, e.Type)
+	return fmt.Sprintf("%s: %s.%s has type %s, not embed.FS; ParseFS reads an exported embed.FS variable of another package", e.Position, e.Package, e.Name, e.Type)
 }
 
 // SharedParseError is a parse error in a file of another package's embed.FS.
