@@ -4,7 +4,7 @@ Type-checks each template against the data type at its `ExecuteTemplate` call si
 
 `use_templates_variable` comes from the directory's [`muxt.json`](../muxt-json.md) entry when there is one; `--use-templates-variable` is rejected there.
 
-With no flags in the directory of a `muxt.json`, `check` checks every entry, dependencies first, from one package load. Each `ok:` line follows its entry's key, and the run stops at the first failure, named by key: `example.com/m: fail: variable templates not found in package example.com/m`.
+With no flags in the directory of a `muxt.json`, `check` checks every entry, dependencies first, from one package load. Each `ok:` line follows its entry's key, and the run stops at the first failure, named by key: `Error: example.com/m: fail: variable templates not found in package example.com/m`.
 
 ```bash
 muxt check
