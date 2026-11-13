@@ -116,7 +116,7 @@ func EvaluateTemplateSelector(scope Scope, chain Chain, expression ast.Expr, fun
 				if meta != nil {
 					meta.EmbedFilePaths = append(meta.EmbedFilePaths, filePaths...)
 				}
-				t, err := parseFiles(chain.Templates, false, fm, meta, pkgPath, chain.LeftDelim, chain.RightDelim, filePaths...)
+				t, err := parseFiles(chain, false, fm, meta, pkgPath, filePaths...)
 				return chain.next(t, err)
 			case "Parse":
 				if len(call.Args) != 1 {
@@ -187,7 +187,7 @@ func EvaluateTemplateSelector(scope Scope, chain Chain, expression ast.Expr, fun
 			if meta != nil {
 				meta.EmbedFilePaths = append(meta.EmbedFilePaths, filePaths...)
 			}
-			t, err := parseFiles(nil, isTextTemplatePkgIdent(scope.Info, x), fm, meta, pkgPath, chain.LeftDelim, chain.RightDelim, filePaths...)
+			t, err := parseFiles(Chain{LeftDelim: chain.LeftDelim, RightDelim: chain.RightDelim}, isTextTemplatePkgIdent(scope.Info, x), fm, meta, pkgPath, filePaths...)
 			return chain.next(t, err)
 		default:
 			return chain.fail(wrapWithFilename(scope.Dir, scope.Fset, call.Fun.Pos(), fmt.Errorf("unsupported function %s%s", sel.Sel.Name, unsupportedFunctionHint(sel.Sel.Name))))
@@ -246,7 +246,7 @@ func EvaluateTemplateSelector(scope Scope, chain Chain, expression ast.Expr, fun
 			if meta != nil {
 				meta.EmbedFilePaths = append(meta.EmbedFilePaths, filePaths...)
 			}
-			t, err := parseFiles(up, false, fm, meta, pkgPath, upLDelim, upRDelim, filePaths...)
+			t, err := parseFiles(upChain, false, fm, meta, pkgPath, filePaths...)
 			return upChain.next(t, err)
 		case "Option":
 			list, err := StringLiteralExpressionList(scope.Dir, scope.Fset, scope.Files, call.Args)
@@ -369,13 +369,14 @@ func FindModificationReceiver(expr *ast.CallExpr, typesInfo *types.Info) types.O
 	return nil
 }
 
-// parseFiles parses each file into t, as ParseFiles does. A nil t is
-// created from the first file's name, as a text/template set when text
-// is true.
+// parseFiles parses each file into chain's set, as ParseFiles does, with the
+// delimiters in effect in chain. A nil set is created from the first file's
+// name, as a text/template set when text is true.
 //
 // pkgPath is the import path of the package whose files these are, recorded
 // on each ParsedText; empty means the analyzed package.
-func parseFiles(t *template.Template[*types.Signature], text bool, fm map[string]any, meta *TemplateMetadata, pkgPath, leftDelim, rightDelim string, filenames ...string) (*template.Template[*types.Signature], error) {
+func parseFiles(chain Chain, text bool, fm map[string]any, meta *TemplateMetadata, pkgPath string, filenames ...string) (*template.Template[*types.Signature], error) {
+	t, leftDelim, rightDelim := chain.Templates, chain.LeftDelim, chain.RightDelim
 	if len(filenames) == 0 {
 		return nil, fmt.Errorf("template: no files named in call to ParseFiles")
 	}

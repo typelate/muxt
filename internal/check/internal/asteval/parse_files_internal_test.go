@@ -24,7 +24,7 @@ func TestParseFilesParseErrorNamesSharedFile(t *testing.T) {
 		{name: "own file", pkgPath: "", want: `template: layout.gohtml:1: function "upper" not defined`},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := parseFiles(nil, false, nil, nil, tt.pkgPath, "", "", file)
+			_, err := parseFiles(Chain{}, false, nil, nil, tt.pkgPath, file)
 
 			if err == nil {
 				t.Fatalf("parseFiles(%q) error = nil, want a parse error", file)
