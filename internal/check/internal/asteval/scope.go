@@ -35,25 +35,34 @@ type Scope struct {
 }
 
 // Chain is one call's state: the template set built so far and the
-// variable it is being built for. It is the input and the output of one
-// step of the construction chain, so that the delimiters a Delims call set
-// reach the next call.
+// delimiters in effect. It is the input and the output of one step of the
+// construction chain, so that the delimiters a Delims call set reach the
+// next call.
 type Chain struct {
 	// Templates is the set built so far, nil at the start of a chain.
 	Templates *template.Template[*types.Signature]
-
-	// Variable is the name of the template variable being built.
-	Variable string
 
 	// LeftDelim and RightDelim are the delimiters in effect, empty for the
 	// template defaults.
 	LeftDelim, RightDelim string
 }
 
-// result is the return of one evaluation step: the set t and the chain with
-// the delimiters in effect after the step. It keeps a step's return one
-// statement, as it was when the delimiters were separate return values.
-func (c Chain) result(t *template.Template[*types.Signature], leftDelim, rightDelim string, err error) (*template.Template[*types.Signature], Chain, error) {
+// next is the return of a step that leaves the delimiters alone: the set t,
+// and err if the step failed.
+func (c Chain) next(t *template.Template[*types.Signature], err error) (Chain, error) {
+	c.Templates = t
+	return c, err
+}
+
+// delimited is the return of a Delims step: the set t with the new
+// delimiters in effect.
+func (c Chain) delimited(t *template.Template[*types.Signature], leftDelim, rightDelim string) (Chain, error) {
 	c.Templates, c.LeftDelim, c.RightDelim = t, leftDelim, rightDelim
-	return t, c, err
+	return c, nil
+}
+
+// fail is the return of a step that failed. It keeps the delimiters in
+// effect, so a caller that reads them after an error sees what it passed in.
+func (c Chain) fail(err error) (Chain, error) {
+	return c.next(nil, err)
 }

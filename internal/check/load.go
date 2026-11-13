@@ -73,10 +73,11 @@ func LoadTemplates(pkg *packages.Package, templatesVariable string, imports map[
 	if pkg.Module != nil {
 		scope.ModulePath = pkg.Module.Path
 	}
-	ts, _, err := asteval.EvaluateTemplateSelector(scope, asteval.Chain{Variable: templatesVariable}, value, functions, make(map[string]any), meta)
+	end, err := asteval.EvaluateTemplateSelector(scope, asteval.Chain{}, value, functions, make(map[string]any), meta)
 	if err != nil {
 		return nil, err
 	}
+	ts := end.Templates
 	collected := make(Functions)
 	for name, sig := range functions {
 		if base, ok := baseline[name]; !ok || base != sig {

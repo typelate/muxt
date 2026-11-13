@@ -47,7 +47,7 @@ var notAFunc = 42
 	fm := make(map[string]any)
 	funcTypes := make(TemplateFunctions)
 
-	err = evaluateFuncMap(".", nil, pkg, fset, nil, call, fm, funcTypes)
+	err = evaluateFuncMap(Scope{Dir: ".", Types: pkg, Fset: fset}, call, fm, funcTypes)
 	require.Error(t, err, "evaluateFuncMap should return an error for non-function FuncMap values")
 	require.Contains(t, err.Error(), "not a function type")
 }

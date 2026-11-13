@@ -418,24 +418,23 @@ func resolveTemplates(pkg *packages.Package, receivers map[types.Object]struct{}
 
 	var resolveErrs []error
 
-	resolveExpr := func(obj types.Object, name string, expr ast.Expr) {
+	resolveExpr := func(obj types.Object, expr ast.Expr) {
 		if _, needed := receivers[obj]; !needed {
 			return
 		}
 		funcTypeMap := asteval.DefaultFunctions(pkg.Types)
 		meta := &asteval.TemplateMetadata{}
-		ts, end, err := asteval.EvaluateTemplateSelector(scope, asteval.Chain{Variable: name}, expr, funcTypeMap, make(map[string]any), meta)
-		left, right := end.LeftDelim, end.RightDelim
+		end, err := asteval.EvaluateTemplateSelector(scope, asteval.Chain{}, expr, funcTypeMap, make(map[string]any), meta)
 		if err != nil {
 			resolveErrs = append(resolveErrs, err)
 			return
 		}
 		resolved[obj] = &resolvedTemplate{
-			templates:  ts,
+			templates:  end.Templates,
 			functions:  funcTypeMap,
 			metadata:   meta,
-			leftDelim:  left,
-			rightDelim: right,
+			leftDelim:  end.LeftDelim,
+			rightDelim: end.RightDelim,
 		}
 	}
 
@@ -449,7 +448,7 @@ func resolveTemplates(pkg *packages.Package, receivers map[types.Object]struct{}
 			if obj == nil {
 				continue
 			}
-			resolveExpr(obj, ident.Name, tv.Values[i])
+			resolveExpr(obj, tv.Values[i])
 		}
 	}
 
@@ -475,7 +474,7 @@ func resolveTemplates(pkg *packages.Package, receivers map[types.Object]struct{}
 						if obj == nil {
 							continue
 						}
-						resolveExpr(obj, ident.Name, vs.Values[i])
+						resolveExpr(obj, vs.Values[i])
 					}
 				}
 			case *ast.AssignStmt:
@@ -494,7 +493,7 @@ func resolveTemplates(pkg *packages.Package, receivers map[types.Object]struct{}
 					if obj == nil {
 						continue
 					}
-					resolveExpr(obj, ident.Name, n.Rhs[i])
+					resolveExpr(obj, n.Rhs[i])
 				}
 			}
 			return true
@@ -517,11 +516,11 @@ func resolveTemplates(pkg *packages.Package, receivers map[types.Object]struct{}
 				return true
 			}
 			meta := &asteval.TemplateMetadata{}
-			ts, end, err := asteval.EvaluateTemplateSelector(scope, asteval.Chain{Templates: rt.templates, LeftDelim: rt.leftDelim, RightDelim: rt.rightDelim}, call, rt.functions, make(map[string]any), meta)
+			end, err := asteval.EvaluateTemplateSelector(scope, asteval.Chain{Templates: rt.templates, LeftDelim: rt.leftDelim, RightDelim: rt.rightDelim}, call, rt.functions, make(map[string]any), meta)
 			if err != nil {
 				return true
 			}
-			rt.templates = ts
+			rt.templates = end.Templates
 			rt.leftDelim, rt.rightDelim = end.LeftDelim, end.RightDelim
 			rt.metadata.EmbedFilePaths = append(rt.metadata.EmbedFilePaths, meta.EmbedFilePaths...)
 			rt.metadata.ParseCalls = append(rt.metadata.ParseCalls, meta.ParseCalls...)

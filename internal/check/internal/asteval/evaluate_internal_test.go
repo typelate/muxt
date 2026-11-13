@@ -78,8 +78,8 @@ func evalTemplates(t *testing.T, dir, varName string, embedFiles ...string) (*te
 					}
 					meta := new(TemplateMetadata)
 					scope := Scope{Types: pkg, Info: info, Fset: fileSet, Files: files, Dir: dir, Embedded: embedFiles}
-					ts, _, err := EvaluateTemplateSelector(scope, Chain{Variable: varName}, vs.Values[i], DefaultFunctions(pkg), make(map[string]any), meta)
-					return ts, err
+					end, err := EvaluateTemplateSelector(scope, Chain{}, vs.Values[i], DefaultFunctions(pkg), make(map[string]any), meta)
+					return end.Templates, err
 				}
 			}
 		}
