@@ -93,6 +93,10 @@ This function also receives an argument with a type matching the name given by o
 			Name: inputStaticAssetsDirectory, Example: "static",
 			Usage: `A directory inside the templates package, relative to it, whose files generate embeds and serves under --output-static-assets-path. Requires --output-static-assets-path.`,
 		}),
+		stringSetting(&c.StaticAssetsPath, spec[string]{
+			Name: outputStaticAssetsPath, Example: "/static",
+			Usage: `The URL path the files of --input-static-assets-directory are served under with GET, such as /static (a trailing / is added). Adds a TemplateRoutePaths method returning it. Requires --input-static-assets-directory.`,
+		}),
 	}
 }
 

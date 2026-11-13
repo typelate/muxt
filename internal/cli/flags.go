@@ -13,8 +13,6 @@ func addGenerateFlags(flagSet *pflag.FlagSet, config *generate.RoutesFileConfigu
 	registerWithDeprecated(flagSet, generateSettings(config))
 	addDeprecatedTemplatesVariable(flagSet, deprecatedTemplatesVar)
 	addVerboseFlagToFlagSet(flagSet, &config.Verbose)
-
-	addOutputFlagsToFlagSet(flagSet, config)
 }
 
 func isDefaultTemplatesVariable(in *[]string) bool {
@@ -33,10 +31,6 @@ func addUseReceiverTypeVarToFlagSet(flagSet *pflag.FlagSet, out *string) {
 
 func addUseReceiverTypePackageVarToFlagSet(flagSet *pflag.FlagSet, out *string) {
 	flagSet.StringVar(out, useReceiverTypePackage, "", useReceiverTypePackageHelp)
-}
-
-func addOutputFlagsToFlagSet(flagSet *pflag.FlagSet, g *generate.RoutesFileConfiguration) {
-	flagSet.StringVar(&g.StaticAssetsPath, outputStaticAssetsPath, "", outputStaticAssetsPathHelp)
 }
 
 func addVerboseFlagToFlagSet(flagSet *pflag.FlagSet, out *bool) {

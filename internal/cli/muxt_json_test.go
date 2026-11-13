@@ -72,44 +72,38 @@ func namesNotIn(a, b []string) []string {
 // is one flag given both ways in a directory with no other configuration.
 // Static assets flags must be given together, so their rows hold both keys.
 func TestMuxtJSONEntryAcceptsEveryGenerateFlag(t *testing.T) {
-	for _, tt := range []struct {
-		name  string
-		args  string
-		entry map[string]any
-	}{
-		{name: "use_templates_variable", args: "--use-templates-variable data", entry: map[string]any{"use_templates_variable": []string{"data"}}},
-		{name: "use_receiver_type", args: "--use-receiver-type Server", entry: map[string]any{"use_receiver_type": "Server"}},
-		{name: "use_receiver_type_package", args: "--use-receiver-type-package example.com/pkg", entry: map[string]any{"use_receiver_type_package": "example.com/pkg"}},
-		{name: "output_file", args: "--output-file routes_gen.go", entry: map[string]any{"output_file": "routes_gen.go"}},
-		{name: "output_receiver_interface", args: "--output-receiver-interface Receiver", entry: map[string]any{"output_receiver_interface": "Receiver"}},
-		{name: "output_routes_func", args: "--output-routes-func Routes", entry: map[string]any{"output_routes_func": "Routes"}},
-		{name: "output_template_data_type", args: "--output-template-data-type Data", entry: map[string]any{"output_template_data_type": "Data"}},
-		{name: "output_sse_template_data_type", args: "--output-sse-template-data-type SSEData", entry: map[string]any{"output_sse_template_data_type": "SSEData"}},
-		{name: "output_template_route_paths_type", args: "--output-template-route-paths-type Paths", entry: map[string]any{"output_template_route_paths_type": "Paths"}},
-		{name: "output_template_route_type", args: "--output-template-route-type Route", entry: map[string]any{"output_template_route_type": "Route"}},
-		{name: "output_template_route_builder_type", args: "--output-template-route-builder-type RouteBuilder", entry: map[string]any{"output_template_route_builder_type": "RouteBuilder"}},
-		{name: "output_routes_func_with_logger_param", args: "--output-routes-func-with-logger-param", entry: map[string]any{"output_routes_func_with_logger_param": true}},
-		{name: "output_routes_func_with_path_prefix_param", args: "--output-routes-func-with-path-prefix-param", entry: map[string]any{"output_routes_func_with_path_prefix_param": true}},
-		{name: "output_routes_func_with_middleware_param", args: "--output-routes-func-with-middleware-param", entry: map[string]any{"output_routes_func_with_middleware_param": true}},
-		{name: "output_multiple_files", args: "--output-multiple-files", entry: map[string]any{"output_multiple_files": true}},
-		{name: "output_htmx", args: "--output-htmx", entry: map[string]any{"output_htmx": true}},
-		{name: "output_datastar", args: "--output-datastar", entry: map[string]any{"output_datastar": true}},
-		{name: "output_exported_default_identifiers", args: "--output-exported-default-identifiers=false", entry: map[string]any{"output_exported_default_identifiers": false}},
-		{name: "output_multipart_max_memory", args: "--output-multipart-max-memory 64MB", entry: map[string]any{"output_multipart_max_memory": "64MB"}},
-		{name: "output_muxt_version", args: "--output-muxt-version=false", entry: map[string]any{"output_muxt_version": false}},
-		{name: "input_static_assets_directory", args: "--input-static-assets-directory assets --output-static-assets-path /static", entry: map[string]any{"input_static_assets_directory": "assets", "output_static_assets_path": "/static"}},
-		{name: "output_static_assets_path", args: "--input-static-assets-directory assets --output-static-assets-path /static", entry: map[string]any{"input_static_assets_directory": "assets", "output_static_assets_path": "/static"}},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			dir := moduleDir(t)
-			want := generateConfigurationOf(t, dir, "generate "+tt.args)
+	// A static assets setting is rejected without the other, so each of
+	// their rows gives both.
+	companion := map[string]string{
+		inputStaticAssetsDirectory: outputStaticAssetsPath,
+		outputStaticAssetsPath:     inputStaticAssetsDirectory,
+	}
+	settings := generateSettings(new(generate.RoutesFileConfiguration))
+	for _, s := range settings {
+		given := []setting{s}
+		if other, ok := companion[s.name]; ok {
+			i := slices.IndexFunc(settings, func(o setting) bool { return o.name == other })
+			require.GreaterOrEqual(t, i, 0, "companion %s of %s is not a setting", other, s.name)
+			given = append(given, settings[i])
+		}
+		t.Run(muxtJSONKey(s.name), func(t *testing.T) {
+			var args []string
+			entry := map[string]any{}
+			for _, g := range given {
+				arg, value := exampleOf(t, g)
+				args = append(args, arg)
+				entry[muxtJSONKey(g.name)] = value
+			}
 
-			file, err := json.Marshal(map[string]any{"packages": map[string]any{testModule: tt.entry}})
+			dir := moduleDir(t)
+			want := generateConfigurationOf(t, dir, "generate "+strings.Join(args, " "))
+
+			file, err := json.Marshal(map[string]any{"packages": map[string]any{testModule: entry}})
 			require.NoError(t, err)
 			require.NoError(t, os.WriteFile(filepath.Join(dir, "muxt.json"), file, 0o644))
 			got := generateConfigurationOf(t, dir, "generate")
 
-			assert.Equal(t, want, got, "entry %s: Config = %+v, want %+v", tt.name, got, want)
+			assert.Equal(t, want, got, "entry %v: Config = %+v, want %+v", entry, got, want)
 		})
 	}
 }

@@ -76,6 +76,9 @@ type setting struct {
 	name       string
 	deprecated []string
 	nonEmpty   bool
+	// example is the spec's Example, kept so a test can give every setting a
+	// value the same way.
+	example string
 	// field is the pointer the setting is bound to, kept so a test can prove
 	// every configuration field is bound once. It is an any because the kinds
 	// of field differ and nothing in production reads it back.
@@ -106,6 +109,7 @@ func stringSetting(p *string, s spec[string]) setting {
 		name:       s.Name,
 		deprecated: s.Deprecated,
 		nonEmpty:   s.NonEmpty,
+		example:    s.Example,
 		field:      p,
 		setDefault: func() { *p = s.Default },
 		register:   func(fs *pflag.FlagSet) { fs.StringVar(p, s.Name, s.Default, s.Usage) },
@@ -133,6 +137,7 @@ func boolSetting(p *bool, s spec[bool]) setting {
 		name:       s.Name,
 		deprecated: s.Deprecated,
 		nonEmpty:   s.NonEmpty,
+		example:    s.Example,
 		field:      p,
 		setDefault: func() { *p = s.Default },
 		register:   func(fs *pflag.FlagSet) { fs.BoolVar(p, s.Name, s.Default, s.Usage) },
@@ -166,6 +171,7 @@ func stringsSetting(p *[]string, s spec[[]string]) setting {
 		name:       s.Name,
 		deprecated: s.Deprecated,
 		nonEmpty:   s.NonEmpty,
+		example:    s.Example,
 		field:      p,
 		setDefault: func() { *p = slices.Clone(s.Default) },
 		register:   func(fs *pflag.FlagSet) { fs.StringSliceVar(p, s.Name, s.Default, s.Usage) },
@@ -200,6 +206,7 @@ func bytesSetting(p *int64, s spec[int64]) setting {
 		name:       s.Name,
 		deprecated: s.Deprecated,
 		nonEmpty:   s.NonEmpty,
+		example:    s.Example,
 		field:      p,
 		setDefault: func() { *p = s.Default },
 		register:   func(fs *pflag.FlagSet) { fs.Var(byteSize{p: p}, s.Name, s.Usage) },
