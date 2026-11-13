@@ -261,13 +261,25 @@ func read(path string, keys Keys) (*File, error) {
 	if err != nil {
 		return nil, fmt.Errorf("reading %s: %w", path, err)
 	}
-	var f File
-	if err := json.Unmarshal(data, &f); err != nil {
+	// Syntax first: decoding into a RawMessage checks nothing else.
+	var whole json.RawMessage
+	if err := json.Unmarshal(data, &whole); err != nil {
 		var syntax *json.SyntaxError
 		if errors.As(err, &syntax) {
 			line, col := position(data, syntax.Offset)
 			return nil, &ParseError{Path: path, Line: line, Col: col, Err: syntax}
 		}
+		return nil, fmt.Errorf("parsing %s: %w", path, err)
+	}
+	// A wrong outer shape fails the raw read, and the typed read below says
+	// so in the json package's words.
+	if raw, err := readRaw(data); err == nil {
+		if err := checkKinds(path, raw, keys); err != nil {
+			return nil, err
+		}
+	}
+	var f File
+	if err := json.Unmarshal(data, &f); err != nil {
 		return nil, fmt.Errorf("parsing %s: %w", path, err)
 	}
 	f.Dir = filepath.Dir(path)
@@ -477,4 +489,65 @@ func (f *File) spelledOnDisk(key string) (string, error) {
 		dir = filepath.Join(dir, found)
 	}
 	return path.Join(f.module, path.Join(elements...)), nil
+}
+
+// rawFile is the entries of a muxt.json as written, each value left as bytes,
+// so a value's JSON type can be checked before any typed decoding names a Go
+// struct field in its error.
+type rawFile struct {
+	PackageDefaults map[string]json.RawMessage            `json:"package_defaults"`
+	Packages        map[string]map[string]json.RawMessage `json:"packages"`
+}
+
+// readRaw decodes data into the entries as written. It fails when the shape
+// outside the values is wrong, such as a list where packages goes.
+func readRaw(data []byte) (rawFile, error) {
+	var raw rawFile
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return rawFile{}, fmt.Errorf("reading entries: %w", err)
+	}
+	return raw, nil
+}
+
+// checkKinds returns a *ValueTypeError for the first value, in the order
+// package_defaults, then packages sorted, then each entry's keys sorted, that
+// is not the JSON type its key takes. A key keys does not know is left to
+// checkKeys, and null is an absent key, so neither is a kind error.
+func checkKinds(path string, raw rawFile, keys Keys) error {
+	if err := checkEntryKinds(path, "package_defaults", raw.PackageDefaults, keys); err != nil {
+		return err
+	}
+	for _, key := range slices.Sorted(maps.Keys(raw.Packages)) {
+		if err := checkEntryKinds(path, fmt.Sprintf("packages[%q]", key), raw.Packages[key], keys); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// checkEntryKinds is checkKinds for the entry where names.
+func checkEntryKinds(path, where string, entry map[string]json.RawMessage, keys Keys) error {
+	for _, key := range slices.Sorted(maps.Keys(entry)) {
+		want, known := keys.Kinds[key]
+		value := entry[key]
+		if !known || bytes.Equal(bytes.TrimSpace(value), []byte("null")) {
+			continue
+		}
+		var err error
+		switch want {
+		case KindBool:
+			var v bool
+			err = json.Unmarshal(value, &v)
+		case KindList:
+			var v []string
+			err = json.Unmarshal(value, &v)
+		default:
+			var v string
+			err = json.Unmarshal(value, &v)
+		}
+		if err != nil {
+			return &ValueTypeError{Path: path, Where: where, Key: key, Want: want}
+		}
+	}
+	return nil
 }

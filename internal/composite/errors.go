@@ -284,3 +284,28 @@ type SeveralPackagesError struct {
 func (e *SeveralPackagesError) Error() string {
 	return fmt.Sprintf("%s: %s tests one package; pass one of: %s", e.Path, e.Command, strings.Join(e.Dirs, " "))
 }
+
+// ValueTypeError reports a key in a muxt.json entry whose value is not the
+// JSON type the key takes. Want is the type it takes. Where names the entry.
+type ValueTypeError struct {
+	Path, Where, Key string
+	Want             Kind
+}
+
+// Error returns the path, the entry, the key, and the type it takes on one
+// line.
+func (e *ValueTypeError) Error() string {
+	return fmt.Sprintf("%s: %s: key %q takes %s", e.Path, e.Where, e.Key, e.Want.description())
+}
+
+// description is the kind as a phrase: "a JSON boolean".
+func (k Kind) description() string {
+	switch k {
+	case KindBool:
+		return "a JSON boolean"
+	case KindList:
+		return "a JSON array of strings"
+	default:
+		return "a JSON string"
+	}
+}
