@@ -3,7 +3,6 @@ package cli
 import (
 	"errors"
 	"fmt"
-	"go/types"
 	"io"
 	"io/fs"
 	"os"
@@ -185,80 +184,7 @@ func inspectPackage(target definitionTarget, config generate.RoutesFileConfigura
 	if err != nil {
 		return "", err
 	}
-	return methodStubs(pkg, receiver, name, l.StandardLibrary())
-}
-
-// methodStubs returns a stub for each method the route name calls that
-// receiver does not define, as muxt infers its signature. A method the receiver
-// has gives no stub. Stubs use a pointer receiver when the type's own methods
-// do.
-func methodStubs(pkg source.Package, receiver *types.Named, name string, checker muxt.Checker) (string, error) {
-	templates, err := html.New("").Parse(generate.DefineBlock(name, generate.FragmentBody))
-	if err != nil {
-		return "", fmt.Errorf("parsing %q: %w", name, err)
-	}
-	pointer := hasPointerMethod(receiver)
-	probe := source.Package{Fset: pkg.Fset, Types: pkg.Types, Variables: []source.Variable{{Name: "probe", Set: templates}}}
-	defs, err := muxt.ResolveDefinitions(probe, receiver, checker)
-	if err != nil {
-		return "", err
-	}
-	qualify := func(p *types.Package) string {
-		if p == receiver.Obj().Pkg() {
-			return ""
-		}
-		return p.Name()
-	}
-	var stubs []string
-	for _, def := range defs {
-		for _, inferred := range def.SynthesizedMethods() {
-			method, _, _ := strings.Cut(inferred, "(")
-			spec, err := methodSpec(receiver, pointer, method, qualify)
-			if err != nil {
-				return "", err
-			}
-			stub, err := generate.MethodStub(spec)
-			if err != nil {
-				return "", err
-			}
-			stubs = append(stubs, stub)
-		}
-	}
-	return strings.Join(stubs, "\n"), nil
-}
-
-// hasPointerMethod reports whether receiver declares a method on its pointer
-// type. Only declared methods count: a method has a position only when it is
-// written in source, and muxt adds the ones it infers without one.
-func hasPointerMethod(receiver *types.Named) bool {
-	for method := range receiver.Methods() {
-		if !method.Pos().IsValid() {
-			continue
-		}
-		if _, ok := method.Signature().Recv().Type().(*types.Pointer); ok {
-			return true
-		}
-	}
-	return false
-}
-
-// methodSpec describes the method named name that muxt added to receiver.
-func methodSpec(receiver *types.Named, pointer bool, name string, qualify types.Qualifier) (generate.MethodSpec, error) {
-	for method := range receiver.Methods() {
-		if method.Name() != name {
-			continue
-		}
-		sig := method.Signature()
-		spec := generate.MethodSpec{Receiver: receiver.Obj().Name(), Pointer: pointer, Name: name}
-		for param := range sig.Params().Variables() {
-			spec.Params = append(spec.Params, generate.MethodParam{Name: param.Name(), Type: types.TypeString(param.Type(), qualify)})
-		}
-		for result := range sig.Results().Variables() {
-			spec.Results = append(spec.Results, types.TypeString(result.Type(), qualify))
-		}
-		return spec, nil
-	}
-	return generate.MethodSpec{}, fmt.Errorf("method %s inferred for %s is not on the type", name, receiver.Obj().Name())
+	return generate.MethodStubs(pkg, receiver, name, l.StandardLibrary())
 }
 
 // relativeTo returns file relative to dir. The go command may report a path
