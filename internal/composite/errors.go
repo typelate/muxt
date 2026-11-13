@@ -206,3 +206,16 @@ type PackageNameError struct {
 func (e *PackageNameError) Error() string {
 	return fmt.Sprintf("package name %q %s", e.Name, e.Reason)
 }
+
+// AlreadyConfiguredError reports a muxt.json at or above the directory a
+// command would write one into. A second file would shadow it: the nearest file
+// wins, so the directory would read as unconfigured. Path is the found file's
+// absolute path.
+type AlreadyConfiguredError struct {
+	Path string
+}
+
+// Error returns the file and the command that adds a package, on one line.
+func (e *AlreadyConfiguredError) Error() string {
+	return fmt.Sprintf("%s already configures this directory; add a package with: muxt generate package NAME", e.Path)
+}

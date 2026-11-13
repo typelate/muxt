@@ -30,7 +30,7 @@ func runCommand(t *testing.T, dir string, commandLine string) (string, error) {
 // TestGenerateConfigWritesEmptyMuxtJSON states that muxt generate config in a
 // directory with no muxt.json creates one with an empty packages object.
 func TestGenerateConfigWritesEmptyMuxtJSON(t *testing.T) {
-	dir := t.TempDir()
+	dir := moduleDir(t)
 
 	stdout, err := runCommand(t, dir, "generate config")
 
@@ -44,13 +44,13 @@ func TestGenerateConfigWritesEmptyMuxtJSON(t *testing.T) {
 // TestGenerateConfigLeavesExistingMuxtJSON states that muxt generate config
 // fails, and writes nothing, when the working directory has a muxt.json.
 func TestGenerateConfigLeavesExistingMuxtJSON(t *testing.T) {
-	dir := t.TempDir()
-	const existing = "{\n  \"packages\": {\".\": {\"output_htmx\": true}}\n}\n"
+	dir := moduleDir(t)
+	const existing = "{\n  \"packages\": {\"example.com/m\": {\"output_htmx\": true}}\n}\n"
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "muxt.json"), []byte(existing), 0o644))
 
 	_, err := runCommand(t, dir, "generate config")
 
-	require.EqualError(t, err, filepath.Join(dir, "muxt.json")+" already exists; nothing was written")
+	require.EqualError(t, err, filepath.Join(dir, "muxt.json")+" already configures this directory; add a package with: muxt generate package NAME")
 	got, err := os.ReadFile(filepath.Join(dir, "muxt.json"))
 	require.NoError(t, err)
 	assert.Equal(t, existing, string(got), "muxt.json is unchanged")
@@ -110,7 +110,7 @@ func TestGeneratePackageAddsEntryToMuxtJSON(t *testing.T) {
 // config fails, and creates nothing at the link's target, when muxt.json is a
 // symbolic link to a file that does not exist.
 func TestGenerateConfigDoesNotFollowDanglingMuxtJSONLink(t *testing.T) {
-	dir := t.TempDir()
+	dir := moduleDir(t)
 	target := filepath.Join(dir, "elsewhere.json")
 	link := filepath.Join(dir, "muxt.json")
 	if err := os.Symlink(target, link); err != nil {
@@ -307,7 +307,7 @@ func TestGeneratePackageNeedsMuxtJSON(t *testing.T) {
 // TestGenerateConfigurationIsAliasOfConfig states that muxt generate
 // configuration does what muxt generate config does.
 func TestGenerateConfigurationIsAliasOfConfig(t *testing.T) {
-	dir := t.TempDir()
+	dir := moduleDir(t)
 
 	stdout, err := runCommand(t, dir, "generate configuration")
 
@@ -383,4 +383,38 @@ func TestGeneratePackageRefusesExistingEntry(t *testing.T) {
 	got, err := os.ReadFile(filepath.Join(root, "muxt.json"))
 	require.NoError(t, err)
 	assert.Equal(t, existing, string(got), "muxt.json is unchanged")
+}
+
+// TestGenerateConfigRefusesDirectoryBelowMuxtJSON states that muxt generate
+// config fails, and writes nothing, in a directory below a muxt.json, because
+// a nearer file would shadow the one that configures it.
+func TestGenerateConfigRefusesDirectoryBelowMuxtJSON(t *testing.T) {
+	root := moduleDir(t)
+	const existing = `{"packages": {"example.com/m/contacts": {"output_htmx": true}}}`
+	require.NoError(t, os.WriteFile(filepath.Join(root, "muxt.json"), []byte(existing), 0o644))
+	contacts := filepath.Join(root, "contacts")
+	require.NoError(t, os.Mkdir(contacts, 0o755))
+
+	_, err := runCommand(t, contacts, "generate config")
+
+	var configured *composite.AlreadyConfiguredError
+	require.ErrorAs(t, err, &configured)
+	require.EqualError(t, err, filepath.Join(root, "muxt.json")+" already configures this directory; add a package with: muxt generate package NAME")
+	_, statErr := os.Stat(filepath.Join(contacts, "muxt.json"))
+	assert.ErrorIs(t, statErr, os.ErrNotExist, "no nearer muxt.json is written")
+}
+
+// TestGenerateConfigNeedsModule states that muxt generate config fails, and
+// writes nothing, where no go.mod is at or above the working directory,
+// because every later command rejects such a file.
+func TestGenerateConfigNeedsModule(t *testing.T) {
+	dir := t.TempDir()
+
+	_, err := runCommand(t, dir, "generate config")
+
+	var noModule *composite.NoModuleError
+	require.ErrorAs(t, err, &noModule)
+	require.EqualError(t, err, filepath.Join(dir, "muxt.json")+": no go.mod found at or above the file; package keys are import paths")
+	_, statErr := os.Stat(filepath.Join(dir, "muxt.json"))
+	assert.ErrorIs(t, statErr, os.ErrNotExist, "muxt.json is not written")
 }

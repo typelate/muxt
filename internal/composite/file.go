@@ -92,13 +92,31 @@ func Find(wd string, deprecated map[string]string) (f *File, found bool, err err
 }
 
 // Create writes an empty muxt.json into dir, the file a flagless generate
-// reads before any entry is added.
-func Create(dir string) error {
+// reads before any entry is added. It looks for a file the way Find does and
+// fails with an *AlreadyConfiguredError when one configures dir, since a nearer
+// file would shadow it, and with a *NoModuleError when no go.mod is at or above
+// dir, since no command could read the file. deprecated is as Find takes it.
+func Create(dir string, deprecated map[string]string) error {
 	abs, err := filepath.Abs(dir)
 	if err != nil {
 		return fmt.Errorf("absolute path of %s: %w", dir, err)
 	}
-	return writeNew(filepath.Join(abs, FileName), []byte("{\n\t\"packages\": {}\n}\n"))
+	existing, found, err := Find(abs, deprecated)
+	if err != nil {
+		return err
+	}
+	if found {
+		return &AlreadyConfiguredError{Path: existing.Name}
+	}
+	path := filepath.Join(abs, FileName)
+	_, _, hasModule, err := moduleOf(abs)
+	if err != nil {
+		return fmt.Errorf("%s: %w", path, err)
+	}
+	if !hasModule {
+		return &NoModuleError{Path: path}
+	}
+	return writeNew(path, []byte("{\n\t\"packages\": {}\n}\n"))
 }
 
 // writeNew creates path with data and fails with an *ExistsError, writing

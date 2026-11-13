@@ -1,6 +1,6 @@
 # muxt.json
 
-`muxt.json` holds the `muxt generate` flags of each package. Each package's settings are an **entry**, the object under its `packages` key. The file is found by walking up from the working directory; the walk stops at the directory holding `go.mod`, and the file needs a `go.mod` at or above it.
+`muxt.json` holds the `muxt generate` flags of each package. Each package's settings are an **entry**, the object under its `packages` key. The file is found by walking up from the working directory; the walk stops at the directory holding `go.mod`, and the file needs a `go.mod` at or above it. The nearest file wins, so a hand-written `muxt.json` in a sub-directory replaces the one above it there; `muxt generate config` refuses to write one.
 
 ```json
 {

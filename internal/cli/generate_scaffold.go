@@ -176,7 +176,7 @@ func generateConfigCommand(workingDirectory *string) *cobra.Command {
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			cmd.SilenceUsage = true
-			if err := composite.Create(*workingDirectory); err != nil {
+			if err := composite.Create(*workingDirectory, deprecatedMuxtJSONKeys()); err != nil {
 				return err
 			}
 			_, err := fmt.Fprintln(cmd.OutOrStdout(), "wrote "+composite.FileName)
