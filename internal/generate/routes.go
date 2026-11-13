@@ -147,10 +147,20 @@ func checkGeneratedNames(config RoutesFileConfiguration) error {
 	return nil
 }
 
+// Loggers are where TemplateRoutesFiles reports. Notes are apart from
+// progress so a run over several packages can say which package each note is
+// about, while the progress lines sit under a heading that already says so.
+type Loggers struct {
+	// Progress receives the lines RoutesFileConfiguration.Verbose asks for.
+	Progress *log.Logger
+	// Notes receives the notes and warnings about the routes; nil drops them.
+	Notes *log.Logger
+}
+
 // TemplateRoutesFiles generates the routes files for pkg, written into wd:
 // the package the files belong to, which is the one in the output file's
 // directory. defs are pkg's route definitions, resolved by muxt.ResolveDefinitions.
-func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, pkg source.Package, defs []muxt.Definition, logger *log.Logger) ([]GeneratedFile, error) {
+func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, pkg source.Package, defs []muxt.Definition, logs Loggers) ([]GeneratedFile, error) {
 	config.PackagePath = pkg.Types.Path()
 	config.PackageName = pkg.Types.Name()
 	config.SSETemplateDataType = cmp.Or(config.SSETemplateDataType, "SSETemplateData")
@@ -170,10 +180,10 @@ func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, pkg source.P
 	if err != nil {
 		return nil, err
 	}
-	logResolutionNotes(groups.all, config, logger)
-	if logger != nil && !config.SilenceHTTPResponseWarning {
+	logResolutionNotes(groups.all, config, logs.Notes)
+	if logs.Notes != nil && !config.SilenceHTTPResponseWarning {
 		for _, warning := range muxt.ResponseStatusWarnings(groups.all, pkg.Files, config.TemplateDataType) {
-			logger.Print(warning)
+			logs.Notes.Print(warning)
 		}
 	}
 	if config.StaticAssetsDirectory != "" {
@@ -194,7 +204,7 @@ func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, pkg source.P
 		if err := checkGeneratedFileNames(wd, templateSourceFiles, pkg); err != nil {
 			return nil, err
 		}
-		files, err := sourceFileRouteFunctionFiles(wd, config, templateSourceFiles, groups, logger, file, receiverInterface, routesFunc)
+		files, err := sourceFileRouteFunctionFiles(wd, config, templateSourceFiles, groups, logs.Progress, file, receiverInterface, routesFunc)
 		if err != nil {
 			return files, err
 		}
@@ -202,7 +212,7 @@ func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, pkg source.P
 		topLevelRoutes = groups.noFile
 	}
 
-	handlers, err := routeStatements(file, config, topLevelRoutes, receiverInterface, config.ReceiverInterface, logger, "")
+	handlers, err := routeStatements(file, config, topLevelRoutes, receiverInterface, config.ReceiverInterface, logs.Progress, "")
 	if err != nil {
 		return nil, err
 	}

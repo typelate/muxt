@@ -165,7 +165,8 @@ func snapshot(t *testing.T, config generate.RoutesFileConfiguration, archive *tx
 		return fail(err)
 	}
 	var logs strings.Builder
-	generated, err := generate.TemplateRoutesFiles(dir, config, pkg, defs, log.New(&logs, "", 0))
+	logger := log.New(&logs, "", 0)
+	generated, err := generate.TemplateRoutesFiles(dir, config, pkg, defs, generate.Loggers{Progress: logger, Notes: logger})
 	for _, file := range generated {
 		got[relative(file.Path)] = file.Content
 		assert.Empty(t, unusedImports(t, file.Content), "%s imports these without using them", relative(file.Path))

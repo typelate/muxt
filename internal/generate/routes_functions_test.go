@@ -149,7 +149,7 @@ func TestResolutionNotesAreLoggedOncePerRun(t *testing.T) {
 	config.ReceiverType = "T"
 	config.OutputMultipleFiles = true
 	var buf bytes.Buffer
-	_, err := TemplateRoutesFiles(t.TempDir(), config, pkg, defs, log.New(&buf, "", 0))
+	_, err := TemplateRoutesFiles(t.TempDir(), config, pkg, defs, Loggers{Progress: log.New(&buf, "", 0), Notes: log.New(&buf, "", 0)})
 	require.NoError(t, err)
 	for _, line := range []string{
 		"note: T does not define MissingA() any",

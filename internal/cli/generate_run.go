@@ -10,7 +10,6 @@ import (
 	"maps"
 	"os"
 	"slices"
-	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -201,11 +200,11 @@ func resolveJob(cmd *cobra.Command, pl []*packages.Package, job generateJob, sev
 		return nil, err
 	}
 	// Several jobs share one stream, so each note says whose it is.
-	var notes io.Writer = cmd.OutOrStdout()
+	logs := generate.Loggers{Progress: log.New(cmd.OutOrStdout(), "", 0), Notes: log.New(cmd.OutOrStdout(), "", 0)}
 	if several {
-		notes = keyedNotes{w: notes, key: job.Key}
+		logs.Notes.SetPrefix(job.Key + ": ")
 	}
-	files, err := generate.TemplateRoutesFiles(job.Dir, config, pkg, defs, log.New(notes, "", 0))
+	files, err := generate.TemplateRoutesFiles(job.Dir, config, pkg, defs, logs)
 	if err != nil {
 		report(err)
 		return nil, err
@@ -257,26 +256,4 @@ func readFiles(paths []string) (map[string]string, error) {
 		contents[path] = string(data)
 	}
 	return contents, nil
-}
-
-// keyedNotes writes what a job logs to w, putting the job's key before each
-// note and warning. The progress lines -v prints stay bare: the key is
-// printed once above them.
-//
-// A log.Logger writes each line in one call, so a prefix test on p sees whole
-// lines. The generator logs notes and warnings as text, not as a type, so the
-// line's own prefix is what tells them from progress.
-type keyedNotes struct {
-	w   io.Writer
-	key string
-}
-
-func (k keyedNotes) Write(p []byte) (int, error) {
-	line := string(p)
-	if strings.HasPrefix(line, "note:") || strings.HasPrefix(line, "warning:") {
-		if _, err := io.WriteString(k.w, k.key+": "); err != nil {
-			return 0, err
-		}
-	}
-	return k.w.Write(p)
 }

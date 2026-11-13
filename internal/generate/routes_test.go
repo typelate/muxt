@@ -61,6 +61,6 @@ func (T) Stream(string) {}
 
 	defs, err := muxt.ResolveDefinitions(pkg, receiver, fake.NewChecker().Fake())
 	require.NoError(t, err)
-	_, err = TemplateRoutesFiles(".", config, pkg, defs, log.New(io.Discard, "", 0))
+	_, err = TemplateRoutesFiles(".", config, pkg, defs, Loggers{Progress: log.New(io.Discard, "", 0)})
 	assert.ErrorContains(t, err, "failed to determine type for fooMessage")
 }
