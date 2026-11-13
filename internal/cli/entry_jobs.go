@@ -110,6 +110,9 @@ func requireEntry(wd string) error {
 		return fmt.Errorf("muxt.json entry for %s: %w", lookup.File.Dir, err)
 	}
 	if lookup.Key == ownKey {
+		if len(lookup.File.Packages) == 0 {
+			return &composite.EmptyPackagesError{Path: lookup.File.Name}
+		}
 		return nil
 	}
 	return &composite.MissingEntryError{Path: lookup.File.Name, Key: lookup.Key}

@@ -921,3 +921,25 @@ func TestGenerateRejectsMuxtJSONWithoutGoMod(t *testing.T) {
 	assert.Equal(t, path+": no go.mod found at or above the file; package keys are import paths", err.Error(), "message")
 	assert.False(t, called, "generate runner called")
 }
+
+// TestGenerateRejectsMuxtJSONWithoutPackages states that a flagless muxt
+// generate in the directory of a muxt.json that lists no packages fails,
+// naming the file and the command that adds one, rather than generating with
+// defaults. With a generate flag the directory is not configured, so the flags
+// decide. The runner is not called for the failure.
+func TestGenerateRejectsMuxtJSONWithoutPackages(t *testing.T) {
+	dir := moduleDir(t)
+	require.NoError(t, os.WriteFile(filepath.Join(dir, composite.FileName), []byte(`{"packages": {}}`), 0o644))
+
+	called, err := generateFailureOf(t, dir)
+
+	var empty *composite.EmptyPackagesError
+	require.ErrorAs(t, err, &empty, "error %v", err)
+	path := filepath.Join(dir, composite.FileName)
+	assert.Equal(t, path, empty.Path, "path")
+	assert.Equal(t, path+": packages is empty; add a package with: muxt generate package NAME", err.Error(), "message")
+	assert.False(t, called, "generate runner called")
+
+	config := generateConfigurationOf(t, dir, "generate --use-receiver-type T1")
+	assert.Equal(t, "T1", config.ReceiverType, "receiver type from flags")
+}

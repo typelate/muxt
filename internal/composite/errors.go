@@ -219,3 +219,15 @@ type AlreadyConfiguredError struct {
 func (e *AlreadyConfiguredError) Error() string {
 	return fmt.Sprintf("%s already configures this directory; add a package with: muxt generate package NAME", e.Path)
 }
+
+// EmptyPackagesError reports a flagless muxt generate in the directory of a
+// muxt.json that lists no packages, so there is nothing to generate from the
+// file and defaults must not stand in for it. Path is the file's absolute path.
+type EmptyPackagesError struct {
+	Path string
+}
+
+// Error returns the file and the command that adds a package, on one line.
+func (e *EmptyPackagesError) Error() string {
+	return fmt.Sprintf("%s: packages is empty; add a package with: muxt generate package NAME", e.Path)
+}
