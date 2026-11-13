@@ -24,7 +24,7 @@ import (
 // flags do. Flags win outright so a command line never half-merges with a
 // file. It reads the file itself, since nothing else needs it yet.
 func generateJobs(wd string, flags *pflag.FlagSet, flagConfig *generate.RoutesFileConfiguration, deprecatedTemplatesVar string, getEnv func(string) string, version func() (string, bool)) ([]packageJob, error) {
-	if flagNames := givenGenerateFlags(flags); len(flagNames) > 0 {
+	if flagNames := givenSettingFlags(flags, generateSettingFlags()); len(flagNames) > 0 {
 		if err := rejectConfiguredDirectory(generateCommandName, wd, flagNames); err != nil {
 			return nil, err
 		}

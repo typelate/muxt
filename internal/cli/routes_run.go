@@ -43,7 +43,7 @@ func (j routesJob) definitions() analysis.DefinitionsConfiguration {
 // chooses what generate writes: with no shared flag given and a muxt.json
 // entry for wd, the entry decides; otherwise the flags do.
 func routesJobs(wd string, flags *pflag.FlagSet, flagConfig analysis.DefinitionsConfiguration, getEnv func(string) string) ([]routesJob, error) {
-	flagNames := givenGenerateFlags(flags)
+	flagNames := givenSettingFlags(flags, rootSettingFlags())
 	if len(flagNames) > 0 {
 		if err := rejectConfiguredDirectory("muxt", wd, flagNames); err != nil {
 			return nil, err

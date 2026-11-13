@@ -6,9 +6,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"slices"
-
-	"github.com/spf13/pflag"
 
 	"github.com/typelate/muxt/internal/composite"
 	"github.com/typelate/muxt/internal/generate"
@@ -24,36 +21,6 @@ type packageJob struct {
 	Dir    string
 	Config generate.RoutesFileConfiguration
 	Given  []string
-}
-
-// givenGenerateFlags returns the sorted names of the generate flags passed.
-// The root flags -C, -v, --format and --version do not configure a run, so
-// they do not count.
-func givenGenerateFlags(flags *pflag.FlagSet) []string {
-	var given []string
-	flags.Visit(func(f *pflag.Flag) {
-		if !slices.Contains([]string{"change-directory", "verbose", "format", "version"}, f.Name) {
-			given = append(given, f.Name)
-		}
-	})
-	slices.Sort(given)
-	return given
-}
-
-// givenEntryFlags returns the sorted names of the flags passed that a muxt.json
-// entry also sets. Only these decide whether the entry or the flags configure a
-// command: a flag such as --verbose or --format is not configuration, and a
-// command's own flags, such as --allow-unused, do not stop the entry applying.
-// The deprecated name of the templates variable flag counts as that flag.
-func givenEntryFlags(flags *pflag.FlagSet) []string {
-	var given []string
-	flags.Visit(func(f *pflag.Flag) {
-		if f.Name == deprecatedTemplatesVariable || slices.ContainsFunc(entryFields(), func(field entryField) bool { return field.Name == f.Name }) {
-			given = append(given, f.Name)
-		}
-	})
-	slices.Sort(given)
-	return given
 }
 
 // entryLookup is where a directory stands in the nearest muxt.json.
