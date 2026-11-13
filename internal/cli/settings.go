@@ -57,6 +57,10 @@ This function also receives an argument with a type matching the name given by o
 			Name: outputRoutesFuncWithLoggerParam, Deprecated: []string{deprecatedLogger}, Example: "true",
 			Usage: `Adds a *slog.Logger parameter to the generated routes function and uses it to log ExecuteTemplate errors and debug information in handlers.`,
 		}),
+		boolSetting(&c.PathPrefix, spec[bool]{
+			Name: outputRoutesFuncWithPathPrefix, Deprecated: []string{deprecatedPathPrefix}, Example: "true",
+			Usage: `Adds a pathsPrefix string parameter to the generated routes function and uses it in each path generator method.`,
+		}),
 	}
 }
 
