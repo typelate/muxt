@@ -191,6 +191,32 @@ func TestGeneratePackageRejectsInvalidEntryAndWritesNothing(t *testing.T) {
 	assert.Equal(t, existing, string(got), "muxt.json is unchanged")
 }
 
+// TestGeneratePackageLeavesNothingWhenMuxtJSONCannotBeSaved states that when
+// the entry cannot be written, the package directory is not left behind, so
+// the same command can be run again once the file is writable.
+func TestGeneratePackageLeavesNothingWhenMuxtJSONCannotBeSaved(t *testing.T) {
+	root := moduleDir(t)
+	const existing = `{"packages": {}}`
+	require.NoError(t, os.WriteFile(filepath.Join(root, "muxt.json"), []byte(existing), 0o644))
+	sub := filepath.Join(root, "sub")
+	require.NoError(t, os.Mkdir(sub, 0o755))
+	// Save replaces muxt.json through a temporary file in its directory, so
+	// a directory nobody can write to makes the last step fail.
+	require.NoError(t, os.Chmod(root, 0o555))
+	t.Cleanup(func() { _ = os.Chmod(root, 0o755) })
+	if probe, err := os.CreateTemp(root, "probe"); err == nil {
+		_ = probe.Close()
+		_ = os.Remove(probe.Name())
+		t.Skip("a read-only directory can still be written here")
+	}
+
+	_, err := runCommand(t, sub, "generate package web")
+
+	require.Error(t, err)
+	_, statErr := os.Stat(filepath.Join(sub, "web"))
+	assert.ErrorIs(t, statErr, os.ErrNotExist, "web directory is removed")
+}
+
 // TestGeneratePackageDeclaresReceiverType states that the Go file of the new
 // package declares its package name and the receiver type: the given
 // --use-receiver-type, else package_defaults, else T. The entry records the

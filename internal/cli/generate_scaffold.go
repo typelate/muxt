@@ -126,27 +126,35 @@ func scaffoldPackage(out io.Writer, wd, name string, flags *pflag.FlagSet, confi
 	if err != nil {
 		return &composite.InvalidEntryError{Path: f.Name, Where: fmt.Sprintf("packages[%q]", key), Err: err}
 	}
-	if err := os.Mkdir(dir, 0o755); err != nil {
-		return fmt.Errorf("creating %s: %w", dir, err)
-	}
 	// The entry names the variable the next generate looks for, so the file
 	// declares the first one the resolved entry names.
 	filename, src, err := generate.PackageFile(generate.PackageFileSpec{Name: name, ReceiverType: receiver, TemplatesVariable: resolvedConfig.TemplatesVariables[0]})
 	if err != nil {
 		return err
 	}
+	if err := os.Mkdir(dir, 0o755); err != nil {
+		return fmt.Errorf("creating %s: %w", dir, err)
+	}
+	// The directory is new, since Mkdir refuses an existing one, so a failure
+	// below removes all of it and the command can be run again.
+	undo := func(err error) error {
+		if removeErr := os.RemoveAll(dir); removeErr != nil {
+			return errors.Join(err, fmt.Errorf("removing %s: %w", dir, removeErr))
+		}
+		return err
+	}
 	// The embed in the Go file needs a match, so the template file exists
 	// even though it is empty.
 	written := []string{filepath.Join(name, filename), filepath.Join(name, name+".gohtml")}
 	if err := os.WriteFile(filepath.Join(dir, filename), src, 0o644); err != nil {
-		return fmt.Errorf("writing %s: %w", written[0], err)
+		return undo(fmt.Errorf("writing %s: %w", written[0], err))
 	}
 	if err := os.WriteFile(filepath.Join(dir, name+".gohtml"), nil, 0o644); err != nil {
-		return fmt.Errorf("writing %s: %w", written[1], err)
+		return undo(fmt.Errorf("writing %s: %w", written[1], err))
 	}
 	f.Packages = candidate.Packages
 	if err := f.Save(); err != nil {
-		return err
+		return undo(err)
 	}
 	for _, path := range written {
 		if _, err := fmt.Fprintf(out, "wrote %s\n", path); err != nil {
