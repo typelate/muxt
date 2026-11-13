@@ -321,4 +321,5 @@ type ValueError struct {
 // Error returns the key and the parser's error on one line.
 func (e *ValueError) Error() string { return e.Key + ": " + e.Err.Error() }
 
+// Unwrap returns the parser's error, so a caller can match what it was.
 func (e *ValueError) Unwrap() error { return e.Err }

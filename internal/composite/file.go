@@ -138,20 +138,21 @@ func writeNew(path string, data []byte) error {
 // before packages, keys sorted, one trailing newline. It writes a temporary
 // file beside it and renames that over it, so a failure leaves the old file.
 func (f *File) Save() error {
-	if f.Packages == nil {
-		f.Packages = map[string]Entry{}
-	}
-	// An entry that is nil would be written as null, which reads back as {}.
+	// Encode a copy: an entry that is nil would be written as null, which
+	// reads back as {}, and the caller's file is not ours to change.
+	out := *f
+	out.Packages = make(map[string]Entry, len(f.Packages))
 	for key, e := range f.Packages {
 		if e == nil {
-			f.Packages[key] = Entry{}
+			e = Entry{}
 		}
+		out.Packages[key] = e
 	}
 	var buf bytes.Buffer
 	enc := json.NewEncoder(&buf)
 	enc.SetEscapeHTML(false)
 	enc.SetIndent("", "\t")
-	if err := enc.Encode(f); err != nil {
+	if err := enc.Encode(&out); err != nil {
 		return fmt.Errorf("encoding %s: %w", f.Name, err)
 	}
 	tmp, err := os.CreateTemp(f.Dir, FileName+".*")
@@ -229,35 +230,28 @@ func read(path string, keys Keys) (*File, error) {
 	if err != nil {
 		return nil, fmt.Errorf("reading %s: %w", path, err)
 	}
-	// Syntax first: decoding into a RawMessage checks nothing else.
-	var whole json.RawMessage
-	if err := json.Unmarshal(data, &whole); err != nil {
+	// The file is decoded once, into the raw shape. The json package checks
+	// the syntax of the whole input before it decodes any of it, so a syntax
+	// error is reported before a value of the wrong kind.
+	raw, err := readRaw(data)
+	if err != nil {
 		var syntax *json.SyntaxError
 		if errors.As(err, &syntax) {
 			line, col := position(data, syntax.Offset)
 			return nil, &ParseError{Path: path, Line: line, Col: col, Err: syntax}
 		}
+		// A wrong outer shape, such as a list where packages goes. Decoding
+		// into File says so in the json package's words, naming the field.
+		var f File
+		if typedErr := json.Unmarshal(data, &f); typedErr != nil {
+			err = typedErr
+		}
 		return nil, fmt.Errorf("parsing %s: %w", path, err)
 	}
-	// A wrong outer shape fails the raw read, and the typed read below says
-	// so in the json package's words.
-	if raw, err := readRaw(data); err == nil {
-		if err := checkKinds(path, raw, keys); err != nil {
-			return nil, err
-		}
+	if err := checkKinds(path, raw, keys); err != nil {
+		return nil, err
 	}
-	var f File
-	if err := json.Unmarshal(data, &f); err != nil {
-		return nil, fmt.Errorf("parsing %s: %w", path, err)
-	}
-	dropNulls(f.Defaults)
-	for key, e := range f.Packages {
-		if e == nil {
-			e = Entry{}
-			f.Packages[key] = e
-		}
-		dropNulls(e)
-	}
+	f := File{Defaults: raw.PackageDefaults, Packages: raw.Packages}
 	f.Dir = filepath.Dir(path)
 	f.Name = path
 	var hasModule bool
@@ -268,8 +262,18 @@ func read(path string, keys Keys) (*File, error) {
 	if !hasModule {
 		return nil, &NoModuleError{Path: path}
 	}
-	if err := f.checkKeys(data, keys); err != nil {
+	// Keys are checked before nulls are dropped, since f shares raw's maps
+	// and an unknown key set to null is still a key the file holds.
+	if err := f.checkKeys(data, raw, keys); err != nil {
 		return nil, err
+	}
+	dropNulls(f.Defaults)
+	for key, e := range f.Packages {
+		if e == nil {
+			e = Entry{}
+			f.Packages[key] = e
+		}
+		dropNulls(e)
 	}
 	return &f, nil
 }
@@ -278,15 +282,8 @@ func read(path string, keys Keys) (*File, error) {
 // sorted order, that is not an import path of a package at or below the file's
 // directory, or the entry-key errors of checkEntryKeys for package_defaults
 // and then for each packages entry. json.Unmarshal drops unknown keys without a
-// word, so the keys are read again here.
-func (f *File) checkKeys(data []byte, keys Keys) error {
-	var raw struct {
-		PackageDefaults map[string]json.RawMessage            `json:"package_defaults"`
-		Packages        map[string]map[string]json.RawMessage `json:"packages"`
-	}
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return fmt.Errorf("parsing %s: %w", f.Name, err)
-	}
+// word, so the top-level keys are read again from data here.
+func (f *File) checkKeys(data []byte, raw rawFile, keys Keys) error {
 	var top map[string]json.RawMessage
 	if err := json.Unmarshal(data, &top); err != nil {
 		return fmt.Errorf("parsing %s: %w", f.Name, err)
@@ -471,11 +468,12 @@ func (f *File) spelledOnDisk(key string) (string, error) {
 // so a value's JSON type can be checked before any typed decoding names a Go
 // struct field in its error.
 type rawFile struct {
-	PackageDefaults map[string]json.RawMessage            `json:"package_defaults"`
-	Packages        map[string]map[string]json.RawMessage `json:"packages"`
+	PackageDefaults Entry            `json:"package_defaults"`
+	Packages        map[string]Entry `json:"packages"`
 }
 
-// readRaw decodes data into the entries as written. It fails when the shape
+// readRaw decodes data into the entries as written. It fails with a
+// *json.SyntaxError when data is not JSON, and otherwise when the shape
 // outside the values is wrong, such as a list where packages goes.
 func readRaw(data []byte) (rawFile, error) {
 	var raw rawFile

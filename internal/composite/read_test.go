@@ -135,6 +135,43 @@ func TestFindKeepsTheJSONMessageForAWrongOuterShape(t *testing.T) {
 	assert.Equal(t, "parsing "+path+": json: cannot unmarshal array into Go struct field File.packages of type map[string]composite.Entry", err.Error(), "message")
 }
 
+// TestFindRejectsANullKeyItDoesNotAccept states that a key read drops as null
+// is still checked: unknown, dashed and deprecated keys are errors whatever
+// their value.
+func TestFindRejectsANullKeyItDoesNotAccept(t *testing.T) {
+	keys := testKeys()
+	keys.Deprecated = map[string]string{"receiver_type": "use_receiver_type"}
+	for _, tt := range []struct {
+		name, file, want string
+	}{
+		{
+			name: "unknown",
+			file: `{"packages": {"example.com/m": {"no_such_key": null}}}`,
+			want: `packages["example.com/m"]: unknown key "no_such_key"`,
+		},
+		{
+			name: "dashed",
+			file: `{"package_defaults": {"output-htmx": null}, "packages": {"example.com/m": {}}}`,
+			want: `package_defaults: key "output-htmx" uses dashes; write "output_htmx"`,
+		},
+		{
+			name: "deprecated",
+			file: `{"packages": {"example.com/m": {"receiver_type": null}}}`,
+			want: `packages["example.com/m"]: key "receiver_type" is deprecated; write "use_receiver_type"`,
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := writeFile(t, tt.file)
+
+			_, _, err := composite.Find(dir, keys)
+
+			require.Error(t, err, "Find")
+			path := filepath.Join(dir, composite.FileName)
+			assert.Equal(t, path+": "+tt.want, err.Error(), "message")
+		})
+	}
+}
+
 // TestFindReadsNullAsAbsent states that a null value is the same as a key that
 // is not there: a default fills it.
 func TestFindReadsNullAsAbsent(t *testing.T) {
