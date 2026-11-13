@@ -326,8 +326,8 @@ func (f *File) checkKeys(data []byte, deprecated map[string]string) error {
 
 // checkPackageKey returns a *KeyFormError for a key that is a directory
 // relative to the file, or an import path of the module that is not clean, and
-// a *KeyOutsideError for one that names a package outside the file's
-// directory, so a checked-out muxt.json cannot point generate at, or write
+// an *OtherModuleError for one outside the module, a *KeyOutsideError for one
+// outside the file's directory, so a checked-out muxt.json cannot point generate at, or write
 // into, another place. Two spellings of one package would be two entries, so
 // each key is the form path.Clean gives it.
 func (f *File) checkPackageKey(key string) error {
@@ -344,7 +344,7 @@ func (f *File) checkPackageKey(key string) error {
 	// the way keys used to be written, which has an import path to name, or
 	// the import path of some other package.
 	if !isRelative(key) {
-		return &KeyOutsideError{Path: f.Name, Key: key}
+		return &OtherModuleError{Path: f.Name, Key: key, Module: f.module}
 	}
 	dir := filepath.FromSlash(key)
 	if !filepath.IsLocal(dir) {

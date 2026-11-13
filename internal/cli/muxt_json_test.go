@@ -255,7 +255,7 @@ func TestGenerateRejectsPackageDefaultsKey(t *testing.T) {
 		var dashed *composite.DashedKeyError
 		require.ErrorAs(t, err, &dashed, "error %v", err)
 		assert.Equal(t, "package_defaults", dashed.Where, "where")
-		assert.Equal(t, filepath.Join(dir, composite.FileName)+`: package_defaults: key "use-receiver-type" is written with underscores; write "use_receiver_type"`, err.Error(), "message")
+		assert.Equal(t, filepath.Join(dir, composite.FileName)+`: package_defaults: key "use-receiver-type" uses dashes; write "use_receiver_type"`, err.Error(), "message")
 		assert.False(t, called, "generate runner called")
 	})
 
@@ -412,7 +412,7 @@ func TestGenerateMuxtJSONKeysUseUnderscores(t *testing.T) {
 		assert.Equal(t, `packages["example.com/m"]`, dashed.Where, "where")
 		assert.Equal(t, "use-receiver-type", dashed.Key, "key")
 		assert.Equal(t, "use_receiver_type", dashed.Underscored, "underscored")
-		assert.Equal(t, filepath.Join(dir, composite.FileName)+`: packages["example.com/m"]: key "use-receiver-type" is written with underscores; write "use_receiver_type"`, err.Error(), "message")
+		assert.Equal(t, filepath.Join(dir, composite.FileName)+`: packages["example.com/m"]: key "use-receiver-type" uses dashes; write "use_receiver_type"`, err.Error(), "message")
 		assert.False(t, called, "generate runner called")
 	})
 }
@@ -822,7 +822,7 @@ func TestGenerateWithMuxtJSONInParentDirectory(t *testing.T) {
 // packages key that leaves the file's directory fails a muxt generate, naming
 // the key, so no job directory is built from it. The runner is not called.
 func TestGenerateRejectsMuxtJSONKeyOutsideDirectory(t *testing.T) {
-	for _, key := range []string{"../other", "/abs", "..", "example.com/other", "example.com/m2"} {
+	for _, key := range []string{"../other", "/abs", ".."} {
 		t.Run(key, func(t *testing.T) {
 			dir := moduleDir(t)
 			file, err := json.Marshal(map[string]any{"packages": map[string]any{key: map[string]any{}}})
@@ -837,6 +837,27 @@ func TestGenerateRejectsMuxtJSONKeyOutsideDirectory(t *testing.T) {
 			assert.Equal(t, path, outside.Path, "path")
 			assert.Equal(t, key, outside.Key, "key")
 			assert.Equal(t, path+`: packages key "`+key+`" is outside the file's directory`, err.Error(), "message")
+			assert.False(t, called, "generate runner called")
+		})
+	}
+}
+
+// TestGenerateRejectsMuxtJSONKeyOutsideModule states that a packages key that
+// is an import path of another module fails a muxt generate saying so, and
+// naming the module the file's keys belong to. The runner is not called.
+func TestGenerateRejectsMuxtJSONKeyOutsideModule(t *testing.T) {
+	for _, key := range []string{"example.com/other/x", "example.com/other", "example.com/m2"} {
+		t.Run(key, func(t *testing.T) {
+			dir := moduleDir(t)
+			writeMuxtJSON(t, dir, `{"packages": {"`+key+`": {}}}`)
+
+			called, err := generateFailureOf(t, dir)
+
+			var other *composite.OtherModuleError
+			require.ErrorAs(t, err, &other, "error %v", err)
+			assert.Equal(t, key, other.Key, "key")
+			assert.Equal(t, testModule, other.Module, "module")
+			assert.Equal(t, filepath.Join(dir, composite.FileName)+`: packages key "`+key+`" is not in this module (`+testModule+`)`, err.Error(), "message")
 			assert.False(t, called, "generate runner called")
 		})
 	}

@@ -176,12 +176,24 @@ type DashedKeyError struct {
 // Error returns the path, the entry, the key, and its underscore form on one
 // line.
 func (e *DashedKeyError) Error() string {
-	return fmt.Sprintf("%s: %s: key %q is written with underscores; write %q", e.Path, e.Where, e.Key, e.Underscored)
+	return fmt.Sprintf("%s: %s: key %q uses dashes; write %q", e.Path, e.Where, e.Key, e.Underscored)
 }
 
-// KeyOutsideError reports a packages key that names a package outside the
-// directory holding the muxt.json: an import path of another module or above
-// the file's directory, or a relative path such as "../other" or "/abs". A file
+// OtherModuleError reports a packages key that is an import path outside the
+// module holding the muxt.json. Module is the file's module path, the prefix
+// every key must have.
+type OtherModuleError struct {
+	Path, Key, Module string
+}
+
+// Error returns the path, the key, and the module on one line.
+func (e *OtherModuleError) Error() string {
+	return fmt.Sprintf("%s: packages key %q is not in this module (%s)", e.Path, e.Key, e.Module)
+}
+
+// KeyOutsideError reports a packages key that names a package in the file's
+// module but not at or below the directory holding the muxt.json, or a
+// relative path such as "../other" or "/abs". A file
 // checked into a repository must not make muxt generate write elsewhere on the
 // machine.
 type KeyOutsideError struct {
