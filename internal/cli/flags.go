@@ -37,7 +37,6 @@ func addUseReceiverTypePackageVarToFlagSet(flagSet *pflag.FlagSet, out *string) 
 }
 
 func addOutputFlagsToFlagSet(flagSet *pflag.FlagSet, g *generate.RoutesFileConfiguration) {
-	flagSet.StringVar(&g.TemplateRouteTypeName, outputTemplateRouteType, defaultTemplateRouteTypeName, outputTemplateRouteTypeHelp)
 	flagSet.StringVar(&g.TemplateRouteBuilderTypeName, outputTemplateRouteBuilderType, defaultTemplateRouteBuilderTypeName, outputTemplateRouteBuilderTypeHelp)
 	flagSet.BoolVar(&g.Logger, outputRoutesFuncWithLoggerParam, false, outputRoutesFuncWithLoggerParamHelp)
 	flagSet.BoolVar(&g.PathPrefix, outputRoutesFuncWithPathPrefix, false, outputRoutesFuncWithPathPrefixHelp)

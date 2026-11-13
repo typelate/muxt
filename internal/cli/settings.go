@@ -41,6 +41,13 @@ This function also receives an argument with a type matching the name given by o
 			Deprecated: []string{deprecatedTemplateRoutePathsType}, Example: "SitePaths",
 			Usage: `The type name for the type with path constructor helper methods.`,
 		}),
+		stringSetting(&c.TemplateRouteTypeName, spec[string]{
+			Name: outputTemplateRouteType, Default: defaultTemplateRouteTypeName, NonEmpty: true, Example: "SiteRoute",
+			Derived: func() string {
+				return defaultRouteTypeName(c.TemplateRoutePathsTypeName, c.OutputExportedDefaultIdentifiers)
+			},
+			Usage: `The type name for the type the route builder's methods return. When not set, it is TemplateRoute, or the route paths type name with Route appended when output-template-route-paths-type names another type.`,
+		}),
 	}
 }
 
