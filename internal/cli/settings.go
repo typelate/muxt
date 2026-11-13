@@ -27,6 +27,11 @@ func generateSettings(c *generate.RoutesFileConfiguration) []setting {
 			Usage: `The function name for the package registering handler functions on an *"net/http".ServeMux.
 This function also receives an argument with a type matching the name given by output-receiver-interface.`,
 		}),
+		stringSetting(&c.TemplateDataType, spec[string]{
+			Name: outputTemplateDataType, Default: defaultTemplateDataTypeName, NonEmpty: true,
+			Deprecated: []string{deprecatedTemplateDataType}, Example: "PageData",
+			Usage: `The type name for the template data passed to root route templates.`,
+		}),
 	}
 }
 

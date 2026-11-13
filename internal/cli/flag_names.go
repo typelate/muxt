@@ -51,7 +51,6 @@ const (
 	useReceiverTypeHelp        = `The type name for a named type to use for looking up method signatures. If not set, all methods added to the receiver interface will have inferred signatures with argument types based on the argument identifier names. The inferred method signatures always return a single result of type any. Accepted by muxt and muxt generate; muxt check resolves receivers from the generated routes file.`
 	useReceiverTypePackageHelp = `The package path to use when looking for use-receiver-type. If not set, the package in the current directory is used.`
 
-	outputTemplateDataTypeHelp         = `The type name for the template data passed to root route templates.`
 	outputSSETemplateDataTypeHelp      = `The type name for the template data passed to Server-Sent Events route templates.`
 	outputTemplateRoutePathsTypeHelp   = `The type name for the type with path constructor helper methods.`
 	outputTemplateRouteTypeHelp        = `The type name for the type the route builder's methods return. When not set, it is TemplateRoute, or the route paths type name with Route appended when output-template-route-paths-type names another type.`
