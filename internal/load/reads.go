@@ -40,9 +40,9 @@ func quoteAll(patterns []string) string {
 // CheckFileRead returns an *UnreadFileError when none of the variables, in
 // the package in wd, reads the file named name in wd, or would once it exists.
 // It reads only the variable's initializer: a ParseFS call whose arguments it
-// cannot read there (an FS from another package, a pattern that is not a
-// literal), or a variable with no ParseFS call, means it cannot tell, and the
-// file is accepted.
+// cannot read there (a pattern that is not a literal, an FS from a package
+// whose directory holds wd), or a variable with no other ParseFS call, means
+// it cannot tell, and the file is accepted.
 func CheckFileRead(wd string, pl []*packages.Package, variables []string, name string) error {
 	pkg, ok := packageInDirectory(pl, wd)
 	if !ok {
@@ -50,7 +50,7 @@ func CheckFileRead(wd string, pl []*packages.Package, variables []string, name s
 	}
 	var first *UnreadFileError
 	for _, variable := range variables {
-		calls, known := parseFSCalls(pkg, variable)
+		calls, known := parseFSCalls(pkg, wd, variable)
 		if !known {
 			return nil
 		}
@@ -77,10 +77,15 @@ func CheckFileRead(wd string, pl []*packages.Package, variables []string, name s
 type fsRead struct{ embed, parse []string }
 
 // parseFSCalls returns the ParseFS calls in the initializer of variable in
-// pkg. known is false when there is none, or when any of them cannot be read
-// from this package's syntax alone.
-func parseFSCalls(pkg *packages.Package, variable string) (calls []fsRead, known bool) {
-	var value ast.Expr
+// pkg that could read a file in wd. A call on another package's FS is left
+// out when that package's directory does not hold wd, since //go:embed reaches
+// only files under its own package. known is false when no call is left, or
+// when one of them cannot be read from this package's syntax alone.
+func parseFSCalls(pkg *packages.Package, wd, variable string) (calls []fsRead, known bool) {
+	var (
+		value     ast.Expr
+		valueFile *ast.File
+	)
 	for _, file := range pkg.Syntax {
 		for _, decl := range file.Decls {
 			gen, ok := decl.(*ast.GenDecl)
@@ -88,10 +93,13 @@ func parseFSCalls(pkg *packages.Package, variable string) (calls []fsRead, known
 				continue
 			}
 			for _, spec := range gen.Specs {
-				vs := spec.(*ast.ValueSpec)
+				vs, ok := spec.(*ast.ValueSpec)
+				if !ok {
+					continue
+				}
 				for i, ident := range vs.Names {
 					if ident.Name == variable && i < len(vs.Values) {
-						value = vs.Values[i]
+						value, valueFile = vs.Values[i], file
 					}
 				}
 			}
@@ -110,6 +118,12 @@ func parseFSCalls(pkg *packages.Package, variable string) (calls []fsRead, known
 		if !ok || sel.Sel.Name != "ParseFS" {
 			return true
 		}
+		if len(call.Args) > 0 {
+			if fsSel, ok := call.Args[0].(*ast.SelectorExpr); ok {
+				readable = readable && !otherPackageHolds(pkg, valueFile, fsSel, wd)
+				return true
+			}
+		}
 		read, ok := readParseFS(pkg, call)
 		if !ok {
 			readable = false
@@ -119,6 +133,39 @@ func parseFSCalls(pkg *packages.Package, variable string) (calls []fsRead, known
 		return true
 	})
 	return calls, readable && len(calls) > 0
+}
+
+// otherPackageHolds reports whether the package fsSel's qualifier imports in
+// file may hold wd, under its own directory, and so embed a file there. It
+// reports true when it cannot find that package's directory.
+func otherPackageHolds(pkg *packages.Package, file *ast.File, fsSel *ast.SelectorExpr, wd string) bool {
+	qualifier, ok := fsSel.X.(*ast.Ident)
+	if !ok {
+		return true
+	}
+	for _, spec := range file.Imports {
+		importPath, err := strconv.Unquote(spec.Path.Value)
+		if err != nil {
+			continue
+		}
+		imported, ok := pkg.Imports[importPath]
+		if !ok || len(imported.GoFiles) == 0 {
+			continue
+		}
+		name := imported.Name
+		if spec.Name != nil {
+			name = spec.Name.Name
+		}
+		if name != qualifier.Name {
+			continue
+		}
+		rel, err := filepath.Rel(filepath.Dir(imported.GoFiles[0]), wd)
+		if err != nil {
+			return true
+		}
+		return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+	}
+	return true
 }
 
 func readParseFS(pkg *packages.Package, call *ast.CallExpr) (fsRead, bool) {
