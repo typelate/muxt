@@ -82,7 +82,7 @@ func newConfigurationReport(f *composite.File, key string, given givenSettings, 
 	fields := entryFields()
 	slices.SortFunc(fields, func(a, b entryField) int { return cmp.Compare(a.Name, b.Name) })
 	for _, field := range fields {
-		s := reportLine{Key: muxtJSONKey(field.Name), Value: field.Value(config)}
+		s := reportLine{Key: composite.Key(field.Name), Value: field.Value(config)}
 		group := &defaults
 		for i := range sources {
 			given, err := sources[i].gives(field)

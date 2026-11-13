@@ -10,6 +10,7 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/spf13/pflag"
 
+	"github.com/typelate/muxt/internal/composite"
 	"github.com/typelate/muxt/internal/generate"
 )
 
@@ -76,6 +77,9 @@ type setting struct {
 	name       string
 	deprecated []string
 	nonEmpty   bool
+	// kind is the JSON type muxt.json gives the setting, set by the
+	// constructor for the field's kind.
+	kind composite.Kind
 	// example is the spec's Example, kept so a test can give every setting a
 	// value the same way.
 	example string
@@ -117,6 +121,7 @@ func untold[T any](s spec[T]) T {
 
 func stringSetting(p *string, s spec[string]) setting {
 	set := setting{
+		kind:       composite.KindString,
 		name:       s.Name,
 		deprecated: s.Deprecated,
 		nonEmpty:   s.NonEmpty,
@@ -145,6 +150,7 @@ func stringSetting(p *string, s spec[string]) setting {
 
 func boolSetting(p *bool, s spec[bool]) setting {
 	set := setting{
+		kind:       composite.KindBool,
 		name:       s.Name,
 		deprecated: s.Deprecated,
 		nonEmpty:   s.NonEmpty,
@@ -179,6 +185,7 @@ func boolSetting(p *bool, s spec[bool]) setting {
 // commas; a deprecated spelling takes one value per flag, as it always did.
 func stringsSetting(p *[]string, s spec[[]string]) setting {
 	set := setting{
+		kind:       composite.KindList,
 		name:       s.Name,
 		deprecated: s.Deprecated,
 		nonEmpty:   s.NonEmpty,
@@ -214,6 +221,8 @@ func stringsSetting(p *[]string, s spec[[]string]) setting {
 // default.
 func bytesSetting(p *int64, s spec[int64]) setting {
 	set := setting{
+		// A size is written as the text the flag parses.
+		kind:       composite.KindString,
 		name:       s.Name,
 		deprecated: s.Deprecated,
 		nonEmpty:   s.NonEmpty,

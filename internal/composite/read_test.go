@@ -11,6 +11,15 @@ import (
 	"github.com/typelate/muxt/internal/composite"
 )
 
+// testKeys is the keys the tests of this package read: composite does not
+// know the settings, so a test says which keys exist.
+func testKeys() composite.Keys {
+	return composite.Keys{Kinds: map[string]composite.Kind{
+		"use_receiver_type": composite.KindString,
+		"output_htmx":       composite.KindBool,
+	}}
+}
+
 // writeFile writes a go.mod for example.com/m and a muxt.json holding file in
 // a temporary directory, and returns the directory.
 func writeFile(t *testing.T, file string) string {
@@ -28,7 +37,7 @@ func writeFile(t *testing.T, file string) string {
 func TestFindWrongJSONTypeIsAJSONError(t *testing.T) {
 	dir := writeFile(t, `{"packages": {"example.com/m": {"output_htmx": "yes"}}}`)
 
-	_, _, err := composite.Find(dir, nil)
+	_, _, err := composite.Find(dir, testKeys())
 
 	require.Error(t, err, "Find")
 	path := filepath.Join(dir, composite.FileName)
@@ -40,7 +49,7 @@ func TestFindWrongJSONTypeIsAJSONError(t *testing.T) {
 func TestFindReadsNullAsAbsent(t *testing.T) {
 	dir := writeFile(t, `{"package_defaults": {"output_htmx": true}, "packages": {"example.com/m": {"output_htmx": null, "use_receiver_type": null}}}`)
 
-	f, found, err := composite.Find(dir, nil)
+	f, found, err := composite.Find(dir, testKeys())
 
 	require.NoError(t, err, "Find")
 	require.True(t, found, "found")

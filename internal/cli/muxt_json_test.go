@@ -3,9 +3,9 @@ package cli
 import (
 	"encoding/json"
 	"io"
+	"maps"
 	"os"
 	"path/filepath"
-	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -41,17 +41,9 @@ func TestEveryGenerateFlagHasMuxtJSONKey(t *testing.T) {
 	assert.Empty(t, namesNotIn(keys, flagNames), "muxt.json keys with no generate flag")
 }
 
-// muxtJSONEntryKeys returns the json key of each field of composite.Entry.
+// muxtJSONEntryKeys returns the keys a muxt.json entry accepts, sorted.
 func muxtJSONEntryKeys() []string {
-	var keys []string
-	entry := reflect.TypeFor[composite.Entry]()
-	for i := range entry.NumField() {
-		name, _, _ := strings.Cut(entry.Field(i).Tag.Get("json"), ",")
-		if name != "" && name != "-" {
-			keys = append(keys, name)
-		}
-	}
-	return keys
+	return slices.Sorted(maps.Keys(muxtJSONKeys().Kinds))
 }
 
 // namesNotIn returns the names in a that are not in b, sorted.
@@ -86,13 +78,13 @@ func TestMuxtJSONEntryAcceptsEveryGenerateFlag(t *testing.T) {
 			require.GreaterOrEqual(t, i, 0, "companion %s of %s is not a setting", other, s.name)
 			given = append(given, settings[i])
 		}
-		t.Run(muxtJSONKey(s.name), func(t *testing.T) {
+		t.Run(composite.Key(s.name), func(t *testing.T) {
 			var args []string
 			entry := map[string]any{}
 			for _, g := range given {
 				arg, value := exampleOf(t, g)
 				args = append(args, arg)
-				entry[muxtJSONKey(g.name)] = value
+				entry[composite.Key(g.name)] = value
 			}
 
 			dir := moduleDir(t)

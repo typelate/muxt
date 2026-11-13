@@ -53,7 +53,7 @@ func scaffoldPackage(out io.Writer, wd, name string, flags *pflag.FlagSet, confi
 	case !token.IsIdentifier(name):
 		return &composite.PackageNameError{Name: name, Reason: "must be a Go identifier"}
 	}
-	f, found, err := composite.Find(wd, deprecatedMuxtJSONKeys())
+	f, found, err := composite.Find(wd, muxtJSONKeys())
 	if err != nil {
 		return err
 	}
@@ -152,7 +152,7 @@ func entryFromFlags(flags *pflag.FlagSet, config generate.RoutesFileConfiguratio
 	for _, field := range entryFields() {
 		given := flags.Changed(field.Name) || (field.Name == useTemplatesVariable && usesTemplatesVariable)
 		if given {
-			values[muxtJSONKey(field.Name)] = field.Value(config)
+			values[composite.Key(field.Name)] = field.Value(config)
 		}
 	}
 	data, err := json.Marshal(values)
@@ -176,7 +176,7 @@ func generateConfigCommand(workingDirectory *string) *cobra.Command {
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			cmd.SilenceUsage = true
-			if err := composite.Create(*workingDirectory, deprecatedMuxtJSONKeys()); err != nil {
+			if err := composite.Create(*workingDirectory, muxtJSONKeys()); err != nil {
 				return err
 			}
 			_, err := fmt.Fprintln(cmd.OutOrStdout(), "wrote "+composite.FileName)

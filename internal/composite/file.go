@@ -64,16 +64,16 @@ func (f *File) Resolve(key string) (e Entry, found bool) {
 // go.mod is checked for muxt.json and no directory above it is. A muxt.json
 // above the module belongs to another project, so it is not read. When no
 // go.mod is found on the way up, the walk goes to the filesystem root. found is
-// false when the walk ends without a muxt.json. deprecated maps an old key to
-// its replacement, as Find takes it.
-func Find(wd string, deprecated map[string]string) (f *File, found bool, err error) {
+// false when the walk ends without a muxt.json. keys says which keys an entry
+// may hold and which are deprecated.
+func Find(wd string, keys Keys) (f *File, found bool, err error) {
 	start, err := filepath.Abs(wd)
 	if err != nil {
 		return nil, false, fmt.Errorf("absolute path of %s: %w", wd, err)
 	}
 	dir := start
 	for {
-		f, err := read(filepath.Join(dir, FileName), deprecated)
+		f, err := read(filepath.Join(dir, FileName), keys)
 		if err == nil {
 			return f, true, nil
 		}
@@ -95,13 +95,13 @@ func Find(wd string, deprecated map[string]string) (f *File, found bool, err err
 // reads before any entry is added. It looks for a file the way Find does and
 // fails with an *AlreadyConfiguredError when one configures dir, since a nearer
 // file would shadow it, and with a *NoModuleError when no go.mod is at or above
-// dir, since no command could read the file. deprecated is as Find takes it.
-func Create(dir string, deprecated map[string]string) error {
+// dir, since no command could read the file. keys is as Find takes it.
+func Create(dir string, keys Keys) error {
 	abs, err := filepath.Abs(dir)
 	if err != nil {
 		return fmt.Errorf("absolute path of %s: %w", dir, err)
 	}
-	existing, found, err := Find(abs, deprecated)
+	existing, found, err := Find(abs, keys)
 	if err != nil {
 		return err
 	}
@@ -256,7 +256,7 @@ type Entry struct {
 
 // read reads the muxt.json at path, an absolute path its errors name the file
 // by. A missing file is an error that matches fs.ErrNotExist.
-func read(path string, deprecated map[string]string) (*File, error) {
+func read(path string, keys Keys) (*File, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("reading %s: %w", path, err)
@@ -280,7 +280,7 @@ func read(path string, deprecated map[string]string) (*File, error) {
 	if !hasModule {
 		return nil, &NoModuleError{Path: path}
 	}
-	if err := f.checkKeys(data, deprecated); err != nil {
+	if err := f.checkKeys(data, keys); err != nil {
 		return nil, err
 	}
 	return &f, nil
@@ -291,7 +291,7 @@ func read(path string, deprecated map[string]string) (*File, error) {
 // directory, or the entry-key errors of checkEntryKeys for package_defaults
 // and then for each packages entry. json.Unmarshal drops unknown keys without a
 // word, so the keys are read again here.
-func (f *File) checkKeys(data []byte, deprecated map[string]string) error {
+func (f *File) checkKeys(data []byte, keys Keys) error {
 	var raw struct {
 		PackageDefaults map[string]json.RawMessage            `json:"package_defaults"`
 		Packages        map[string]map[string]json.RawMessage `json:"packages"`
@@ -309,15 +309,17 @@ func (f *File) checkKeys(data []byte, deprecated map[string]string) error {
 			return &UnknownKeyError{Path: f.Name, Key: key, Suggestion: closestKey(key, topKnown)}
 		}
 	}
-	known := entryKeys()
-	if err := checkEntryKeys(f.Name, "package_defaults", raw.PackageDefaults, deprecated, known); err != nil {
+	// Sorted, so a did-you-mean hint between two equally close keys is the
+	// same every run.
+	known := slices.Sorted(maps.Keys(keys.Kinds))
+	if err := checkEntryKeys(f.Name, "package_defaults", raw.PackageDefaults, keys.Deprecated, known); err != nil {
 		return err
 	}
 	for _, key := range slices.Sorted(maps.Keys(raw.Packages)) {
 		if err := f.checkPackageKey(key); err != nil {
 			return err
 		}
-		if err := checkEntryKeys(f.Name, fmt.Sprintf("packages[%q]", key), raw.Packages[key], deprecated, known); err != nil {
+		if err := checkEntryKeys(f.Name, fmt.Sprintf("packages[%q]", key), raw.Packages[key], keys.Deprecated, known); err != nil {
 			return err
 		}
 	}
@@ -379,7 +381,7 @@ func isRelative(key string) bool {
 
 // checkEntryKeys returns the error for the first key, in sorted order, of the
 // entry where names: a *DeprecatedKeyError, a *DashedKeyError, or an
-// *UnknownKeyError. known is entryKeys.
+// *UnknownKeyError. known is the sorted keys an entry accepts.
 func checkEntryKeys(path, where string, keys map[string]json.RawMessage, deprecated map[string]string, known []string) error {
 	for _, key := range slices.Sorted(maps.Keys(keys)) {
 		if replacement, ok := deprecated[key]; ok {
@@ -430,17 +432,6 @@ func editDistance(a, b string) int {
 		prev = cur
 	}
 	return prev[len(b)]
-}
-
-// entryKeys returns the json key of each Entry field: the keys an entry accepts.
-func entryKeys() []string {
-	var keys []string
-	entry := reflect.TypeFor[Entry]()
-	for i := range entry.NumField() {
-		name, _, _ := strings.Cut(entry.Field(i).Tag.Get("json"), ",")
-		keys = append(keys, name)
-	}
-	return keys
 }
 
 // position returns the 1-based line and column of the byte before offset. The

@@ -25,7 +25,7 @@ type entryLookup struct {
 // lookupMuxtJSONEntry finds the nearest muxt.json at or above wd and the key
 // for wd in it.
 func lookupMuxtJSONEntry(wd string) (entryLookup, error) {
-	f, found, err := composite.Find(wd, deprecatedMuxtJSONKeys())
+	f, found, err := composite.Find(wd, muxtJSONKeys())
 	if err != nil {
 		// Find's errors already name the file, and a *composite.ParseError
 		// must reach the caller as it is.

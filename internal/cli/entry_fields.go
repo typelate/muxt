@@ -78,7 +78,7 @@ func entryFields() []entryField {
 				// The flag's own parser turns "64MB" into bytes, so the entry and
 				// the command line accept the same values.
 				if err := (byteSize{p: &c.MultipartMaxMemory}).Set(*e.OutputMultipartMaxMemory); err != nil {
-					return false, fmt.Errorf("%s: %w", muxtJSONKey(outputMultipartMaxMemory), err)
+					return false, fmt.Errorf("%s: %w", composite.Key(outputMultipartMaxMemory), err)
 				}
 				return true, nil
 			},

@@ -16,6 +16,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
+	"github.com/typelate/muxt/internal/composite"
 	"github.com/typelate/muxt/internal/generate"
 	"github.com/typelate/muxt/internal/header"
 )
@@ -91,7 +92,7 @@ const (
 // flag is how an error names a setting where a flag would be written.
 func (s settingSource) flag(name string) string {
 	if s == fromMuxtJSON {
-		return muxtJSONKey(name)
+		return composite.Key(name)
 	}
 	return "--" + name
 }
@@ -99,7 +100,7 @@ func (s settingSource) flag(name string) string {
 // bare is how an error names a setting where no leading dashes are written.
 func (s settingSource) bare(name string) string {
 	if s == fromMuxtJSON {
-		return muxtJSONKey(name)
+		return composite.Key(name)
 	}
 	return name
 }

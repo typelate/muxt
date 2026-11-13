@@ -2,6 +2,7 @@ package cli
 
 import (
 	"github.com/typelate/muxt/internal/analysis"
+	"github.com/typelate/muxt/internal/composite"
 	"github.com/typelate/muxt/internal/generate"
 )
 
@@ -127,4 +128,31 @@ func rootSettings(c *analysis.DefinitionsConfiguration) []setting {
 // read from the command line that configures a package.
 func templatesSettings(templatesVariables *[]string) []setting {
 	return []setting{templatesVariableSetting(templatesVariables)}
+}
+
+// keysOf returns what a muxt.json entry may hold for settings: each setting's
+// key and kind, and each deprecated spelling's key with the key that replaces
+// it. --templates-variable is a spelling of the templates variable that no
+// setting lists, so it is added here.
+func keysOf(settings []setting) composite.Keys {
+	keys := composite.Keys{Kinds: map[string]composite.Kind{}, Deprecated: map[string]string{}}
+	for _, s := range settings {
+		key := composite.Key(s.name)
+		keys.Kinds[key] = s.kind
+		for _, spelling := range s.deprecated {
+			keys.Deprecated[composite.Key(spelling)] = key
+		}
+	}
+	keys.Deprecated[composite.Key(deprecatedTemplatesVariable)] = composite.Key(useTemplatesVariable)
+	return keys
+}
+
+// muxtJSONKeys is what every muxt.json read accepts: the keys of the generate
+// settings, since an entry configures a generate run.
+func muxtJSONKeys() composite.Keys {
+	keys := keysOf(generateSettings(new(generate.RoutesFileConfiguration)))
+	// output_htmx_helpers is a deprecated spelling of output_htmx on the
+	// command line, but a muxt.json has always read it as an unknown key.
+	delete(keys.Deprecated, composite.Key(outputHTMXHelpers))
+	return keys
 }

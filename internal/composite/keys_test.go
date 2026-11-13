@@ -49,7 +49,7 @@ func TestFindRejectsUnknownKeys(t *testing.T) {
 			path := filepath.Join(dir, composite.FileName)
 			require.NoError(t, os.WriteFile(path, []byte(tt.file), 0o644))
 
-			_, _, err := composite.Find(dir, nil)
+			_, _, err := composite.Find(dir, testKeys())
 
 			var unknown *composite.UnknownKeyError
 			require.ErrorAs(t, err, &unknown, "Find error %v", err)
@@ -72,7 +72,7 @@ func TestFindRejectsKeyWithOtherLetterCase(t *testing.T) {
 	path := filepath.Join(dir, composite.FileName)
 	require.NoError(t, os.WriteFile(path, []byte(`{"packages": {"example.com/m/Contacts": {}}}`), 0o644))
 
-	_, _, err := composite.Find(dir, nil)
+	_, _, err := composite.Find(dir, testKeys())
 
 	var typed *composite.KeyCaseError
 	require.ErrorAs(t, err, &typed, "Find error %v", err)
