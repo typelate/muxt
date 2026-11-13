@@ -66,11 +66,14 @@ func scaffoldPackage(out io.Writer, wd, name string, flags *pflag.FlagSet, confi
 	if !found {
 		return &composite.NoFileError{Dir: wd}
 	}
-	dir := filepath.Join(wd, name)
+	dir, err := filepath.Abs(filepath.Join(wd, name))
+	if err != nil {
+		return fmt.Errorf("absolute path of %s: %w", name, err)
+	}
 	if _, err := os.Stat(dir); err == nil {
-		return &composite.ExistsError{Path: name}
+		return &composite.ExistsError{Path: dir}
 	} else if !errors.Is(err, fs.ErrNotExist) {
-		return fmt.Errorf("checking %s: %w", name, err)
+		return fmt.Errorf("checking %s: %w", dir, err)
 	}
 	key, err := f.KeyFor(dir)
 	if err != nil {
@@ -124,7 +127,7 @@ func scaffoldPackage(out io.Writer, wd, name string, flags *pflag.FlagSet, confi
 		return &composite.InvalidEntryError{Path: f.Name, Where: fmt.Sprintf("packages[%q]", key), Err: err}
 	}
 	if err := os.Mkdir(dir, 0o755); err != nil {
-		return fmt.Errorf("creating %s: %w", name, err)
+		return fmt.Errorf("creating %s: %w", dir, err)
 	}
 	// The entry names the variable the next generate looks for, so the file
 	// declares the first one the resolved entry names.

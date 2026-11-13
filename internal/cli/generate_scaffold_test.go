@@ -279,7 +279,7 @@ func TestGeneratePackageRefusesExistingDirectory(t *testing.T) {
 
 	_, err := runCommand(t, root, "generate package workspace")
 
-	require.EqualError(t, err, "workspace already exists; nothing was written")
+	require.EqualError(t, err, filepath.Join(root, "workspace")+" already exists; nothing was written")
 	entries, err := os.ReadDir(filepath.Join(root, "workspace"))
 	require.NoError(t, err)
 	assert.Len(t, entries, 1, "workspace holds only keep.txt")
