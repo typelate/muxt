@@ -243,7 +243,8 @@ error: $BASE/muxt.json: packages["example.com/fieldkit/ghost"]: directory $BASE/
 == stale entry, file directory: callers list-template-callers
 error: $BASE/muxt.json: packages["example.com/fieldkit/ghost"]: directory $BASE/ghost does not exist
 == stale entry, file directory: def generate def GET /things/{id} GetThing(ctx, id)
-error: $BASE/muxt.json: packages["example.com/fieldkit/ghost"]: directory $BASE/ghost does not exist
+load root="." dirs=["."] patterns=[""]
+error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: no Go package found at $BASE
 == stale entry, file directory: mutations test-template-mutations --dry-run
 mutations dir="." templates=[templates]
 == stale entry, contacts: generate generate -v

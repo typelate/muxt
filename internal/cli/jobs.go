@@ -123,6 +123,14 @@ func selectJobs(spec jobSpec, dir string, flags *pflag.FlagSet, getEnv func(stri
 			return fallbackSelection(spec, dir, f, nil)
 		}
 		keys = f.Keys()
+		if spec.Scope == itsEntry {
+			// Only the directory's own entry is read, so another entry's
+			// mistake cannot fail a command that acts on one package.
+			if !lookup.HasEntry {
+				return fallbackSelection(spec, dir, f, nil)
+			}
+			keys = []string{lookup.Key}
+		}
 	}
 	version := spec.Version
 	if version == nil {
@@ -141,16 +149,6 @@ func selectJobs(spec jobSpec, dir string, flags *pflag.FlagSet, getEnv func(stri
 		}
 		config.Verbose = spec.Verbose
 		jobs = append(jobs, packageJob{File: f.Name, Key: key, Dir: entryDir, Config: config})
-	}
-	if spec.Scope == itsEntry {
-		// Every entry in the file's own directory was validated above, as a
-		// listing of them would; the command acts on the directory's alone.
-		for _, job := range jobs {
-			if job.Key == lookup.Key {
-				return selection{File: f, Jobs: []packageJob{job}}, nil
-			}
-		}
-		return fallbackSelection(spec, dir, f, nil)
 	}
 	return selection{File: f, Jobs: jobs}, nil
 }

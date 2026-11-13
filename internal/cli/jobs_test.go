@@ -23,6 +23,7 @@ func TestSelectJobs(t *testing.T) {
 		tasks     = "example.com/fieldkit/tasks"
 		root      = "example.com/fieldkit"
 	)
+	const staleWithRoot = `{"packages": {"example.com/fieldkit": {}, "example.com/fieldkit/ghost": {}}}`
 	settings := []string{"use-receiver-type"}
 	writes := jobSpec{Name: "generate", Settings: settings, Scope: eachEntry, RequireEntry: true}
 	lists := jobSpec{Name: "muxt", Settings: settings, Scope: eachEntry}
@@ -64,7 +65,8 @@ func TestSelectJobs(t *testing.T) {
 		{name: "row 6 listing takes every entry", spec: lists, muxtJSON: fieldkitEntries, dir: ".", wantKeys: []string{contacts, inventory, tasks}, wantFile: true},
 		{name: "row 6 check without an entry for the file's directory", spec: reads, muxtJSON: fieldkitEntries, dir: ".", wantKeys: []string{""}, wantFile: true},
 		{name: "row 6 check with an entry for the file's directory", spec: reads, muxtJSON: fieldkitWithRoot, dir: ".", wantKeys: []string{root}, wantFile: true},
-		{name: "row 6 check validates every entry", spec: reads, muxtJSON: fieldkitStale, dir: ".", wantErr: asError[*composite.MissingDirectoryError]},
+		{name: "row 6 check validates only its own entry", spec: reads, muxtJSON: fieldkitStale, dir: ".", wantKeys: []string{""}, wantFile: true},
+		{name: "row 6 check with an entry for the file's directory ignores a stale one", spec: reads, muxtJSON: staleWithRoot, dir: ".", wantKeys: []string{root}, wantFile: true},
 		{name: "row 6 generate validates every entry", spec: writes, muxtJSON: fieldkitStale, dir: ".", wantErr: asError[*composite.MissingDirectoryError]},
 
 		{name: "row 7 generate", spec: writes, muxtJSON: fieldkitEntries, dir: "inventory", wantKeys: []string{inventory}, wantFile: true},
