@@ -28,11 +28,13 @@ Error: configure generate with fields in /home/me/app/muxt.json instead of flags
 | `package NAME` | | Create the package directory and its entry ([below](#generate-package)). | the `generate` flags, stored in the entry |
 | `def NAME` | `definition` | Add a route template named `NAME` to a template file. Without `--output-file` it prints the template it would add and a method stub to paste, and changes nothing. With it, it writes the template file and prints the stub. The stub is a placeholder to rewrite: it returns `any` and its body returns `nil`. Its receiver is a pointer when the type declares a pointer method, a value otherwise. Imports are not added. | `--output-file`, `--output-document`, `--output-fragment`, `--use-receiver-type` |
 
+`--output-document` writes an HTML skeleton whose empty `<body>` is a placeholder for the package's layout.
+
 Steps: [move generate flags into muxt.json](../../how-to/muxt-json.md).
 
 ### generate package
 
-`generate package NAME` writes `NAME/NAME.go` (the `go:embed`, the templates variable under its configured name, and the receiver type), an empty `NAME/NAME.gohtml`, and the entry in `muxt.json`. The entry records `use_receiver_type` unless `package_defaults` supplies one. `NAME` is one Go identifier that is not `main` and does not start with `_`, which the go command ignores in a file name.
+`generate package NAME` writes `NAME/NAME.go` (the `go:embed`, the templates variable under its configured name, and the receiver type), an empty `NAME/NAME.gohtml`, and the entry in `muxt.json`. The entry records `use_receiver_type`, `T` by default, unless `package_defaults` supplies one. `NAME` is one Go identifier that is not `main` and does not start with `_`, which the go command ignores in a file name.
 
 ## Files
 
