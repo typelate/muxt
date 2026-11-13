@@ -15,6 +15,7 @@ import (
 	"github.com/spf13/pflag"
 	"golang.org/x/tools/txtar"
 
+	"github.com/typelate/muxt/internal/composite"
 	"github.com/typelate/muxt/internal/generate"
 	"github.com/typelate/muxt/internal/load"
 	"github.com/typelate/muxt/internal/muxt"
@@ -64,17 +65,22 @@ func generateDefinitionCommand(workingDirectory *string, getEnv func(string) str
 // definitionConfiguration returns the configuration of the package in wd: the
 // muxt.json entry for it, with package_defaults applied, or generate's defaults
 // with the receiver type the flag gave. The flag is a second source for what an
-// entry already says, so entryJobFor rejects it in a configured directory.
+// entry already says, so in a configured directory it is accepted only when
+// the resolved entry names no receiver type, and a
+// *composite.ConfiguredDirectoryError otherwise.
 func definitionConfiguration(wd string, flags *pflag.FlagSet, receiverType string, getEnv func(string) string) (generate.RoutesFileConfiguration, error) {
-	var given []string
-	if flags.Changed(useReceiverType) {
-		given = append(given, useReceiverType)
-	}
-	job, found, err := entryJobFor(generateCommandName, wd, given, getEnv)
+	job, found, err := entryJobFor(generateCommandName, wd, nil, getEnv)
 	if err != nil {
 		return generate.RoutesFileConfiguration{}, err
 	}
 	if found {
+		if !flags.Changed(useReceiverType) {
+			return job.Config, nil
+		}
+		if job.Config.ReceiverType != "" {
+			return generate.RoutesFileConfiguration{}, &composite.ConfiguredDirectoryError{Path: job.File, Command: generateCommandName + " def", Flags: []string{useReceiverType}}
+		}
+		job.Config.ReceiverType = receiverType
 		return job.Config, nil
 	}
 	config, err := defaultConfiguration(wd, getEnv)
