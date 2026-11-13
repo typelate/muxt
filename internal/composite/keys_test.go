@@ -58,6 +58,20 @@ func TestFindRejectsUnknownKeys(t *testing.T) {
 	}
 }
 
+// TestFindRejectsDeprecatedKeys states that a key Keys lists as deprecated is
+// an error naming the key to write instead, not an unknown key.
+func TestFindRejectsDeprecatedKeys(t *testing.T) {
+	dir := writeFile(t, `{"packages": {"example.com/m": {"output_htmx_helpers": true}}}`)
+	keys := testKeys()
+	keys.Deprecated = map[string]string{"output_htmx_helpers": "output_htmx"}
+
+	_, _, err := composite.Find(dir, keys)
+
+	var deprecated *composite.DeprecatedKeyError
+	require.ErrorAs(t, err, &deprecated, "Find error %v", err)
+	assert.Equal(t, filepath.Join(dir, composite.FileName)+`: packages["example.com/m"]: key "output_htmx_helpers" is deprecated; write "output_htmx"`, err.Error(), "message")
+}
+
 // TestFindRejectsKeyWithOtherLetterCase states that a packages key that names a
 // directory by a different letter case than the disk spells it is an error
 // naming the spelling on disk, so two spellings of one directory on a

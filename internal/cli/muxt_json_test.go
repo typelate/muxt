@@ -352,21 +352,39 @@ func TestGenerateRejectsUnknownMuxtJSONKey(t *testing.T) {
 // that is a deprecated flag name fails a flagless muxt generate, naming the
 // key and the key to write instead. The runner is not called.
 func TestGenerateRejectsDeprecatedMuxtJSONKey(t *testing.T) {
-	dir := moduleDir(t)
-	const file = `{"packages": {"example.com/m": {"receiver_type": "Server"}}}`
-	path := filepath.Join(dir, composite.FileName)
-	require.NoError(t, os.WriteFile(path, []byte(file), 0o644))
+	for _, tt := range []struct {
+		name, file, key, replacement string
+	}{
+		{
+			name:        "receiver type",
+			file:        `{"packages": {"example.com/m": {"receiver_type": "Server"}}}`,
+			key:         "receiver_type",
+			replacement: "use_receiver_type",
+		},
+		{
+			name:        "htmx helpers",
+			file:        `{"packages": {"example.com/m": {"output_htmx_helpers": true}}}`,
+			key:         "output_htmx_helpers",
+			replacement: "output_htmx",
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := moduleDir(t)
+			path := filepath.Join(dir, composite.FileName)
+			require.NoError(t, os.WriteFile(path, []byte(tt.file), 0o644))
 
-	called, err := generateFailureOf(t, dir)
+			called, err := generateFailureOf(t, dir)
 
-	var deprecated *composite.DeprecatedKeyError
-	require.ErrorAs(t, err, &deprecated, "error %v", err)
-	assert.Equal(t, path, deprecated.Path, "path")
-	assert.Equal(t, `packages["example.com/m"]`, deprecated.Where, "where")
-	assert.Equal(t, "receiver_type", deprecated.Key, "key")
-	assert.Equal(t, "use_receiver_type", deprecated.Replacement, "replacement")
-	assert.Equal(t, path+`: packages["example.com/m"]: key "receiver_type" is deprecated; write "use_receiver_type"`, err.Error(), "message")
-	assert.False(t, called, "generate runner called")
+			var deprecated *composite.DeprecatedKeyError
+			require.ErrorAs(t, err, &deprecated, "error %v", err)
+			assert.Equal(t, path, deprecated.Path, "path")
+			assert.Equal(t, `packages["example.com/m"]`, deprecated.Where, "where")
+			assert.Equal(t, tt.key, deprecated.Key, "key")
+			assert.Equal(t, tt.replacement, deprecated.Replacement, "replacement")
+			assert.Equal(t, path+`: packages["example.com/m"]: key "`+tt.key+`" is deprecated; write "`+tt.replacement+`"`, err.Error(), "message")
+			assert.False(t, called, "generate runner called")
+		})
+	}
 }
 
 // TestGenerateMuxtJSONKeysUseUnderscores states that a muxt.json entry key is

@@ -150,9 +150,5 @@ func keysOf(settings []setting) composite.Keys {
 // muxtJSONKeys is what every muxt.json read accepts: the keys of the generate
 // settings, since an entry configures a generate run.
 func muxtJSONKeys() composite.Keys {
-	keys := keysOf(generateSettings(new(generate.RoutesFileConfiguration)))
-	// output_htmx_helpers is a deprecated spelling of output_htmx on the
-	// command line, but a muxt.json has always read it as an unknown key.
-	delete(keys.Deprecated, composite.Key(outputHTMXHelpers))
-	return keys
+	return keysOf(generateSettings(new(generate.RoutesFileConfiguration)))
 }

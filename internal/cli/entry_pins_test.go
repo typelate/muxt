@@ -46,21 +46,6 @@ func TestGenerateReportsTheFirstErrorOfAFile(t *testing.T) {
 	}
 }
 
-// TestMuxtJSONHTMXHelpersIsAnUnknownKey states that output_htmx_helpers, the
-// deprecated flag's name as a key, is not a key muxt.json reads: it is the
-// same unknown key error as any other name, and no hint, since it is too far
-// from output_htmx.
-func TestMuxtJSONHTMXHelpersIsAnUnknownKey(t *testing.T) {
-	dir := moduleDir(t)
-	writeMuxtJSON(t, dir, `{"packages": {"example.com/m": {"output_htmx_helpers": true}}}`)
-
-	_, err := generateFailureOf(t, dir)
-
-	var unknown *composite.UnknownKeyError
-	require.ErrorAs(t, err, &unknown, "error %v", err)
-	assert.Equal(t, filepath.Join(dir, composite.FileName)+`: packages["example.com/m"]: unknown key "output_htmx_helpers"`, err.Error(), "message")
-}
-
 // muxtJSONAfter runs commandLine in a module holding file as its muxt.json and
 // returns the muxt.json text afterwards.
 func muxtJSONAfter(t *testing.T, file, commandLine string) string {
