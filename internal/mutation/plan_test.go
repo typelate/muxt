@@ -17,6 +17,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/typelate/muxt/internal/asteval"
+	"github.com/typelate/muxt/internal/load/loadtest"
 	"github.com/typelate/muxt/internal/source"
 )
 
@@ -614,6 +615,58 @@ func TestCoverageReaches(t *testing.T) {
 			cov := coverage{"page.gohtml": tt.blocks}
 			got := cov.reaches("page.gohtml", newLineIndex(src.text), tt.r)
 			assert.Equal(t, tt.want, got, "reaches(%q)", src.text[tt.r.start:tt.r.end])
+		})
+	}
+}
+
+// sharedChainGo defines "own" and, in the same set, "shared", which "own"
+// renders. Each holds one action that mutates.
+const sharedChainGo = `package server
+
+import (
+	"html/template"
+	"io"
+)
+
+var templates = template.Must(template.Must(template.New("own").Parse(` + "`{{if .}}a{{end}}{{template \"shared\" .}}`" + `)).New("shared").Parse(` + "`{{if .}}b{{end}}`" + `))
+
+func Render(w io.Writer, on bool) error {
+	return templates.ExecuteTemplate(w, "own", on)
+}
+`
+
+// TestPlanMutatesOnlyTemplatesTheVariableOwns states that no mutant is
+// planned for a template defined in another package's files, which that
+// package owns, while the package's own templates are mutated.
+func TestPlanMutatesOnlyTemplatesTheVariableOwns(t *testing.T) {
+	for _, tt := range []struct {
+		name         string
+		sharedFrom   string
+		wantTemplate []string
+	}{
+		{name: "both defined here", wantTemplate: []string{"own bool", "shared bool"}},
+		{name: "shared defined in another package", sharedFrom: "example.com/other", wantTemplate: []string{"own bool"}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			in, err := inputFrom(dir, loadtest.Package(t, dir, "example.com/server", map[string]string{
+				"go.mod":      goMod,
+				"template.go": sharedChainGo,
+			}), []string{"templates"})
+			require.NoError(t, err)
+			require.Len(t, in.pkg.Variables, 1)
+			variable := in.pkg.Variables[0]
+			if tt.sharedFrom != "" {
+				definition, ok := variable.Definitions["shared"]
+				require.True(t, ok, "definitions %v", variable.Definitions)
+				definition.Package = tt.sharedFrom
+				variable.Definitions["shared"] = definition
+			}
+
+			p, err := planFrom(Configuration{TemplatesVariables: []string{"templates"}, Seed: 1, SeedSet: true}, in, nil, "")
+
+			require.NoError(t, err)
+			assert.ElementsMatch(t, tt.wantTemplate, mutatedTemplates(p), "mutated templates")
 		})
 	}
 }
