@@ -12,7 +12,6 @@ import (
 
 	"github.com/ettle/strcase"
 	"github.com/spf13/cobra"
-	"github.com/spf13/pflag"
 	"golang.org/x/tools/txtar"
 
 	"github.com/typelate/muxt/internal/composite"
@@ -50,9 +49,35 @@ The method stub it prints is a placeholder to rewrite: its result type is any, i
 			if document {
 				body = generate.DocumentBody
 			}
-			config, err := definitionConfiguration(*workingDirectory, cmd.Flags(), receiverType, getEnv)
+			spec := jobSpec{
+				Name:      generateCommandName + " def",
+				Scope:     itsEntry,
+				statFirst: true,
+				// The receiver type flag is the only setting def reads from the
+				// command line, and what it gives an unconfigured package.
+				Fallback: func(dir string) (generate.RoutesFileConfiguration, error) {
+					config, err := defaultConfiguration(dir, getEnv)
+					if err != nil {
+						return generate.RoutesFileConfiguration{}, err
+					}
+					config.ReceiverType = receiverType
+					return config, nil
+				},
+			}
+			sel, err := selectJobs(spec, *workingDirectory, nil, getEnv)
 			if err != nil {
 				return err
+			}
+			job := sel.Jobs[0]
+			config := job.Config
+			if job.File != "" && cmd.Flags().Changed(useReceiverType) {
+				// The flag is a second source for what an entry already says, so
+				// in a configured directory it only fills a receiver type the
+				// resolved entry, package_defaults included, leaves unnamed.
+				if config.ReceiverType != "" {
+					return &composite.ConfiguredDirectoryError{Path: job.File, Command: spec.Name, Flags: []string{useReceiverType}}
+				}
+				config.ReceiverType = receiverType
 			}
 			target := definitionTarget{Dir: *workingDirectory, Name: args[0], File: templateFile}
 			return scaffoldDefinition(cmd, target, body, config, getEnv, loadPackages)
@@ -63,35 +88,6 @@ The method stub it prints is a placeholder to rewrite: its result type is any, i
 	cmd.Flags().BoolVar(&fragment, outputFragment, false, "make the template an empty fragment (the default)")
 	cmd.Flags().BoolVar(&document, outputDocument, false, "make the template a full HTML document")
 	return cmd
-}
-
-// definitionConfiguration returns the configuration of the package in wd: the
-// muxt.json entry for it, with package_defaults applied, or generate's defaults
-// with the receiver type the flag gave. The flag is a second source for what an
-// entry already says, so in a configured directory it is accepted only when
-// the resolved entry names no receiver type, and a
-// *composite.ConfiguredDirectoryError otherwise.
-func definitionConfiguration(wd string, flags *pflag.FlagSet, receiverType string, getEnv func(string) string) (generate.RoutesFileConfiguration, error) {
-	job, found, err := entryJobFor(generateCommandName, wd, nil, getEnv)
-	if err != nil {
-		return generate.RoutesFileConfiguration{}, err
-	}
-	if found {
-		if !flags.Changed(useReceiverType) {
-			return job.Config, nil
-		}
-		if job.Config.ReceiverType != "" {
-			return generate.RoutesFileConfiguration{}, &composite.ConfiguredDirectoryError{Path: job.File, Command: generateCommandName + " def", Flags: []string{useReceiverType}}
-		}
-		job.Config.ReceiverType = receiverType
-		return job.Config, nil
-	}
-	config, err := defaultConfiguration(wd, getEnv)
-	if err != nil {
-		return generate.RoutesFileConfiguration{}, err
-	}
-	config.ReceiverType = receiverType
-	return config, nil
 }
 
 // definitionTarget is where generate def puts a route template. The three

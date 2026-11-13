@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/typelate/muxt/internal/analysis"
+	"github.com/typelate/muxt/internal/generate"
 )
 
 func checkCommand(workingDirectory *string, getEnv func(string) string, run func(*cobra.Command, string, analysis.CheckConfiguration) error) *cobra.Command {
@@ -23,7 +24,6 @@ func checkCommand(workingDirectory *string, getEnv func(string) string, run func
 		Short:   "Check templates for errors",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cmd.SilenceUsage = true
-			flagNames := givenSettingFlags(cmd.Flags(), templatesSettingFlags())
 			if err := fixTemplateVariables(&config.TemplatesVariables, deprecatedTemplatesVar); err != nil {
 				return err
 			}
@@ -34,13 +34,11 @@ func checkCommand(workingDirectory *string, getEnv func(string) string, run func
 			if err != nil {
 				return err
 			}
-			job, found, err := entryJobFor(cmd.Name(), dir, flagNames, getEnv)
+			sel, err := selectJobs(templatesSpec(cmd.Name(), config.TemplatesVariables, getEnv), dir, cmd.Flags(), getEnv)
 			if err != nil {
 				return err
 			}
-			if found {
-				config.TemplatesVariables = job.Config.TemplatesVariables
-			}
+			config.TemplatesVariables = sel.Jobs[0].Config.TemplatesVariables
 			return run(cmd, dir, config)
 		},
 	}
@@ -56,6 +54,27 @@ func checkCommand(workingDirectory *string, getEnv func(string) string, run func
 	}
 
 	return cmd
+}
+
+// templatesSpec is the jobSpec of a command that reads one package and takes
+// only its templates variables from the command line: check and the listings.
+// Its Fallback is what an empty entry gives, with the variables the flags
+// named.
+func templatesSpec(name string, templatesVariables []string, getEnv func(string) string) jobSpec {
+	return jobSpec{
+		Name:      name,
+		Settings:  templatesSettingFlags(),
+		Scope:     itsEntry,
+		statFirst: true,
+		Fallback: func(dir string) (generate.RoutesFileConfiguration, error) {
+			config, err := defaultConfiguration(dir, getEnv)
+			if err != nil {
+				return generate.RoutesFileConfiguration{}, err
+			}
+			config.TemplatesVariables = templatesVariables
+			return config, nil
+		},
+	}
 }
 
 // packageDirectory is the directory of the package a command reads: the
@@ -101,7 +120,6 @@ func listTemplateCallersCommand(wd *string, getEnv func(string) string, run func
 		Short:   "List template callers",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cmd.SilenceUsage = true
-			flagNames := givenSettingFlags(cmd.Flags(), templatesSettingFlags())
 			if err := fixTemplateVariables(&config.TemplatesVariables, deprecatedTemplatesVar); err != nil {
 				return err
 			}
@@ -117,13 +135,11 @@ func listTemplateCallersCommand(wd *string, getEnv func(string) string, run func
 			if err != nil {
 				return err
 			}
-			job, found, err := entryJobFor(cmd.Name(), dir, flagNames, getEnv)
+			sel, err := selectJobs(templatesSpec(cmd.Name(), config.TemplatesVariables, getEnv), dir, cmd.Flags(), getEnv)
 			if err != nil {
 				return err
 			}
-			if found {
-				config.TemplatesVariables = job.Config.TemplatesVariables
-			}
+			config.TemplatesVariables = sel.Jobs[0].Config.TemplatesVariables
 			return run(cmd, dir, config)
 		},
 	}
@@ -149,7 +165,6 @@ func listTemplateCallsCommand(wd *string, getEnv func(string) string, run func(*
 		Short:   "List template calls",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cmd.SilenceUsage = true
-			flagNames := givenSettingFlags(cmd.Flags(), templatesSettingFlags())
 			if err := fixTemplateVariables(&config.TemplatesVariables, deprecatedTemplatesVar); err != nil {
 				return err
 			}
@@ -165,13 +180,11 @@ func listTemplateCallsCommand(wd *string, getEnv func(string) string, run func(*
 			if err != nil {
 				return err
 			}
-			job, found, err := entryJobFor(cmd.Name(), dir, flagNames, getEnv)
+			sel, err := selectJobs(templatesSpec(cmd.Name(), config.TemplatesVariables, getEnv), dir, cmd.Flags(), getEnv)
 			if err != nil {
 				return err
 			}
-			if found {
-				config.TemplatesVariables = job.Config.TemplatesVariables
-			}
+			config.TemplatesVariables = sel.Jobs[0].Config.TemplatesVariables
 			return run(cmd, dir, config)
 		},
 	}

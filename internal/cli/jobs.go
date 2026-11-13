@@ -47,6 +47,18 @@ type jobSpec struct {
 	statFirst bool
 }
 
+// packageJob is one package directory and what to run a command with. Key is
+// the packages key the configuration came from, and File the absolute path of
+// the muxt.json holding it; both are empty when flags gave the configuration.
+// Given is the setting flags that did, so a report can name them.
+type packageJob struct {
+	File   string
+	Key    string
+	Dir    string
+	Config generate.RoutesFileConfiguration
+	Given  []string
+}
+
 // selection is what selectJobs chose.
 type selection struct {
 	// File is the muxt.json read, nil when there is none.
