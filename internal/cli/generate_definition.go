@@ -9,15 +9,12 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/ettle/strcase"
 	"github.com/spf13/cobra"
 	"golang.org/x/tools/txtar"
 
 	"github.com/typelate/muxt/internal/composite"
 	"github.com/typelate/muxt/internal/generate"
 	"github.com/typelate/muxt/internal/muxt"
-	"github.com/typelate/muxt/internal/source"
-	"github.com/typelate/muxt/template/html"
 )
 
 // generateDefinitionCommand is muxt generate def NAME: it adds a route template
@@ -207,7 +204,7 @@ func relativeTo(dir, file string) string {
 // the route's identifier in snake case, so the person can place each section
 // where it belongs without renaming it.
 func writeDefinitionArchive(w io.Writer, name, define, stub string) error {
-	base, err := routeFileBase(name)
+	base, err := generate.RouteFileBase(name)
 	if err != nil {
 		return err
 	}
@@ -217,24 +214,6 @@ func writeDefinitionArchive(w io.Writer, name, define, stub string) error {
 	}
 	_, err = w.Write(txtar.Format(archive))
 	return err
-}
-
-// routeFileBase returns the identifier muxt gives the route name, in snake case.
-// The identifier is the one muxt uses for the route's generated names, so it is
-// asked of muxt rather than derived from the name here.
-func routeFileBase(name string) (string, error) {
-	templates, err := html.New("").Parse(generate.DefineBlock(name, generate.FragmentBody))
-	if err != nil {
-		return "", fmt.Errorf("parsing %q: %w", name, err)
-	}
-	defs, err := muxt.Definitions(source.Variable{Name: "probe", Set: templates})
-	if err != nil {
-		return "", err
-	}
-	if len(defs) != 1 {
-		return "", fmt.Errorf("%q is not one route definition", name)
-	}
-	return strcase.ToSnake(defs[0].Identifier()), nil
 }
 
 // checkTemplateFileName rejects an --output-file that is not a .gohtml file in

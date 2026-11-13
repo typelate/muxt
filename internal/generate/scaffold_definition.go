@@ -1,6 +1,15 @@
 package generate
 
-import "strconv"
+import (
+	"fmt"
+	"strconv"
+
+	"github.com/ettle/strcase"
+
+	"github.com/typelate/muxt/internal/muxt"
+	"github.com/typelate/muxt/internal/source"
+	"github.com/typelate/muxt/template/html"
+)
 
 // DefineBody is what a new define holds: the choice between a template that
 // contributes a fragment to a page and one that is a page.
@@ -45,4 +54,22 @@ func AppendDefinition(existing []byte, define string) []byte {
 	}
 	out = append(out, define...)
 	return append(out, '\n')
+}
+
+// RouteFileBase returns the identifier muxt gives the route name, in snake case.
+// The identifier is the one muxt uses for the route's generated names, so it is
+// asked of muxt rather than derived from the name here.
+func RouteFileBase(name string) (string, error) {
+	templates, err := html.New("").Parse(DefineBlock(name, FragmentBody))
+	if err != nil {
+		return "", fmt.Errorf("parsing %q: %w", name, err)
+	}
+	defs, err := muxt.Definitions(source.Variable{Name: "probe", Set: templates})
+	if err != nil {
+		return "", err
+	}
+	if len(defs) != 1 {
+		return "", fmt.Errorf("%q is not one route definition", name)
+	}
+	return strcase.ToSnake(defs[0].Identifier()), nil
 }
