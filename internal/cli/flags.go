@@ -37,7 +37,6 @@ func addUseReceiverTypePackageVarToFlagSet(flagSet *pflag.FlagSet, out *string) 
 }
 
 func addOutputFlagsToFlagSet(flagSet *pflag.FlagSet, g *generate.RoutesFileConfiguration) {
-	flagSet.StringVar(&g.ReceiverInterface, outputReceiverInterface, defaultReceiverInterfaceName, outputReceiverInterfaceHelp)
 	flagSet.StringVar(&g.RoutesFunction, outputRoutesFunc, defaultRoutesFunctionName, outputRoutesFuncHelp)
 	flagSet.StringVar(&g.TemplateDataType, outputTemplateDataType, defaultTemplateDataTypeName, outputTemplateDataTypeHelp)
 	flagSet.StringVar(&g.SSETemplateDataType, outputSSETemplateDataType, defaultSSETemplateDataTypeName, outputSSETemplateDataTypeHelp)
@@ -62,7 +61,6 @@ func addVerboseFlagToFlagSet(flagSet *pflag.FlagSet, out *bool) {
 }
 
 func addDeprecatedOutputFlagsToFlagSet(flagSet *pflag.FlagSet, g *generate.RoutesFileConfiguration) {
-	flagSet.StringVar(&g.ReceiverInterface, deprecatedReceiverInterface, defaultReceiverInterfaceName, "DEPRECATED: use --"+outputReceiverInterface+" instead. "+outputReceiverInterfaceHelp)
 	flagSet.StringVar(&g.RoutesFunction, deprecatedRoutesFunc, defaultRoutesFunctionName, "DEPRECATED: use --"+outputRoutesFunc+" instead. "+outputRoutesFuncHelp)
 	flagSet.StringVar(&g.TemplateDataType, deprecatedTemplateDataType, defaultTemplateDataTypeName, "DEPRECATED: use --"+outputTemplateDataType+" instead. "+outputTemplateDataTypeHelp)
 	flagSet.StringVar(&g.TemplateRoutePathsTypeName, deprecatedTemplateRoutePathsType, defaultTemplateRoutePathsTypeName, "DEPRECATED: use --"+outputTemplateRoutePathsType+" instead. "+outputTemplateRoutePathsTypeHelp)
@@ -70,7 +68,6 @@ func addDeprecatedOutputFlagsToFlagSet(flagSet *pflag.FlagSet, g *generate.Route
 	flagSet.BoolVar(&g.PathPrefix, deprecatedPathPrefix, false, "DEPRECATED: use --"+outputRoutesFuncWithPathPrefix+" instead. "+outputRoutesFuncWithPathPrefixHelp)
 	flagSet.BoolVar(&g.OutputHTMX, outputHTMXHelpers, false, "DEPRECATED: use --"+outputHTMX+" instead. "+outputHTMXHelp)
 
-	markDeprecated(flagSet, deprecatedReceiverInterface, outputReceiverInterface)
 	markDeprecated(flagSet, deprecatedRoutesFunc, outputRoutesFunc)
 	markDeprecated(flagSet, deprecatedTemplateDataType, outputTemplateDataType)
 	markDeprecated(flagSet, deprecatedTemplateRoutePathsType, outputTemplateRoutePathsType)

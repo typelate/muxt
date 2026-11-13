@@ -16,6 +16,11 @@ func generateSettings(c *generate.RoutesFileConfiguration) []setting {
 			Name: outputFile, Default: defaultOutputFileName, NonEmpty: true, Example: "routes.go",
 			Usage: `The generated file name containing the routes function and receiver interface. A file name in the working directory, without whitespace.`,
 		}),
+		stringSetting(&c.ReceiverInterface, spec[string]{
+			Name: outputReceiverInterface, Default: defaultReceiverInterfaceName, NonEmpty: true,
+			Deprecated: []string{deprecatedReceiverInterface}, Example: "RoutesReceiver",
+			Usage: `The interface name in the generated output file listing the methods used by handler routes in the routes function.`,
+		}),
 	}
 }
 
