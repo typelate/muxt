@@ -48,6 +48,11 @@ This function also receives an argument with a type matching the name given by o
 			},
 			Usage: `The type name for the type the route builder's methods return. When not set, it is TemplateRoute, or the route paths type name with Route appended when output-template-route-paths-type names another type.`,
 		}),
+		stringSetting(&c.TemplateRouteBuilderTypeName, spec[string]{
+			Name: outputTemplateRouteBuilderType, Default: defaultTemplateRouteBuilderTypeName, NonEmpty: true, Example: "SiteRouteBuilder",
+			Derived: func() string { return c.TemplateRouteTypeName + routeBuilderSuffix },
+			Usage:   `The type name for the type TemplateData.Route returns, whose methods return the route type. When not set, it is the route type name with Builder appended.`,
+		}),
 	}
 }
 
