@@ -1,12 +1,14 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 
 	"github.com/spf13/pflag"
 
+	"github.com/typelate/muxt/internal/check"
 	"github.com/typelate/muxt/internal/composite"
 	"github.com/typelate/muxt/internal/generate"
 )
@@ -191,6 +193,17 @@ func fallbackSelection(spec jobSpec, dir string, f *composite.File, given givenS
 	}
 	config.Verbose = spec.Verbose
 	return selection{File: f, Jobs: []packageJob{{Dir: dir, Config: config, Given: given}}}, nil
+}
+
+// entryVariableError returns the error naming job's muxt.json entry when err
+// says the package lacks the templates variable, so the fix is in the file.
+// ok is false for any other err, and for a job the command line configured.
+func entryVariableError(job packageJob, err error) (entryErr error, ok bool) {
+	missing, ok := errors.AsType[*check.VariableNotFoundError](err)
+	if !ok || job.File == "" {
+		return nil, false
+	}
+	return &composite.NoVariableError{Path: job.File, Key: job.Key, Package: missing.Package, Variable: missing.Variable}, true
 }
 
 // configuredHook is analysis.NewModule's answer to whether a muxt.json entry

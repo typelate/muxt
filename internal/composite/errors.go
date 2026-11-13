@@ -198,6 +198,20 @@ func (e *InvalidEntryError) Unwrap() error {
 	return e.Err
 }
 
+// NoVariableError reports a muxt.json entry whose package does not declare the
+// templates variable the entry names, or the default one. Path is the file's
+// absolute path, Key the entry's packages key, Package the package's import
+// path and Variable the name asked for.
+type NoVariableError struct {
+	Path, Key, Package, Variable string
+}
+
+// Error returns the path, the entry, the variable and the two fixes on one
+// line.
+func (e *NoVariableError) Error() string {
+	return fmt.Sprintf("%s: packages[%q]: package %s declares no variable %q; declare it, or remove the entry", e.Path, e.Key, e.Package, e.Variable)
+}
+
 // ConfiguredDirectoryError reports generate flags given in a directory whose
 // muxt.json entry already configures it. Path is the file's absolute
 // path. Command is the word the person typed for the command that

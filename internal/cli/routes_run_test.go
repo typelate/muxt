@@ -300,6 +300,33 @@ func TestRoutesListsEveryMuxtJSONEntryFromOneLoad(t *testing.T) {
 	}
 }
 
+// TestRoutesNamesMuxtJSONEntryWithoutTemplatesVariable states that bare muxt
+// over a muxt.json entry whose package does not declare the templates variable
+// fails the way generate does: the file by absolute path, the entry and the two
+// fixes.
+func TestRoutesNamesMuxtJSONEntryWithoutTemplatesVariable(t *testing.T) {
+	if testing.Short() {
+		t.Skip("loads packages with the go command")
+	}
+	for _, tt := range []struct {
+		name string
+		keys []string
+	}{
+		{name: "one entry", keys: []string{"workspace"}},
+		{name: "several entries", keys: []string{".", "workspace"}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := entryModule(t, map[string]string{".": "Root", "workspace": "Space"}, nil)
+			withMissingVariableEntry(t, dir, tt.keys...)
+
+			_, _, err := listWithLoader(t, dir)
+
+			want := filepath.Join(dir, composite.FileName) + `: packages["example.com/m/workspace"]: package example.com/m/workspace declares no variable "missing"; declare it, or remove the entry`
+			require.EqualError(t, err, want, "muxt")
+		})
+	}
+}
+
 // TestRoutesListsOnlyTheEntriesAMuxtJSONHas states that bare muxt in the
 // directory of a muxt.json with no "." entry lists the entries it has, and that
 // one in a sub-directory prints that package's sections with no key line, the

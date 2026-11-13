@@ -123,6 +123,49 @@ func TestGenerateEveryMuxtJSONEntryNamesEachDirectory(t *testing.T) {
 	assert.Equal(t, "generating handler for pattern GET /Space\nwrote template_routes.go: 1 route\n", stdout, "stdout of a run over one entry")
 }
 
+// withMissingVariableEntry rewrites the muxt.json of dir, a module entryModule
+// wrote with an entry for each of keys, so the entry for "workspace" names a
+// templates variable its package does not declare.
+func withMissingVariableEntry(t *testing.T, dir string, keys ...string) {
+	t.Helper()
+	var entries []string
+	for _, key := range keys {
+		entry := `{"use_receiver_type": "Root"}`
+		if key == "workspace" {
+			entry = `{"use_receiver_type": "Space", "use_templates_variable": ["missing"]}`
+		}
+		entries = append(entries, fmt.Sprintf("%q: %s", importPath(key), entry))
+	}
+	writeTestFile(t, dir, composite.FileName, `{"packages": {`+strings.Join(entries, ",")+`}}`)
+}
+
+// TestGenerateNamesMuxtJSONEntryWithoutTemplatesVariable states that a
+// muxt.json entry whose package does not declare the templates variable fails
+// naming the file by absolute path, the entry and the two fixes, over one entry
+// and over several, with no key ahead of it.
+func TestGenerateNamesMuxtJSONEntryWithoutTemplatesVariable(t *testing.T) {
+	if testing.Short() {
+		t.Skip("loads packages with the go command")
+	}
+	for _, tt := range []struct {
+		name string
+		keys []string
+	}{
+		{name: "one entry", keys: []string{"workspace"}},
+		{name: "several entries", keys: []string{".", "workspace"}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := entryModule(t, map[string]string{".": "Root", "workspace": "Space"}, nil)
+			withMissingVariableEntry(t, dir, tt.keys...)
+
+			_, _, err := generateWithLoader(t, dir)
+
+			want := filepath.Join(dir, composite.FileName) + `: packages["example.com/m/workspace"]: package example.com/m/workspace declares no variable "missing"; declare it, or remove the entry`
+			require.EqualError(t, err, want, "generate")
+		})
+	}
+}
+
 // TestGenerateSucceedsQuietly states that without -v a run that generates
 // without problems prints nothing, over one entry and over several.
 func TestGenerateSucceedsQuietly(t *testing.T) {

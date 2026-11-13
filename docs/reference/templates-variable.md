@@ -1,6 +1,6 @@
 # Templates Variable
 
-Muxt finds route templates through a package-level variable of type `*template.Template`, named `templates` unless `--use-templates-variable` says otherwise. A missing or non-package-level variable fails with `variable NAME not found in package PATH` ([err_missing_templates_variable.txt](../../cmd/muxt/testdata/err_missing_templates_variable.txt)).
+Muxt finds route templates through a package-level variable of type `*template.Template`, named `templates` unless `--use-templates-variable` says otherwise. A missing or non-package-level variable fails with `variable NAME not found in package PATH` ([err_missing_templates_variable.txt](../../cmd/muxt/testdata/err_missing_templates_variable.txt)). For a package with a [muxt.json](muxt-json.md) entry, `generate` and bare `muxt` say `FILE: packages["KEY"]: package PATH declares no variable "NAME"; declare it, or remove the entry`.
 
 ```go
 //go:embed *.gohtml

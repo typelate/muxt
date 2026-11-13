@@ -17,6 +17,22 @@ import (
 	htttemplate "github.com/typelate/muxt/template/html"
 )
 
+// VariableNotFoundError is the error for a templates variable the package does
+// not declare, or declares without a value. A caller that knows why the
+// variable was asked for, such as a muxt.json entry, says how to fix that.
+type VariableNotFoundError struct {
+	// Variable is the name asked for.
+	Variable string
+
+	// Package is the import path of the package searched.
+	Package string
+}
+
+// Error is one line: the variable and the package.
+func (e *VariableNotFoundError) Error() string {
+	return fmt.Sprintf("variable %s not found in package %s", e.Variable, e.Package)
+}
+
 // LoadTemplates resolves the construction chain of the package-level
 // template variable named templatesVariable and returns its evaluated
 // template set. It is the variable-first counterpart to AnalyzePackage's
@@ -52,7 +68,7 @@ func LoadTemplates(pkg *packages.Package, templatesVariable string, imports map[
 		}
 	}
 	if variable == nil {
-		return nil, fmt.Errorf("variable %s not found in package %s", templatesVariable, pkg.PkgPath)
+		return nil, &VariableNotFoundError{Variable: templatesVariable, Package: pkg.PkgPath}
 	}
 
 	workingDirectory := packageDirectory(pkg)

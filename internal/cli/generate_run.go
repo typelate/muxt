@@ -44,6 +44,10 @@ func generateRunner(loadPackages packageLoader) func(*cobra.Command, []packageJo
 		// With several directories a failure names its package, since
 		// nothing else says which one it was.
 		failed := func(job packageJob, err error) error {
+			if entryErr, ok := entryVariableError(job, err); ok {
+				// It names the entry already.
+				return entryErr
+			}
 			if several {
 				return fmt.Errorf("%s: %w", job.Key, err)
 			}

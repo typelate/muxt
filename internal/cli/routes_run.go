@@ -91,6 +91,9 @@ func routesRunner(loadPackages packageLoader) func(*cobra.Command, []routesJob) 
 				pkg, receiver, err := l.PackageWithReceiver(job.Config.OutputDirectory(job.Dir), config.ReceiverPackage, config.ReceiverType, config.TemplatesVariables)
 				if err != nil {
 					printMultiLineError(cmd, err)
+					if entryErr, ok := entryVariableError(job, err); ok {
+						return false, entryErr
+					}
 					return false, err
 				}
 				results, err := analysis.NewRoutes(pkg, receiver)
