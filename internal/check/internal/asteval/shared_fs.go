@@ -42,8 +42,17 @@ func sharedFiles(scope Scope, arg *ast.SelectorExpr) (paths []string, importPath
 	}
 	// The analyzed package's type information types the selector; a var
 	// that is not an embed.FS has no embedded files this function can read.
-	if v, ok := scope.Info.Uses[arg.Sel].(*types.Var); ok && !isEmbedFS(v.Type()) {
+	v, typed := scope.Info.Uses[arg.Sel].(*types.Var)
+	if typed && !isEmbedFS(v.Type()) {
 		return nil, "", NotEmbedFSError{Position: scope.Fset.Position(arg.Pos()), Package: pkgIdent.Name, Name: arg.Sel.Name, Type: types.TypeString(v.Type(), nil)}
+	}
+	// A package that embeds no files has no //go:embed directive, since a
+	// pattern that matches nothing fails the build, so its files are not
+	// parsed: a syntax error in an import ParseFS never names stays the
+	// compiler's to report.
+	_, patterns, found := embedDirective(other.Vars, arg.Sel.Name)
+	if (typed && len(other.EmbedFiles) == 0) || (found && len(patterns) == 0) {
+		return nil, "", NoEmbedDirectiveError{Position: scope.Fset.Position(arg.Pos()), Package: pkgIdent.Name, Name: arg.Sel.Name}
 	}
 	relative, err := RelativeFilePaths(other.Dir, other.EmbedFiles...)
 	if err != nil {

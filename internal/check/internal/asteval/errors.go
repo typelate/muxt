@@ -103,6 +103,27 @@ func (e NotEmbedFSError) Error() string {
 	return fmt.Sprintf("%s: %s.%s has type %s, not embed.FS; ParseFS reads an exported embed.FS variable of another package", e.Position, e.Package, e.Name, e.Type)
 }
 
+// NoEmbedDirectiveError is the error for a ParseFS argument that names an
+// exported embed.FS variable of another package that has no //go:embed
+// directive. The program builds, since an embed.FS with no directive is an
+// empty file system, so without this the pattern would match nothing and the
+// cause would be hard to see.
+type NoEmbedDirectiveError struct {
+	// Position is the argument, with its file by absolute path.
+	Position token.Position
+
+	// Package is the argument's qualifier, as written.
+	Package string
+
+	// Name is the variable's name.
+	Name string
+}
+
+// Error is one line: the position, what failed and how to fix it.
+func (e NoEmbedDirectiveError) Error() string {
+	return fmt.Sprintf("%s: %s.%s has no //go:embed directive, so it holds no files; add one to its declaration", e.Position, e.Package, e.Name)
+}
+
 // SharedParseError is a parse error in a file of another package's embed.FS.
 // The parser names a file by its base name, which reads as if the file were in
 // the package that consumes it, so this names it by absolute path, the way

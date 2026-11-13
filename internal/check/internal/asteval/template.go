@@ -643,23 +643,30 @@ func embedFSFilePaths(dir string, fileSet *token.FileSet, decls []*ast.GenDecl, 
 	if !ok {
 		return nil, wrapWithFilename(dir, fileSet, exp.Pos(), fmt.Errorf("%s (got %s)", firstArgumentToParseFSMessage, astgen.Format(exp)))
 	}
+	commentNode, templateNames, found := embedDirective(decls, varIdent.Name)
+	if !found {
+		return nil, wrapWithFilename(dir, fileSet, exp.Pos(), fmt.Errorf("variable %s not found", varIdent))
+	}
+	return embeddedFilesMatchingTemplateNameList(dir, fileSet, commentNode, templateNames, embeddedFiles)
+}
+
+// embedDirective finds the declaration of the variable name among decls and
+// returns the comment holding its //go:embed lines and the patterns on them.
+// found is false when no declaration names it; the patterns are empty when it
+// has no directive.
+func embedDirective(decls []*ast.GenDecl, name string) (comment ast.Node, patterns []string, found bool) {
 	for _, decl := range decls {
 		for _, s := range decl.Specs {
 			spec, ok := s.(*ast.ValueSpec)
-			if !ok || !slices.ContainsFunc(spec.Names, func(e *ast.Ident) bool { return e.Name == varIdent.Name }) {
+			if !ok || !slices.ContainsFunc(spec.Names, func(e *ast.Ident) bool { return e.Name == name }) {
 				continue
 			}
-			var comment strings.Builder
-			commentNode := readComments(&comment, decl.Doc, spec.Doc)
-			templateNames := ParseEmbedPatterns(comment.String())
-			absMat, err := embeddedFilesMatchingTemplateNameList(dir, fileSet, commentNode, templateNames, embeddedFiles)
-			if err != nil {
-				return nil, err
-			}
-			return absMat, nil
+			var text strings.Builder
+			comment = readComments(&text, decl.Doc, spec.Doc)
+			return comment, ParseEmbedPatterns(text.String()), true
 		}
 	}
-	return nil, wrapWithFilename(dir, fileSet, exp.Pos(), fmt.Errorf("variable %s not found", varIdent))
+	return nil, nil, false
 }
 
 func embeddedFilesMatchingTemplateNameList(dir string, set *token.FileSet, comment ast.Node, templateNames, embeddedFiles []string) ([]string, error) {

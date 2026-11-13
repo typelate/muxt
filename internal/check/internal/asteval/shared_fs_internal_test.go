@@ -107,6 +107,24 @@ func TestSharedFilesNotEmbedFSVariable(t *testing.T) {
 	}
 }
 
+// TestSharedFilesPackageEmbedsNothing states that a ParseFS argument naming an
+// exported embed.FS of a package of this module that embeds no files, and so
+// was not parsed, fails with a NoEmbedDirectiveError.
+func TestSharedFilesPackageEmbedsNothing(t *testing.T) {
+	scope, selector := sharedArgument(t, "FS", namedType("embed", "FS"), "example.com/m/fragments", "example.com/m")
+
+	_, _, err := sharedFiles(scope, selector)
+
+	var typed NoEmbedDirectiveError
+	if !errors.As(err, &typed) {
+		t.Fatalf("sharedFiles(fragments.FS) error = %v (%T), want NoEmbedDirectiveError", err, err)
+	}
+	want := argumentPosition() + ": fragments.FS has no //go:embed directive, so it holds no files; add one to its declaration"
+	if got := err.Error(); got != want {
+		t.Errorf("sharedFiles(fragments.FS) error = %q, want %q", got, want)
+	}
+}
+
 // TestSharedFilesOtherModuleError states that a ParseFS argument naming a
 // package outside the analyzed package's module fails with an OtherModuleError
 // that names both the import path and this module.

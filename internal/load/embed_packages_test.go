@@ -126,3 +126,42 @@ func TestPackageSharedFSInStandardLibrary(t *testing.T) {
 	assert.ErrorContains(t, err, "package os is in the standard library", "Package error")
 	assert.NotContains(t, err.Error(), "run muxt on the module", "Package error")
 }
+
+// TestPackageSharedFSWithoutEmbedDirective states that a ParseFS argument
+// naming an exported embed.FS of a package of this module that has no
+// //go:embed directive says so, instead of saying the variable is not found.
+func TestPackageSharedFSWithoutEmbedDirective(t *testing.T) {
+	if testing.Short() {
+		t.Skip("loads packages with the go command")
+	}
+	dir := sharedFSModule(t, "lib.FS", "var FS embed.FS")
+	_, pl, err := Packages(filepath.Join(dir, "workspace"))
+	require.NoError(t, err, "Packages")
+
+	_, err = Package(filepath.Join(dir, "workspace"), pl, []string{"templates"})
+
+	require.Error(t, err, "Package")
+	assert.ErrorContains(t, err, "lib.FS has no //go:embed directive, so it holds no files", "Package error")
+	assert.NotContains(t, err.Error(), "not found", "Package error")
+}
+
+// TestPackageImportThatDoesNotParse states that a package of this module that
+// embeds nothing is not parsed, so a syntax error in an import no ParseFS
+// call names does not fail the load.
+func TestPackageImportThatDoesNotParse(t *testing.T) {
+	if testing.Short() {
+		t.Skip("loads packages with the go command")
+	}
+	dir := writeModule(t, map[string]string{
+		"go.mod":                     "module example.com/m\n\ngo 1.24\n",
+		"a/a.go":                     "package a\n\nvar A = (\n",
+		"workspace/workspace.go":     "package workspace\n\nimport (\n\t\"embed\"\n\t\"html/template\"\n\n\t_ \"example.com/m/a\"\n)\n\n//go:embed *.gohtml\nvar source embed.FS\n\nvar templates = template.Must(template.ParseFS(source, \"*.gohtml\"))\n",
+		"workspace/workspace.gohtml": `{{define "GET / Home()"}}{{end}}`,
+	})
+	_, pl, err := Packages(filepath.Join(dir, "workspace"))
+	require.NoError(t, err, "Packages")
+
+	_, err = Package(filepath.Join(dir, "workspace"), pl, []string{"templates"})
+
+	require.NoError(t, err, "Package")
+}
