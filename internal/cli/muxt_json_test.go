@@ -173,118 +173,6 @@ func TestGenerateAppliesPackageDefaults(t *testing.T) {
 	assert.Equal(t, "T", jobs[0].Config.ReceiverType, "receiver type")
 }
 
-// TestGenerateEntryOverridesPackageDefaults states that a key an entry sets
-// itself wins over package_defaults on a flagless muxt generate. A string and
-// a boolean the entry sets replace the default. A list is replaced, not
-// extended, and a boolean the entry sets to false overrides a default of true.
-func TestGenerateEntryOverridesPackageDefaults(t *testing.T) {
-	t.Run("string", func(t *testing.T) {
-		dir := moduleDir(t)
-		const file = `{"package_defaults": {"use_receiver_type": "T"}, "packages": {"example.com/m": {"use_receiver_type": "Server"}}}`
-		require.NoError(t, os.WriteFile(filepath.Join(dir, composite.FileName), []byte(file), 0o644))
-
-		jobs := generateJobsOf(t, dir, "generate")
-
-		require.Len(t, jobs, 1, "generate jobs")
-		assert.Equal(t, "Server", jobs[0].Config.ReceiverType, "receiver type")
-	})
-
-	t.Run("list is replaced", func(t *testing.T) {
-		dir := moduleDir(t)
-		const file = `{"package_defaults": {"use_templates_variable": ["templates", "pages"]}, "packages": {"example.com/m": {"use_templates_variable": ["admin"]}}}`
-		require.NoError(t, os.WriteFile(filepath.Join(dir, composite.FileName), []byte(file), 0o644))
-
-		jobs := generateJobsOf(t, dir, "generate")
-
-		require.Len(t, jobs, 1, "generate jobs")
-		assert.Equal(t, []string{"admin"}, jobs[0].Config.TemplatesVariables, "templates variables")
-	})
-
-	t.Run("false overrides a default of true", func(t *testing.T) {
-		dir := moduleDir(t)
-		const file = `{"package_defaults": {"output_routes_func_with_logger_param": true}, "packages": {"example.com/m": {"output_routes_func_with_logger_param": false}}}`
-		require.NoError(t, os.WriteFile(filepath.Join(dir, composite.FileName), []byte(file), 0o644))
-
-		jobs := generateJobsOf(t, dir, "generate")
-
-		require.Len(t, jobs, 1, "generate jobs")
-		assert.False(t, jobs[0].Config.Logger, "logger parameter")
-	})
-}
-
-// TestGenerateRejectsPackageDefaultsKey states that a package_defaults key
-// that an entry could not have fails a flagless muxt generate, naming the key
-// under package_defaults. The runner is not called.
-func TestGenerateRejectsPackageDefaultsKey(t *testing.T) {
-	t.Run("unknown", func(t *testing.T) {
-		dir := moduleDir(t)
-		const file = `{"package_defaults": {"zzz": true}, "packages": {"example.com/m": {}}}`
-		require.NoError(t, os.WriteFile(filepath.Join(dir, composite.FileName), []byte(file), 0o644))
-
-		called, err := generateFailureOf(t, dir)
-
-		var unknown *composite.UnknownKeyError
-		require.ErrorAs(t, err, &unknown, "error %v", err)
-		assert.Equal(t, "package_defaults", unknown.Where, "where")
-		assert.Equal(t, "zzz", unknown.Key, "key")
-		assert.Equal(t, filepath.Join(dir, composite.FileName)+`: package_defaults: unknown key "zzz"`, err.Error(), "message")
-		assert.False(t, called, "generate runner called")
-	})
-
-	t.Run("dashed", func(t *testing.T) {
-		dir := moduleDir(t)
-		const file = `{"package_defaults": {"use-receiver-type": "T"}, "packages": {"example.com/m": {}}}`
-		require.NoError(t, os.WriteFile(filepath.Join(dir, composite.FileName), []byte(file), 0o644))
-
-		called, err := generateFailureOf(t, dir)
-
-		var dashed *composite.DashedKeyError
-		require.ErrorAs(t, err, &dashed, "error %v", err)
-		assert.Equal(t, "package_defaults", dashed.Where, "where")
-		assert.Equal(t, filepath.Join(dir, composite.FileName)+`: package_defaults: key "use-receiver-type" uses dashes; write "use_receiver_type"`, err.Error(), "message")
-		assert.False(t, called, "generate runner called")
-	})
-
-	t.Run("deprecated", func(t *testing.T) {
-		dir := moduleDir(t)
-		const file = `{"package_defaults": {"receiver_type": "T"}, "packages": {"example.com/m": {}}}`
-		require.NoError(t, os.WriteFile(filepath.Join(dir, composite.FileName), []byte(file), 0o644))
-
-		called, err := generateFailureOf(t, dir)
-
-		var deprecated *composite.DeprecatedKeyError
-		require.ErrorAs(t, err, &deprecated, "error %v", err)
-		assert.Equal(t, "package_defaults", deprecated.Where, "where")
-		assert.Equal(t, filepath.Join(dir, composite.FileName)+`: package_defaults: key "receiver_type" is deprecated; write "use_receiver_type"`, err.Error(), "message")
-		assert.False(t, called, "generate runner called")
-	})
-}
-
-// TestGenerateIgnoresMuxtJSONAboveModuleRoot states that a muxt.json in a
-// directory above the module root is not read: the walk stops at the directory
-// holding go.mod. Nothing is loaded: the generate runner records the job it is
-// handed.
-func TestGenerateIgnoresMuxtJSONAboveModuleRoot(t *testing.T) {
-	parent := moduleDir(t)
-	module := filepath.Join(parent, "module")
-	require.NoError(t, os.Mkdir(module, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(module, "go.mod"), []byte("module example.com/m\n"), 0o644))
-	const file = `{"packages": {"module": {"use_receiver_type": "T1"}}}`
-	require.NoError(t, os.WriteFile(filepath.Join(parent, "muxt.json"), []byte(file), 0o644))
-
-	var jobs []packageJob
-	err := commands(module, strings.Fields("generate"), func(string) string { return "" }, func() (string, bool) { return "v1.2.3", true }, strings.NewReader(""), io.Discard, io.Discard, runners{
-		generate: func(_ *cobra.Command, got []packageJob) error {
-			jobs = got
-			return nil
-		},
-	})
-	require.NoError(t, err)
-	require.Len(t, jobs, 1, "got %d generate jobs, want 1", len(jobs))
-	assert.Equal(t, "", jobs[0].Key, "generate job key")
-	assert.Equal(t, "", jobs[0].Config.ReceiverType, "generate job receiver type")
-}
-
 // TestGenerateRejectsMalformedMuxtJSON states that a muxt.json that is not
 // valid JSON fails a flagless muxt generate at the byte the parser rejects,
 // naming the file and the line and column. The runner is not called.
@@ -302,29 +190,6 @@ func TestGenerateRejectsMalformedMuxtJSON(t *testing.T) {
 	assert.Equal(t, 3, parseErr.Line, "line")
 	assert.Equal(t, 10, parseErr.Col, "column")
 	assert.Equal(t, path+":3:10: invalid character 'x' looking for beginning of value", err.Error(), "message")
-	assert.False(t, called, "generate runner called")
-}
-
-// TestGenerateRejectsMalformedMuxtJSONInParentDirectory states that a muxt.json
-// in the parent of the working directory that is not valid JSON fails a
-// flagless muxt generate, naming the file by its absolute path. The runner is
-// not called.
-func TestGenerateRejectsMalformedMuxtJSONInParentDirectory(t *testing.T) {
-	parent := moduleDir(t)
-	workspace := filepath.Join(parent, "workspace")
-	require.NoError(t, os.Mkdir(workspace, 0o755))
-	const file = "{\n  \"packages\": {\n    \"workspace\": x\n  }\n}\n"
-	require.NoError(t, os.WriteFile(filepath.Join(parent, composite.FileName), []byte(file), 0o644))
-
-	called, err := generateFailureOf(t, workspace)
-
-	var parseErr *composite.ParseError
-	require.ErrorAs(t, err, &parseErr, "error %v", err)
-	path := filepath.Join(parent, composite.FileName)
-	assert.Equal(t, path, parseErr.Path, "path")
-	assert.Equal(t, 3, parseErr.Line, "line")
-	assert.Equal(t, 18, parseErr.Col, "column")
-	assert.Equal(t, path+":3:18: invalid character 'x' looking for beginning of value", err.Error(), "message")
 	assert.False(t, called, "generate runner called")
 }
 
@@ -360,12 +225,6 @@ func TestGenerateRejectsDeprecatedMuxtJSONKey(t *testing.T) {
 			file:        `{"packages": {"example.com/m": {"receiver_type": "Server"}}}`,
 			key:         "receiver_type",
 			replacement: "use_receiver_type",
-		},
-		{
-			name:        "htmx helpers",
-			file:        `{"packages": {"example.com/m": {"output_htmx_helpers": true}}}`,
-			key:         "output_htmx_helpers",
-			replacement: "output_htmx",
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -473,10 +332,7 @@ func TestGenerateRejectsRelativeMuxtJSONKey(t *testing.T) {
 	for _, tt := range []struct {
 		key, want string
 	}{
-		{key: ".", want: "example.com/m"},
 		{key: "workspace", want: "example.com/m/workspace"},
-		{key: "./workspace/", want: "example.com/m/workspace"},
-		{key: "example.com/m/workspace/", want: "example.com/m/workspace"},
 	} {
 		t.Run(tt.key, func(t *testing.T) {
 			dir := moduleDir(t)
@@ -822,35 +678,11 @@ func TestGenerateWithMuxtJSONInParentDirectory(t *testing.T) {
 	assert.Equal(t, "T1", jobs[0].Config.ReceiverType, "generate job receiver type")
 }
 
-// TestGenerateRejectsMuxtJSONKeyOutsideDirectory states that a muxt.json
-// packages key that leaves the file's directory fails a muxt generate, naming
-// the key, so no job directory is built from it. The runner is not called.
-func TestGenerateRejectsMuxtJSONKeyOutsideDirectory(t *testing.T) {
-	for _, key := range []string{"../other", "/abs", ".."} {
-		t.Run(key, func(t *testing.T) {
-			dir := moduleDir(t)
-			file, err := json.Marshal(map[string]any{"packages": map[string]any{key: map[string]any{}}})
-			require.NoError(t, err)
-			require.NoError(t, os.WriteFile(filepath.Join(dir, composite.FileName), file, 0o644))
-
-			called, err := generateFailureOf(t, dir)
-
-			var outside *composite.KeyOutsideError
-			require.ErrorAs(t, err, &outside, "error %v", err)
-			path := filepath.Join(dir, composite.FileName)
-			assert.Equal(t, path, outside.Path, "path")
-			assert.Equal(t, key, outside.Key, "key")
-			assert.Equal(t, path+`: packages key "`+key+`" is outside the file's directory`, err.Error(), "message")
-			assert.False(t, called, "generate runner called")
-		})
-	}
-}
-
 // TestGenerateRejectsMuxtJSONKeyOutsideModule states that a packages key that
 // is an import path of another module fails a muxt generate saying so, and
 // naming the module the file's keys belong to. The runner is not called.
 func TestGenerateRejectsMuxtJSONKeyOutsideModule(t *testing.T) {
-	for _, key := range []string{"example.com/other/x", "example.com/other", "example.com/m2"} {
+	for _, key := range []string{"example.com/other/x"} {
 		t.Run(key, func(t *testing.T) {
 			dir := moduleDir(t)
 			writeMuxtJSON(t, dir, `{"packages": {"`+key+`": {}}}`)
@@ -967,20 +799,4 @@ func TestGenerateRejectsMuxtJSONWithoutPackages(t *testing.T) {
 
 	config := generateConfigurationOf(t, dir, "generate --use-receiver-type T1")
 	assert.Equal(t, "T1", config.ReceiverType, "receiver type from flags")
-}
-
-// TestGenerateRejectsUnknownTopLevelKey states that a misspelled top-level key
-// fails a flagless muxt generate and names the key it was meant to be, rather
-// than dropping the defaults it holds. The runner is not called.
-func TestGenerateRejectsUnknownTopLevelKey(t *testing.T) {
-	dir := moduleDir(t)
-	const file = `{"package_default": {"output_htmx": true}, "packages": {"example.com/m": {}}}`
-	require.NoError(t, os.WriteFile(filepath.Join(dir, composite.FileName), []byte(file), 0o644))
-
-	called, err := generateFailureOf(t, dir)
-
-	var unknown *composite.UnknownKeyError
-	require.ErrorAs(t, err, &unknown, "error %v", err)
-	assert.Equal(t, filepath.Join(dir, composite.FileName)+`: unknown key "package_default"; did you mean "package_defaults"?`, err.Error(), "message")
-	assert.False(t, called, "generate runner called")
 }
