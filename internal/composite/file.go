@@ -338,6 +338,13 @@ func (f *File) checkPackageKey(key string) error {
 		if rel, err := filepath.Rel(f.Dir, f.DirOf(key)); err != nil || !filepath.IsLocal(rel) {
 			return &KeyOutsideError{Path: f.Name, Key: key}
 		}
+		onDisk, err := f.spelledOnDisk(key)
+		if err != nil {
+			return err
+		}
+		if onDisk != key {
+			return &KeyCaseError{Path: f.Name, Key: key, OnDisk: onDisk}
+		}
 		return nil
 	}
 	// A key that is not an import path of the module is either a directory
@@ -442,4 +449,41 @@ func position(data []byte, offset int64) (line, col int) {
 	pos := max(int(offset)-1, 0)
 	before := data[:pos]
 	return 1 + bytes.Count(before, []byte{'\n'}), pos - bytes.LastIndexByte(before, '\n')
+}
+
+// spelledOnDisk returns key with each element below the module spelled as its
+// directory is. A directory that does not exist is left as written: whether
+// the package is there is for the go command to say.
+func (f *File) spelledOnDisk(key string) (string, error) {
+	rel := strings.TrimPrefix(strings.TrimPrefix(key, f.module), "/")
+	if rel == "" {
+		return key, nil
+	}
+	dir := f.moduleDir
+	elements := strings.Split(rel, "/")
+	for i, element := range elements {
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			if errors.Is(err, fs.ErrNotExist) {
+				return key, nil
+			}
+			return "", fmt.Errorf("reading %s: %w", dir, err)
+		}
+		found := ""
+		for _, entry := range entries {
+			if entry.Name() == element {
+				found = element
+				break
+			}
+			if found == "" && strings.EqualFold(entry.Name(), element) {
+				found = entry.Name()
+			}
+		}
+		if found == "" {
+			return key, nil
+		}
+		elements[i] = found
+		dir = filepath.Join(dir, found)
+	}
+	return path.Join(f.module, path.Join(elements...)), nil
 }

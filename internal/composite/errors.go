@@ -253,3 +253,16 @@ type EmptyPackagesError struct {
 func (e *EmptyPackagesError) Error() string {
 	return fmt.Sprintf("%s: packages is empty; add a package with: muxt generate package NAME", e.Path)
 }
+
+// KeyCaseError reports a packages key that names a directory of the module in
+// a different letter case than the disk does. A case-insensitive file system
+// opens the directory either way, so the key would configure the package
+// twice. OnDisk is the key spelled as the directory is.
+type KeyCaseError struct {
+	Path, Key, OnDisk string
+}
+
+// Error returns the path, the key, and the spelling on disk on one line.
+func (e *KeyCaseError) Error() string {
+	return fmt.Sprintf("%s: packages key %q is spelled %q on disk; write that", e.Path, e.Key, e.OnDisk)
+}

@@ -15,8 +15,10 @@ import (
 //
 // Only a package of the analyzed package's module is read: its files are
 // part of the same build, so the embed patterns the muxt user wrote are the
-// ones the go command resolved. Anything else is an error, one plain error
-// for now.
+// ones the go command resolved. A package of another module is an
+// OtherModuleError; one the scope holds no embedded files for, which is what
+// a scope with nil Imports (check.Package) always means, is a
+// SharedPackageUnavailableError.
 func sharedFiles(scope Scope, arg *ast.SelectorExpr) (paths []string, importPath string, err error) {
 	pkgIdent, ok := arg.X.(*ast.Ident)
 	if !ok {
@@ -28,8 +30,11 @@ func sharedFiles(scope Scope, arg *ast.SelectorExpr) (paths []string, importPath
 	}
 	importPath = pkgName.Imported().Path()
 	other, ok := scope.Imports[importPath]
-	if !ok || other.ModulePath != scope.ModulePath {
-		return nil, "", OtherModuleError{Position: relativePosition(scope.Dir, scope.Fset, arg.Pos()), ImportPath: importPath, ThisModule: scope.ModulePath}
+	if !ok {
+		return nil, "", SharedPackageUnavailableError{Position: relativePosition(scope.Dir, scope.Fset, arg.Pos()), ImportPath: importPath}
+	}
+	if other.ModulePath != scope.ModulePath {
+		return nil, "", OtherModuleError{Position: relativePosition(scope.Dir, scope.Fset, arg.Pos()), ImportPath: importPath, OtherModule: other.ModulePath, ThisModule: scope.ModulePath}
 	}
 	if !arg.Sel.IsExported() {
 		return nil, "", UnexportedSharedFSError{Position: relativePosition(scope.Dir, scope.Fset, arg.Pos()), Package: pkgIdent.Name, Name: arg.Sel.Name}

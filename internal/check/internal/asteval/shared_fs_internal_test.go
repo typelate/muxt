@@ -113,11 +113,35 @@ func TestSharedFilesOtherModuleError(t *testing.T) {
 	if !errors.As(err, &typed) {
 		t.Fatalf("sharedFiles(fragments.TemplateSource) error = %v (%T), want OtherModuleError", err, err)
 	}
-	const want = "workspace.go:5:9: package example.org/other/fragments is not in this module (example.com/m); a shared embed.FS must come from a package of this module"
+	const want = "workspace.go:5:9: package example.org/other/fragments is in module example.org/other, not in this module (example.com/m); a shared embed.FS must come from a package of this module"
 	if got := err.Error(); got != want {
 		t.Errorf("sharedFiles(fragments.TemplateSource) error = %q, want %q", got, want)
 	}
 	if typed.ImportPath != "example.org/other/fragments" || typed.ThisModule != "example.com/m" {
 		t.Errorf("OtherModuleError{ImportPath: %q, ThisModule: %q}, want example.org/other/fragments and example.com/m", typed.ImportPath, typed.ThisModule)
+	}
+}
+
+// TestSharedFilesUnavailablePackage states that a ParseFS argument naming a
+// package the evaluation was given no embedded files for fails with a
+// SharedPackageUnavailableError, not an OtherModuleError, and that the message
+// never prints empty parentheses.
+func TestSharedFilesUnavailablePackage(t *testing.T) {
+	scope, selector := sharedArgument(t, "TemplateSource", namedType("embed", "FS"), "example.com/m/fragments", "example.com/m")
+	scope.Imports = nil
+	scope.ModulePath = ""
+
+	_, _, err := sharedFiles(scope, selector)
+
+	var typed SharedPackageUnavailableError
+	if !errors.As(err, &typed) {
+		t.Fatalf("sharedFiles(fragments.TemplateSource) error = %v (%T), want SharedPackageUnavailableError", err, err)
+	}
+	const want = "workspace.go:5:9: muxt has no embedded files for package example.com/m/fragments; run muxt on the module so its packages are loaded together"
+	if got := err.Error(); got != want {
+		t.Errorf("sharedFiles(fragments.TemplateSource) error = %q, want %q", got, want)
+	}
+	if typed.ImportPath != "example.com/m/fragments" {
+		t.Errorf("SharedPackageUnavailableError.ImportPath = %q, want example.com/m/fragments", typed.ImportPath)
 	}
 }

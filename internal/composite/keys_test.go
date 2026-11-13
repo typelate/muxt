@@ -57,3 +57,24 @@ func TestFindRejectsUnknownKeys(t *testing.T) {
 		})
 	}
 }
+
+// TestFindRejectsKeyWithOtherLetterCase states that a packages key that names a
+// directory by a different letter case than the disk spells it is an error
+// naming the spelling on disk, so two spellings of one directory on a
+// case-insensitive file system never become two packages.
+func TestFindRejectsKeyWithOtherLetterCase(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module example.com/m\n"), 0o644))
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "contacts"), 0o755))
+	if _, err := os.Stat(filepath.Join(dir, "Contacts")); err != nil {
+		t.Skip("file system is case sensitive")
+	}
+	path := filepath.Join(dir, composite.FileName)
+	require.NoError(t, os.WriteFile(path, []byte(`{"packages": {"example.com/m/Contacts": {}}}`), 0o644))
+
+	_, _, err := composite.Find(dir, nil)
+
+	var typed *composite.KeyCaseError
+	require.ErrorAs(t, err, &typed, "Find error %v", err)
+	assert.Equal(t, path+`: packages key "example.com/m/Contacts" is spelled "example.com/m/contacts" on disk; write that`, err.Error(), "message")
+}

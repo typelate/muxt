@@ -72,6 +72,11 @@ type ExecuteTemplateNodeInspectorFunc func(node *ast.CallExpr, t *template.Tree,
 //
 // ExecuteTemplate must be called with a string literal for the second parameter.
 //
+// Package does not read another package's embedded files, because pkg alone
+// holds none: a ParseFS of another package's embed.FS is an error saying muxt
+// has no embedded files for that package. muxt's own commands load the
+// module's packages together and read them.
+//
 // A non-nil result is a *Error tree; see Execute for how to walk it.
 func Package(pkg *packages.Package, inspectCall ExecuteTemplateNodeInspectorFunc, inspectTemplate TemplateNodeInspectorFunc) error {
 	pending, receivers, _ := findExecuteCalls(pkg)

@@ -513,7 +513,7 @@ var TemplateSource embed.FS
 	output, err := runMuxt(t, filepath.Join(dir, "workspace"), "generate")
 
 	require.Error(t, err, "generate: %s", output)
-	assert.Contains(t, output, "workspace.go:14:10: package example.org/other/fragments is not in this module (example.com/m); a shared embed.FS must come from a package of this module", "generate output")
+	assert.Contains(t, output, "workspace.go:14:10: package example.org/other/fragments is in module example.org/other, not in this module (example.com/m); a shared embed.FS must come from a package of this module", "generate output")
 }
 
 // overriddenFooter is a module where the shared package defines "footer" with

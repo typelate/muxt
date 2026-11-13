@@ -47,13 +47,34 @@ type OtherModuleError struct {
 	// ImportPath is the argument's package.
 	ImportPath string
 
+	// OtherModule is the module the package is in, empty for the standard
+	// library.
+	OtherModule string
+
 	// ThisModule is the analyzed package's module.
 	ThisModule string
 }
 
 // Error is one line: the position, what failed and how to fix it.
 func (e OtherModuleError) Error() string {
-	return fmt.Sprintf("%s: package %s is not in this module (%s); a shared embed.FS must come from a package of this module", e.Position, e.ImportPath, e.ThisModule)
+	return fmt.Sprintf("%s: package %s is in module %s, not in this module (%s); a shared embed.FS must come from a package of this module", e.Position, e.ImportPath, e.OtherModule, e.ThisModule)
+}
+
+// SharedPackageUnavailableError is the error for a ParseFS argument whose
+// package is not among the packages this evaluation was given embedded files
+// for. That is a fact about the run, not about the package's module: the
+// package may well be in this module, so the message must not say it is not.
+type SharedPackageUnavailableError struct {
+	// Position is the argument, relative to the package directory.
+	Position token.Position
+
+	// ImportPath is the argument's package.
+	ImportPath string
+}
+
+// Error is one line: the position, what failed and how to fix it.
+func (e SharedPackageUnavailableError) Error() string {
+	return fmt.Sprintf("%s: muxt has no embedded files for package %s; run muxt on the module so its packages are loaded together", e.Position, e.ImportPath)
 }
 
 // NotEmbedFSError is the error for a ParseFS argument that names an exported

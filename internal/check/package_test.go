@@ -265,3 +265,36 @@ func main() {
 	assert.Contains(t, leaves[0], "field or method Missing not found")
 	assert.Contains(t, leaves[1], "field or method Absent not found")
 }
+
+// TestPackage_sharedEmbedFS states what Package does with a ParseFS of another
+// package's embed.FS: it does not read the other package's files, and says so
+// rather than calling the package another module's.
+func TestPackage_sharedEmbedFS(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, dir, "go.mod", "module example.com/m\n\ngo 1.25.0\n")
+	require.NoError(t, os.Mkdir(filepath.Join(dir, "fragments"), 0o755))
+	writeFile(t, dir, "fragments/fragments.go", "package fragments\n\nimport \"embed\"\n\n//go:embed *.gohtml\nvar Source embed.FS\n")
+	writeFile(t, dir, "fragments/layout.gohtml", `{{define "layout"}}x{{end}}`)
+	writeFile(t, dir, "main.go", `package main
+
+import (
+	"html/template"
+	"os"
+
+	"example.com/m/fragments"
+)
+
+var ts = template.Must(template.ParseFS(fragments.Source, "*.gohtml"))
+
+func main() {
+	ts.ExecuteTemplate(os.Stdout, "layout", nil)
+}
+`)
+	pkg := loadTestPackage(t, dir)
+
+	err := check.Package(pkg, nil, nil)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "muxt has no embedded files for package example.com/m/fragments", "Package error")
+	assert.NotContains(t, err.Error(), "()", "Package error")
+}
