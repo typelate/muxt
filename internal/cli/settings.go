@@ -12,6 +12,10 @@ func generateSettings(c *generate.RoutesFileConfiguration) []setting {
 		templatesVariableSetting(&c.TemplatesVariables),
 		receiverTypeSetting(&c.ReceiverType),
 		receiverPackageSetting(&c.ReceiverPackage),
+		stringSetting(&c.OutputFileName, spec[string]{
+			Name: outputFile, Default: defaultOutputFileName, NonEmpty: true, Example: "routes.go",
+			Usage: `The generated file name containing the routes function and receiver interface. A file name in the working directory, without whitespace.`,
+		}),
 	}
 }
 
