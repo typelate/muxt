@@ -24,7 +24,7 @@ Each command's `--help` shows its summary and the line naming its full reference
 
 When a [`muxt.json`](muxt-json.md) is found, `generate` reads its settings, `check` and the two list commands read `use_templates_variable`, and bare `muxt` shows each setting with its source.
 
-`muxt` with no subcommand prints the resolved configuration, the package's routes, and the functions registered with `Funcs`; `--use-receiver-type` adds the receiver's methods. With no `muxt.json`, every setting shows under `defaults:`; with one, a group a `muxt.json` supplies is headed by the file's absolute path:
+`muxt` with no subcommand prints the resolved configuration, the package's routes, and the functions registered with `Funcs`; `--use-receiver-type` adds the receiver's methods. A setting given on the command line, by any spelling, shows under `flags:`. With no `muxt.json`, every other setting shows under `defaults:`; with one, a group a `muxt.json` supplies is headed by the file's absolute path:
 
 ```text
 Configuration:

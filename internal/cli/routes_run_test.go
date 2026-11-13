@@ -241,8 +241,7 @@ func TestRoutesConfigurationDefaults(t *testing.T) {
 
 // TestRoutesConfigurationDeprecatedTemplatesVariable states where the report
 // files a templates variable given by its deprecated spelling with no muxt.json:
-// under defaults, with the value given, since only a setting's current name
-// counts as given.
+// under flags, with the value given, like the current name.
 func TestRoutesConfigurationDeprecatedTemplatesVariable(t *testing.T) {
 	dir := moduleDir(t)
 	writeTestFile(t, dir, "go.mod", "module example.com/m\n\ngo 1.24\n")

@@ -1,4 +1,6 @@
 Configuration:
+  flags:
+    "use_templates_variable": ["x"]
   defaults:
     "input_static_assets_directory": ""
     "output_datastar": false
@@ -21,5 +23,4 @@ Configuration:
     "output_template_route_type": "TemplateRoute"
     "use_receiver_type": ""
     "use_receiver_type_package": ""
-    "use_templates_variable": ["x"]
 

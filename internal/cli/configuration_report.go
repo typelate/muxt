@@ -66,9 +66,7 @@ func newConfigurationReport(f *composite.File, key string, given givenSettings, 
 	if len(given) > 0 {
 		sources = append(sources, reportSource{
 			group: settingGroup{Source: "flags"},
-			// The current name only, until the report files a deprecated
-			// spelling under the setting it spells.
-			gives: func(name string) bool { return slices.Contains(given[name], name) },
+			gives: given.has,
 		})
 	}
 	if f != nil {
