@@ -1,0 +1,414 @@
+== no muxt.json, root: generate generate -v
+generate key="" file="" dir="." receiver="" receiver-package="" templates=[templates] output="template_routes.go" htmx=false logger=false verbose=true
+== no muxt.json, root: muxt 
+routes key="" file="" dir="." receiver="" receiver-package="" templates=[templates] htmx=false verbose=false report=[defaults@]
+== no muxt.json, root: check check
+check dir="." templates=[templates] allow-unused=false
+== no muxt.json, root: calls list-template-calls
+calls dir="." templates=[templates]
+== no muxt.json, root: callers list-template-callers
+callers dir="." templates=[templates]
+== no muxt.json, root: def generate def GET /things/{id} GetThing(ctx, id)
+load root="." dirs=["."] patterns=[""]
+error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: no Go package found at $BASE
+== no muxt.json, root: mutations test-template-mutations --dry-run
+mutations dir="." templates=[templates]
+== no muxt.json, package: generate generate -v
+generate key="" file="" dir="contacts" receiver="" receiver-package="" templates=[templates] output="template_routes.go" htmx=false logger=false verbose=true
+== no muxt.json, package: muxt 
+routes key="" file="" dir="contacts" receiver="" receiver-package="" templates=[templates] htmx=false verbose=false report=[defaults@]
+== no muxt.json, package: check check
+check dir="contacts" templates=[templates] allow-unused=false
+== no muxt.json, package: calls list-template-calls
+calls dir="contacts" templates=[templates]
+== no muxt.json, package: callers list-template-callers
+callers dir="contacts" templates=[templates]
+== no muxt.json, package: def generate def GET /things/{id} GetThing(ctx, id)
+load root="contacts" dirs=["contacts"] patterns=[""]
+error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: no Go package found at $BASE/contacts
+== no muxt.json, package: mutations test-template-mutations --dry-run
+mutations dir="contacts" templates=[templates]
+== entries, file directory: generate generate -v
+generate key="example.com/fieldkit/contacts" file="muxt.json" dir="contacts" receiver="Server" receiver-package="example.com/fieldkit/types" templates=[templates] output="template_routes.go" htmx=true logger=false verbose=true
+generate key="example.com/fieldkit/inventory" file="muxt.json" dir="inventory" receiver="Catalog" receiver-package="example.com/fieldkit/types" templates=[catalogTemplates] output="template_routes.go" htmx=true logger=false verbose=true
+generate key="example.com/fieldkit/tasks" file="muxt.json" dir="tasks" receiver="Server" receiver-package="example.com/fieldkit/types" templates=[templates] output="tasks_routes.go" htmx=true logger=true verbose=true
+== entries, file directory: muxt 
+routes key="example.com/fieldkit/contacts" file="muxt.json" dir="contacts" receiver="Server" receiver-package="example.com/fieldkit/types" templates=[templates] htmx=true verbose=false report=[package_defaults@muxt.json defaults@]
+routes key="example.com/fieldkit/inventory" file="muxt.json" dir="inventory" receiver="Catalog" receiver-package="example.com/fieldkit/types" templates=[catalogTemplates] htmx=true verbose=false report=[packages["example.com/fieldkit/inventory"]@muxt.json package_defaults@muxt.json defaults@]
+routes key="example.com/fieldkit/tasks" file="muxt.json" dir="tasks" receiver="Server" receiver-package="example.com/fieldkit/types" templates=[templates] htmx=true verbose=false report=[packages["example.com/fieldkit/tasks"]@muxt.json package_defaults@muxt.json defaults@]
+== entries, file directory: check check
+check dir="." templates=[templates] allow-unused=false
+== entries, file directory: calls list-template-calls
+calls dir="." templates=[templates]
+== entries, file directory: callers list-template-callers
+callers dir="." templates=[templates]
+== entries, file directory: def generate def GET /things/{id} GetThing(ctx, id)
+load root="." dirs=["."] patterns=[""]
+error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: no Go package found at $BASE
+== entries, file directory: mutations test-template-mutations --dry-run
+mutations dir="." templates=[templates]
+== entries and root entry, file directory: generate generate -v
+generate key="example.com/fieldkit" file="muxt.json" dir="." receiver="Server" receiver-package="" templates=[templates] output="template_routes.go" htmx=true logger=false verbose=true
+generate key="example.com/fieldkit/contacts" file="muxt.json" dir="contacts" receiver="Server" receiver-package="" templates=[templates] output="template_routes.go" htmx=true logger=false verbose=true
+generate key="example.com/fieldkit/inventory" file="muxt.json" dir="inventory" receiver="Catalog" receiver-package="" templates=[catalogTemplates] output="template_routes.go" htmx=true logger=false verbose=true
+generate key="example.com/fieldkit/tasks" file="muxt.json" dir="tasks" receiver="Server" receiver-package="" templates=[templates] output="tasks_routes.go" htmx=true logger=true verbose=true
+== entries and root entry, file directory: muxt 
+routes key="example.com/fieldkit" file="muxt.json" dir="." receiver="Server" receiver-package="" templates=[templates] htmx=true verbose=false report=[package_defaults@muxt.json defaults@]
+routes key="example.com/fieldkit/contacts" file="muxt.json" dir="contacts" receiver="Server" receiver-package="" templates=[templates] htmx=true verbose=false report=[package_defaults@muxt.json defaults@]
+routes key="example.com/fieldkit/inventory" file="muxt.json" dir="inventory" receiver="Catalog" receiver-package="" templates=[catalogTemplates] htmx=true verbose=false report=[packages["example.com/fieldkit/inventory"]@muxt.json package_defaults@muxt.json defaults@]
+routes key="example.com/fieldkit/tasks" file="muxt.json" dir="tasks" receiver="Server" receiver-package="" templates=[templates] htmx=true verbose=false report=[packages["example.com/fieldkit/tasks"]@muxt.json package_defaults@muxt.json defaults@]
+== entries and root entry, file directory: check check
+check dir="." templates=[templates] allow-unused=false
+== entries and root entry, file directory: calls list-template-calls
+calls dir="." templates=[templates]
+== entries and root entry, file directory: callers list-template-callers
+callers dir="." templates=[templates]
+== entries and root entry, file directory: def generate def GET /things/{id} GetThing(ctx, id)
+load root="." dirs=["."] patterns=[""]
+error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: no Go package found at $BASE
+== entries and root entry, file directory: mutations test-template-mutations --dry-run
+mutations dir="." templates=[templates]
+== entries, contacts: generate generate -v
+generate key="example.com/fieldkit/contacts" file="muxt.json" dir="contacts" receiver="Server" receiver-package="example.com/fieldkit/types" templates=[templates] output="template_routes.go" htmx=true logger=false verbose=true
+== entries, contacts: muxt 
+routes key="example.com/fieldkit/contacts" file="muxt.json" dir="contacts" receiver="Server" receiver-package="example.com/fieldkit/types" templates=[templates] htmx=true verbose=false report=[package_defaults@muxt.json defaults@]
+== entries, contacts: check check
+check dir="contacts" templates=[templates] allow-unused=false
+== entries, contacts: calls list-template-calls
+calls dir="contacts" templates=[templates]
+== entries, contacts: callers list-template-callers
+callers dir="contacts" templates=[templates]
+== entries, contacts: def generate def GET /things/{id} GetThing(ctx, id)
+load root="contacts" dirs=["contacts"] patterns=["example.com/fieldkit/types"]
+error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: no Go package found at $BASE/contacts
+== entries, contacts: mutations test-template-mutations --dry-run
+mutations dir="contacts" templates=[templates]
+== entries, inventory: generate generate -v
+generate key="example.com/fieldkit/inventory" file="muxt.json" dir="inventory" receiver="Catalog" receiver-package="example.com/fieldkit/types" templates=[catalogTemplates] output="template_routes.go" htmx=true logger=false verbose=true
+== entries, inventory: muxt 
+routes key="example.com/fieldkit/inventory" file="muxt.json" dir="inventory" receiver="Catalog" receiver-package="example.com/fieldkit/types" templates=[catalogTemplates] htmx=true verbose=false report=[packages["example.com/fieldkit/inventory"]@muxt.json package_defaults@muxt.json defaults@]
+== entries, inventory: check check
+check dir="inventory" templates=[catalogTemplates] allow-unused=false
+== entries, inventory: calls list-template-calls
+calls dir="inventory" templates=[catalogTemplates]
+== entries, inventory: callers list-template-callers
+callers dir="inventory" templates=[catalogTemplates]
+== entries, inventory: def generate def GET /things/{id} GetThing(ctx, id)
+load root="inventory" dirs=["inventory"] patterns=["example.com/fieldkit/types"]
+error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: no Go package found at $BASE/inventory
+== entries, inventory: mutations test-template-mutations --dry-run
+mutations dir="inventory" templates=[templates]
+== entries, tasks: generate generate -v
+generate key="example.com/fieldkit/tasks" file="muxt.json" dir="tasks" receiver="Server" receiver-package="example.com/fieldkit/types" templates=[templates] output="tasks_routes.go" htmx=true logger=true verbose=true
+== entries, tasks: muxt 
+routes key="example.com/fieldkit/tasks" file="muxt.json" dir="tasks" receiver="Server" receiver-package="example.com/fieldkit/types" templates=[templates] htmx=true verbose=false report=[packages["example.com/fieldkit/tasks"]@muxt.json package_defaults@muxt.json defaults@]
+== entries, tasks: check check
+check dir="tasks" templates=[templates] allow-unused=false
+== entries, tasks: calls list-template-calls
+calls dir="tasks" templates=[templates]
+== entries, tasks: callers list-template-callers
+callers dir="tasks" templates=[templates]
+== entries, tasks: def generate def GET /things/{id} GetThing(ctx, id)
+load root="tasks" dirs=["tasks"] patterns=["example.com/fieldkit/types"]
+error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: no Go package found at $BASE/tasks
+== entries, tasks: mutations test-template-mutations --dry-run
+mutations dir="tasks" templates=[templates]
+== entries, no entry for extra: generate generate -v
+error: $BASE/muxt.json: no packages entry "example.com/fieldkit/extra"; add one to generate this directory
+== entries, no entry for extra: muxt 
+routes key="" file="" dir="extra" receiver="" receiver-package="" templates=[templates] htmx=false verbose=false report=[defaults@]
+== entries, no entry for extra: check check
+check dir="extra" templates=[templates] allow-unused=false
+== entries, no entry for extra: calls list-template-calls
+calls dir="extra" templates=[templates]
+== entries, no entry for extra: callers list-template-callers
+callers dir="extra" templates=[templates]
+== entries, no entry for extra: def generate def GET /things/{id} GetThing(ctx, id)
+load root="extra" dirs=["extra"] patterns=[""]
+error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: no Go package found at $BASE/extra
+== entries, no entry for extra: mutations test-template-mutations --dry-run
+mutations dir="extra" templates=[templates]
+== setting flags, contacts has an entry: generate generate -v --use-receiver-type=Server --use-templates-variable=templates
+error: configure generate with fields in $BASE/muxt.json instead of flags
+== setting flags, contacts has an entry: muxt --use-receiver-type=Server --use-templates-variable=templates
+error: configure muxt with fields in $BASE/muxt.json instead of flags
+== setting flags, contacts has an entry: check check --use-templates-variable=templates
+error: configure check with fields in $BASE/muxt.json instead of flags
+== setting flags, contacts has an entry: calls list-template-calls --use-templates-variable=templates
+error: configure list-template-calls with fields in $BASE/muxt.json instead of flags
+== setting flags, contacts has an entry: callers list-template-callers --use-templates-variable=templates
+error: configure list-template-callers with fields in $BASE/muxt.json instead of flags
+== setting flags, contacts has an entry: def generate def GET /things/{id} GetThing(ctx, id) --use-receiver-type=Server
+error: configure generate def with fields in $BASE/muxt.json instead of flags
+== setting flags, contacts has an entry: mutations test-template-mutations --dry-run --use-templates-variable=templates
+mutations dir="contacts" templates=[templates]
+== setting flags, entry names no receiver: generate generate -v --use-receiver-type=Server --use-templates-variable=templates
+error: configure generate with fields in $BASE/muxt.json instead of flags
+== setting flags, entry names no receiver: muxt --use-receiver-type=Server --use-templates-variable=templates
+error: configure muxt with fields in $BASE/muxt.json instead of flags
+== setting flags, entry names no receiver: check check --use-templates-variable=templates
+error: configure check with fields in $BASE/muxt.json instead of flags
+== setting flags, entry names no receiver: calls list-template-calls --use-templates-variable=templates
+error: configure list-template-calls with fields in $BASE/muxt.json instead of flags
+== setting flags, entry names no receiver: callers list-template-callers --use-templates-variable=templates
+error: configure list-template-callers with fields in $BASE/muxt.json instead of flags
+== setting flags, entry names no receiver: def generate def GET /things/{id} GetThing(ctx, id) --use-receiver-type=Server
+load root="contacts" dirs=["contacts"] patterns=[""]
+error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: no Go package found at $BASE/contacts
+== setting flags, entry names no receiver: mutations test-template-mutations --dry-run --use-templates-variable=templates
+mutations dir="contacts" templates=[templates]
+== setting flags, file directory is not an entry: generate generate -v --use-receiver-type=Server
+generate key="" file="" dir="." receiver="Server" receiver-package="" templates=[templates] output="template_routes.go" htmx=false logger=false verbose=true
+== setting flags, file directory is not an entry: muxt --use-templates-variable=templates
+routes key="" file="" dir="." receiver="" receiver-package="" templates=[templates] htmx=false verbose=false report=[flags@ defaults@]
+== setting flags, file directory is not an entry: check check --use-templates-variable=pages
+check dir="." templates=[pages] allow-unused=false
+== setting flags, file directory is not an entry: calls list-template-calls --use-templates-variable=pages
+calls dir="." templates=[pages]
+== setting flags, file directory is not an entry: callers list-template-callers --use-templates-variable=pages
+callers dir="." templates=[pages]
+== setting flags, file directory is not an entry: def generate def GET /things/{id} GetThing(ctx, id) --use-receiver-type=Server
+load root="." dirs=["."] patterns=[""]
+error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: no Go package found at $BASE
+== setting flags, file directory is not an entry: mutations test-template-mutations --dry-run --use-templates-variable=pages
+mutations dir="." templates=[pages]
+== setting flags, extra has no entry: generate generate -v --use-receiver-type=Server
+generate key="" file="" dir="extra" receiver="Server" receiver-package="" templates=[templates] output="template_routes.go" htmx=false logger=false verbose=true
+== setting flags, extra has no entry: muxt --use-templates-variable=templates
+routes key="" file="" dir="extra" receiver="" receiver-package="" templates=[templates] htmx=false verbose=false report=[flags@ defaults@]
+== setting flags, extra has no entry: check check --use-templates-variable=pages
+check dir="extra" templates=[pages] allow-unused=false
+== setting flags, extra has no entry: calls list-template-calls --use-templates-variable=pages
+calls dir="extra" templates=[pages]
+== setting flags, extra has no entry: callers list-template-callers --use-templates-variable=pages
+callers dir="extra" templates=[pages]
+== setting flags, extra has no entry: def generate def GET /things/{id} GetThing(ctx, id) --use-receiver-type=Server
+load root="extra" dirs=["extra"] patterns=[""]
+error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: no Go package found at $BASE/extra
+== setting flags, extra has no entry: mutations test-template-mutations --dry-run --use-templates-variable=pages
+mutations dir="extra" templates=[pages]
+== empty packages, file directory: generate generate -v
+error: $BASE/muxt.json: packages is empty; add a package with: muxt generate package NAME
+== empty packages, file directory: muxt 
+routes key="" file="" dir="." receiver="" receiver-package="" templates=[templates] htmx=false verbose=false report=[defaults@]
+== empty packages, file directory: check check
+check dir="." templates=[templates] allow-unused=false
+== empty packages, file directory: calls list-template-calls
+calls dir="." templates=[templates]
+== empty packages, file directory: callers list-template-callers
+callers dir="." templates=[templates]
+== empty packages, file directory: def generate def GET /things/{id} GetThing(ctx, id)
+load root="." dirs=["."] patterns=[""]
+error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: no Go package found at $BASE
+== empty packages, file directory: mutations test-template-mutations --dry-run
+mutations dir="." templates=[templates]
+== empty packages, contacts: generate generate -v
+error: $BASE/muxt.json: no packages entry "example.com/fieldkit/contacts"; add one to generate this directory
+== empty packages, contacts: muxt 
+routes key="" file="" dir="contacts" receiver="" receiver-package="" templates=[templates] htmx=false verbose=false report=[defaults@]
+== empty packages, contacts: check check
+check dir="contacts" templates=[templates] allow-unused=false
+== empty packages, contacts: calls list-template-calls
+calls dir="contacts" templates=[templates]
+== empty packages, contacts: callers list-template-callers
+callers dir="contacts" templates=[templates]
+== empty packages, contacts: def generate def GET /things/{id} GetThing(ctx, id)
+load root="contacts" dirs=["contacts"] patterns=[""]
+error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: no Go package found at $BASE/contacts
+== empty packages, contacts: mutations test-template-mutations --dry-run
+mutations dir="contacts" templates=[templates]
+== stale entry, file directory: generate generate -v
+error: $BASE/muxt.json: packages["example.com/fieldkit/ghost"]: directory $BASE/ghost does not exist
+== stale entry, file directory: muxt 
+error: $BASE/muxt.json: packages["example.com/fieldkit/ghost"]: directory $BASE/ghost does not exist
+== stale entry, file directory: check check
+error: $BASE/muxt.json: packages["example.com/fieldkit/ghost"]: directory $BASE/ghost does not exist
+== stale entry, file directory: calls list-template-calls
+error: $BASE/muxt.json: packages["example.com/fieldkit/ghost"]: directory $BASE/ghost does not exist
+== stale entry, file directory: callers list-template-callers
+error: $BASE/muxt.json: packages["example.com/fieldkit/ghost"]: directory $BASE/ghost does not exist
+== stale entry, file directory: def generate def GET /things/{id} GetThing(ctx, id)
+error: $BASE/muxt.json: packages["example.com/fieldkit/ghost"]: directory $BASE/ghost does not exist
+== stale entry, file directory: mutations test-template-mutations --dry-run
+mutations dir="." templates=[templates]
+== stale entry, contacts: generate generate -v
+generate key="example.com/fieldkit/contacts" file="muxt.json" dir="contacts" receiver="Server" receiver-package="" templates=[templates] output="template_routes.go" htmx=false logger=false verbose=true
+== stale entry, contacts: muxt 
+routes key="example.com/fieldkit/contacts" file="muxt.json" dir="contacts" receiver="Server" receiver-package="" templates=[templates] htmx=false verbose=false report=[package_defaults@muxt.json defaults@]
+== stale entry, contacts: check check
+check dir="contacts" templates=[templates] allow-unused=false
+== stale entry, contacts: calls list-template-calls
+calls dir="contacts" templates=[templates]
+== stale entry, contacts: callers list-template-callers
+callers dir="contacts" templates=[templates]
+== stale entry, contacts: def generate def GET /things/{id} GetThing(ctx, id)
+load root="contacts" dirs=["contacts"] patterns=[""]
+error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: no Go package found at $BASE/contacts
+== stale entry, contacts: mutations test-template-mutations --dry-run
+mutations dir="contacts" templates=[templates]
+== listed directory that does not exist: generate generate -v
+error: $BASE/muxt.json: packages["example.com/fieldkit/ghost"]: directory $BASE/ghost does not exist
+== listed directory that does not exist: muxt 
+error: $BASE/muxt.json: packages["example.com/fieldkit/ghost"]: directory $BASE/ghost does not exist
+== listed directory that does not exist: check check
+check dir="ghost" templates=[templates] allow-unused=false
+== listed directory that does not exist: calls list-template-calls
+calls dir="ghost" templates=[templates]
+== listed directory that does not exist: callers list-template-callers
+callers dir="ghost" templates=[templates]
+== listed directory that does not exist: def generate def GET /things/{id} GetThing(ctx, id)
+load root="ghost" dirs=["ghost"] patterns=[""]
+error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: no Go package found at $BASE/ghost
+== listed directory that does not exist: mutations test-template-mutations --dry-run
+mutations dir="ghost" templates=[templates]
+== listed directory that does not exist, flags: generate generate -v --use-receiver-type=Server
+error: configure generate with fields in $BASE/muxt.json instead of flags
+== listed directory that does not exist, flags: muxt --use-templates-variable=templates
+error: configure muxt with fields in $BASE/muxt.json instead of flags
+== listed directory that does not exist, flags: check check --use-templates-variable=pages
+check dir="ghost" templates=[pages] allow-unused=false
+== listed directory that does not exist, flags: calls list-template-calls --use-templates-variable=pages
+calls dir="ghost" templates=[pages]
+== listed directory that does not exist, flags: callers list-template-callers --use-templates-variable=pages
+callers dir="ghost" templates=[pages]
+== listed directory that does not exist, flags: def generate def GET /things/{id} GetThing(ctx, id) --use-receiver-type=Server
+load root="ghost" dirs=["ghost"] patterns=[""]
+error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: no Go package found at $BASE/ghost
+== listed directory that does not exist, flags: mutations test-template-mutations --dry-run --use-templates-variable=pages
+mutations dir="ghost" templates=[pages]
+== -C module: generate generate -v
+generate key="example.com/fieldkit/contacts" file="muxt.json" dir="contacts" receiver="Server" receiver-package="example.com/fieldkit/types" templates=[templates] output="template_routes.go" htmx=true logger=false verbose=true
+generate key="example.com/fieldkit/inventory" file="muxt.json" dir="inventory" receiver="Catalog" receiver-package="example.com/fieldkit/types" templates=[catalogTemplates] output="template_routes.go" htmx=true logger=false verbose=true
+generate key="example.com/fieldkit/tasks" file="muxt.json" dir="tasks" receiver="Server" receiver-package="example.com/fieldkit/types" templates=[templates] output="tasks_routes.go" htmx=true logger=true verbose=true
+== -C module: muxt 
+routes key="example.com/fieldkit/contacts" file="muxt.json" dir="contacts" receiver="Server" receiver-package="example.com/fieldkit/types" templates=[templates] htmx=true verbose=false report=[package_defaults@muxt.json defaults@]
+routes key="example.com/fieldkit/inventory" file="muxt.json" dir="inventory" receiver="Catalog" receiver-package="example.com/fieldkit/types" templates=[catalogTemplates] htmx=true verbose=false report=[packages["example.com/fieldkit/inventory"]@muxt.json package_defaults@muxt.json defaults@]
+routes key="example.com/fieldkit/tasks" file="muxt.json" dir="tasks" receiver="Server" receiver-package="example.com/fieldkit/types" templates=[templates] htmx=true verbose=false report=[packages["example.com/fieldkit/tasks"]@muxt.json package_defaults@muxt.json defaults@]
+== -C module: check check
+check dir="." templates=[templates] allow-unused=false
+== -C module: calls list-template-calls
+calls dir="." templates=[templates]
+== -C module: callers list-template-callers
+callers dir="." templates=[templates]
+== -C module: def generate def GET /things/{id} GetThing(ctx, id)
+load root="." dirs=["."] patterns=[""]
+error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: no Go package found at $BASE
+== -C module: mutations test-template-mutations --dry-run
+mutations dir="." templates=[templates]
+== -C inventory: generate generate -v
+generate key="example.com/fieldkit/inventory" file="muxt.json" dir="inventory" receiver="Catalog" receiver-package="example.com/fieldkit/types" templates=[catalogTemplates] output="template_routes.go" htmx=true logger=false verbose=true
+== -C inventory: muxt 
+routes key="example.com/fieldkit/inventory" file="muxt.json" dir="inventory" receiver="Catalog" receiver-package="example.com/fieldkit/types" templates=[catalogTemplates] htmx=true verbose=false report=[packages["example.com/fieldkit/inventory"]@muxt.json package_defaults@muxt.json defaults@]
+== -C inventory: check check
+check dir="inventory" templates=[catalogTemplates] allow-unused=false
+== -C inventory: calls list-template-calls
+calls dir="inventory" templates=[catalogTemplates]
+== -C inventory: callers list-template-callers
+callers dir="inventory" templates=[catalogTemplates]
+== -C inventory: def generate def GET /things/{id} GetThing(ctx, id)
+load root="inventory" dirs=["inventory"] patterns=["example.com/fieldkit/types"]
+error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: no Go package found at $BASE/inventory
+== -C inventory: mutations test-template-mutations --dry-run
+mutations dir="inventory" templates=[templates]
+== -C extra: generate generate -v
+error: $BASE/muxt.json: no packages entry "example.com/fieldkit/extra"; add one to generate this directory
+== -C extra: muxt 
+routes key="" file="" dir="extra" receiver="" receiver-package="" templates=[templates] htmx=false verbose=false report=[defaults@]
+== -C extra: check check
+check dir="extra" templates=[templates] allow-unused=false
+== -C extra: calls list-template-calls
+calls dir="extra" templates=[templates]
+== -C extra: callers list-template-callers
+callers dir="extra" templates=[templates]
+== -C extra: def generate def GET /things/{id} GetThing(ctx, id)
+load root="extra" dirs=["extra"] patterns=[""]
+error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: no Go package found at $BASE/extra
+== -C extra: mutations test-template-mutations --dry-run
+mutations dir="extra" templates=[templates]
+== -C directory that does not exist, below the file: generate generate -v
+error: $BASE/muxt.json: no packages entry "example.com/fieldkit/typo"; add one to generate this directory
+== -C directory that does not exist, below the file: muxt 
+routes key="" file="" dir="typo" receiver="" receiver-package="" templates=[templates] htmx=false verbose=false report=[defaults@]
+== -C directory that does not exist, below the file: check check
+check dir="typo" templates=[templates] allow-unused=false
+== -C directory that does not exist, below the file: calls list-template-calls
+calls dir="typo" templates=[templates]
+== -C directory that does not exist, below the file: callers list-template-callers
+callers dir="typo" templates=[templates]
+== -C directory that does not exist, below the file: def generate def GET /things/{id} GetThing(ctx, id)
+load root="typo" dirs=["typo"] patterns=[""]
+error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: no Go package found at $BASE/typo
+== -C directory that does not exist, below the file: mutations test-template-mutations --dry-run
+mutations dir="typo" templates=[templates]
+== -C directory that does not exist, no muxt.json: generate generate -v
+generate key="" file="" dir="typo" receiver="" receiver-package="" templates=[templates] output="template_routes.go" htmx=false logger=false verbose=true
+== -C directory that does not exist, no muxt.json: muxt 
+routes key="" file="" dir="typo" receiver="" receiver-package="" templates=[templates] htmx=false verbose=false report=[defaults@]
+== -C directory that does not exist, no muxt.json: check check
+check dir="typo" templates=[templates] allow-unused=false
+== -C directory that does not exist, no muxt.json: calls list-template-calls
+calls dir="typo" templates=[templates]
+== -C directory that does not exist, no muxt.json: callers list-template-callers
+callers dir="typo" templates=[templates]
+== -C directory that does not exist, no muxt.json: def generate def GET /things/{id} GetThing(ctx, id)
+load root="typo" dirs=["typo"] patterns=[""]
+error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: no Go package found at $BASE/typo
+== -C directory that does not exist, no muxt.json: mutations test-template-mutations --dry-run
+mutations dir="typo" templates=[templates]
+== -C directory that does not exist, flag: generate generate -v --use-receiver-type=Server
+generate key="" file="" dir="typo" receiver="Server" receiver-package="" templates=[templates] output="template_routes.go" htmx=false logger=false verbose=true
+== -C directory that does not exist, flag: muxt --use-templates-variable=templates
+routes key="" file="" dir="typo" receiver="" receiver-package="" templates=[templates] htmx=false verbose=false report=[flags@ defaults@]
+== -C directory that does not exist, flag: check check --use-templates-variable=pages
+check dir="typo" templates=[pages] allow-unused=false
+== -C directory that does not exist, flag: calls list-template-calls --use-templates-variable=pages
+calls dir="typo" templates=[pages]
+== -C directory that does not exist, flag: callers list-template-callers --use-templates-variable=pages
+callers dir="typo" templates=[pages]
+== -C directory that does not exist, flag: def generate def GET /things/{id} GetThing(ctx, id) --use-receiver-type=Server
+load root="typo" dirs=["typo"] patterns=[""]
+error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: no Go package found at $BASE/typo
+== -C directory that does not exist, flag: mutations test-template-mutations --dry-run --use-templates-variable=pages
+mutations dir="typo" templates=[pages]
+== .: check inventory
+check dir="inventory" templates=[catalogTemplates] allow-unused=false
+== .: list-template-calls inventory
+calls dir="inventory" templates=[catalogTemplates]
+== .: list-template-callers inventory
+callers dir="inventory" templates=[catalogTemplates]
+== .: check extra
+check dir="extra" templates=[templates] allow-unused=false
+== .: check typo
+check dir="typo" templates=[templates] allow-unused=false
+== .: check ./main.go
+check dir="main.go" templates=[templates] allow-unused=false
+== .: test-template-mutations --dry-run inventory
+mutations dir="inventory" templates=[templates]
+== .: test-template-mutations --dry-run extra
+mutations dir="extra" templates=[templates]
+== .: test-template-mutations --dry-run inventory --use-templates-variable=catalogTemplates
+mutations dir="inventory" templates=[catalogTemplates]
+== .: check inventory --use-templates-variable=catalogTemplates
+error: configure check with fields in $BASE/muxt.json instead of flags
+== .: check ./...
+error: check takes one package directory, not a pattern: ./...
+== .: check inventory contacts
+error: check takes one package directory, got 2: inventory contacts
+== .: contacts
+error: unknown command "contacts" for "muxt"
+== .: generate contacts
+error: unknown command "contacts" for "muxt generate"
+== .: check contacts
+check dir="contacts" templates=[templates] allow-unused=false
+== .: list-template-calls contacts
+calls dir="contacts" templates=[templates]
+== -C .: check inventory
+check dir="inventory" templates=[catalogTemplates] allow-unused=false
+== -C inventory: check .
+check dir="inventory" templates=[catalogTemplates] allow-unused=false
+== -C inventory: check ../extra
+check dir="extra" templates=[templates] allow-unused=false
+== -C inventory: list-template-calls ../extra
+calls dir="extra" templates=[templates]
+== -C inventory: test-template-mutations --dry-run ../extra
+mutations dir="extra" templates=[templates]
