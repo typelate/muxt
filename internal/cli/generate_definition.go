@@ -52,7 +52,8 @@ func generateDefinitionCommand(workingDirectory *string, getEnv func(string) str
 			if err != nil {
 				return err
 			}
-			return scaffoldDefinition(cmd, *workingDirectory, args[0], templateFile, body, config, getEnv, loadPackages)
+			target := definitionTarget{Dir: *workingDirectory, Name: args[0], File: templateFile}
+			return scaffoldDefinition(cmd, target, body, config, getEnv, loadPackages)
 		},
 	}
 	cmd.Flags().StringVar(&templateFile, outputFile, "", "the .gohtml file in the working directory to add the template to")
@@ -91,12 +92,25 @@ func definitionConfiguration(wd string, flags *pflag.FlagSet, receiverType strin
 	return config, nil
 }
 
-// scaffoldDefinition appends the define for name to templateFile in wd,
-// reports it on stderr, and prints the method stub, if any, to stdout.
-// Everything is checked before anything is written. With no templateFile it
+// definitionTarget is where generate def puts a route template. The three
+// fields are strings of one kind, so a struct keeps a call from swapping them.
+type definitionTarget struct {
+	// Dir is the package directory, the working directory of the command.
+	Dir string
+	// Name is the template name, the route the define declares.
+	Name string
+	// File is the .gohtml file name in Dir to append to; empty prints an
+	// archive instead.
+	File string
+}
+
+// scaffoldDefinition appends the define for target.Name to target.File in
+// target.Dir, reports it on stderr, and prints the method stub, if any, to
+// stdout. Everything is checked before anything is written. With no File it
 // prints a txtar archive of the files it would write instead, and writes
 // nothing.
-func scaffoldDefinition(cmd *cobra.Command, wd, name, templateFile string, body generate.DefineBody, config generate.RoutesFileConfiguration, getEnv func(string) string, loadPackages packageLoader) error {
+func scaffoldDefinition(cmd *cobra.Command, target definitionTarget, body generate.DefineBody, config generate.RoutesFileConfiguration, getEnv func(string) string, loadPackages packageLoader) error {
+	wd, name, templateFile := target.Dir, target.Name, target.File
 	if templateFile != "" {
 		if err := checkTemplateFileName(templateFile); err != nil {
 			return err
@@ -108,7 +122,7 @@ func scaffoldDefinition(cmd *cobra.Command, wd, name, templateFile string, body 
 	var stub string
 	if loadPackages != nil {
 		var err error
-		if stub, err = inspectPackage(wd, name, templateFile, config, loadPackages); err != nil {
+		if stub, err = inspectPackage(target, config, loadPackages); err != nil {
 			return err
 		}
 	}
@@ -132,14 +146,15 @@ func scaffoldDefinition(cmd *cobra.Command, wd, name, templateFile string, body 
 	return err
 }
 
-// inspectPackage loads the package in wd and returns a
-// *generate.DuplicateDefinitionError when its templates already define name,
-// and a *load.UnreadFileError when templateFile is one no templates variable
+// inspectPackage loads the package in target.Dir and returns a
+// *generate.DuplicateDefinitionError when its templates already define
+// target.Name, and a *load.UnreadFileError when target.File is one no templates variable
 // reads. Otherwise it returns the stubs of the methods the route calls that the
 // receiver type does not define, empty when no receiver type is configured. A
 // package it cannot load, or one with no templates variable, is an error too:
 // the check would otherwise pass for want of anything to check.
-func inspectPackage(wd, name, templateFile string, config generate.RoutesFileConfiguration, loadPackages packageLoader) (string, error) {
+func inspectPackage(target definitionTarget, config generate.RoutesFileConfiguration, loadPackages packageLoader) (string, error) {
+	wd, name, templateFile := target.Dir, target.Name, target.File
 	cannotCheck := func(err error) error {
 		return fmt.Errorf("cannot check whether %q is already defined: %w", name, err)
 	}
