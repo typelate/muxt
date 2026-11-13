@@ -96,20 +96,23 @@ func TestCheckLeavesAFileArgumentToTheRunner(t *testing.T) {
 	}
 }
 
-// TestCheckRejectsDirectoryWithoutMuxtJSONEntry states that muxt check with no
-// flags in a directory below a muxt.json with no entry for it fails with the
-// error generate returns.
-func TestCheckRejectsDirectoryWithoutMuxtJSONEntry(t *testing.T) {
+// TestCheckAcceptsDirectoryWithoutMuxtJSONEntry states that muxt check in a
+// directory below a muxt.json with no entry for it runs with its own flags and
+// defaults, as it does with no muxt.json: only a flagless generate writes from
+// the file, so only it needs an entry.
+func TestCheckAcceptsDirectoryWithoutMuxtJSONEntry(t *testing.T) {
 	parent := moduleDir(t)
 	workspace := filepath.Join(parent, "workspace")
 	require.NoError(t, os.Mkdir(workspace, 0o755))
 	writeMuxtJSON(t, parent, `{"packages": {"example.com/m": {}}}`)
 
-	_, err := templatesVariablesOf(t, workspace, "check")
+	got, err := templatesVariablesOf(t, workspace, "check")
+	require.NoError(t, err, "check without flags")
+	assert.Equal(t, []string{"templates"}, got, "default templates variables")
 
-	var missing *composite.MissingEntryError
-	require.ErrorAs(t, err, &missing, "error %v", err)
-	assert.Equal(t, "example.com/m/workspace", missing.Key, "key")
+	got, err = templatesVariablesOf(t, workspace, "check --use-templates-variable=pages")
+	require.NoError(t, err, "check with a flag")
+	assert.Equal(t, []string{"pages"}, got, "templates variables from the flag")
 }
 
 // TestEntryFlagsRejectedWhereMuxtJSONConfigures states that check and the two

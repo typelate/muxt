@@ -83,10 +83,10 @@ func TestRoutesRejectsFlagsForConfiguredDirectory(t *testing.T) {
 	assert.Empty(t, jobs, "jobs")
 }
 
-// TestRoutesRejectsDirectoryWithoutMuxtJSONEntry states that bare muxt with no
-// flags in a directory below a muxt.json with no entry for it fails with the
-// error generate returns. With a flag, the flags configure the listing.
-func TestRoutesRejectsDirectoryWithoutMuxtJSONEntry(t *testing.T) {
+// TestRoutesAcceptsDirectoryWithoutMuxtJSONEntry states that bare muxt in a
+// directory below a muxt.json with no entry for it lists with its own flags and
+// defaults, as it does with no muxt.json.
+func TestRoutesAcceptsDirectoryWithoutMuxtJSONEntry(t *testing.T) {
 	parent := moduleDir(t)
 	workspace := filepath.Join(parent, "workspace")
 	require.NoError(t, os.Mkdir(workspace, 0o755))
@@ -94,11 +94,9 @@ func TestRoutesRejectsDirectoryWithoutMuxtJSONEntry(t *testing.T) {
 
 	jobs, err := routesJobsOf(t, workspace, "")
 
-	var missing *composite.MissingEntryError
-	require.ErrorAs(t, err, &missing, "error %v", err)
-	assert.Equal(t, filepath.Join(parent, composite.FileName), missing.Path, "path")
-	assert.Equal(t, "example.com/m/workspace", missing.Key, "key")
-	assert.Empty(t, jobs, "jobs")
+	require.NoError(t, err, "without flags")
+	require.Len(t, jobs, 1, "jobs without flags")
+	assert.Equal(t, []string{"templates"}, jobs[0].definitions().TemplatesVariables, "default templates variables")
 
 	jobs, err = routesJobsOf(t, workspace, "--use-receiver-type=T1")
 	require.NoError(t, err, "with a flag")

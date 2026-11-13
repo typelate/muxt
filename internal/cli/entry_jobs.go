@@ -94,10 +94,30 @@ func rejectConfiguredDirectory(command, wd string, flagNames []string) error {
 	return &composite.ConfiguredDirectoryError{Path: lookup.File.Name, Command: command, Flags: flagNames}
 }
 
+// requireEntry returns a *composite.MissingEntryError when the nearest
+// muxt.json is above wd and has no entry for it. Only a flagless generate
+// needs one, because only it writes from the file; every other command reads
+// a package and falls back to its own flags and defaults.
+func requireEntry(wd string) error {
+	lookup, err := lookupMuxtJSONEntry(wd)
+	if err != nil || lookup.File == nil || lookup.HasEntry {
+		return err
+	}
+	ownKey, err := lookup.File.KeyFor(lookup.File.Dir)
+	if err != nil {
+		return fmt.Errorf("muxt.json entry for %s: %w", lookup.File.Dir, err)
+	}
+	if lookup.Key == ownKey {
+		return nil
+	}
+	return &composite.MissingEntryError{Path: lookup.File.Name, Key: lookup.Key}
+}
+
 // entryJobs returns the jobs the nearest muxt.json gives a flagless run in wd.
 // In the file's own directory that is one job per entry, and every entry is
 // validated before any job is returned. In a sub-directory it is that
-// directory's entry alone. found is false when the flags decide the run. file
+// directory's entry alone. found is false when the flags decide the run, and
+// when the file has no entry for wd (see requireEntry). file
 // is the muxt.json the jobs came from, for a caller that says where each
 // setting came from.
 func entryJobs(wd string, getEnv func(string) string, version func() (string, bool)) (file *composite.File, jobs []generateJob, found bool, err error) {
@@ -113,7 +133,7 @@ func entryJobs(wd string, getEnv func(string) string, version func() (string, bo
 	keys := []string{key}
 	if key != ownKey {
 		if !lookup.HasEntry {
-			return nil, nil, false, &composite.MissingEntryError{Path: f.Name, Key: key}
+			return nil, nil, false, nil
 		}
 	} else {
 		if len(f.Packages) == 0 {
@@ -141,9 +161,9 @@ func entryJobs(wd string, getEnv func(string) string, version func() (string, bo
 // flagNames are the entry's flags the command was given: with any, the entry
 // for dir would be a second source for the same settings, so it is rejected by
 // rejectConfiguredDirectory. Without them the entry is read the way generate
-// reads it, so a directory below a muxt.json with no entry for it is a
-// *composite.MissingEntryError, as it is for generate. The command takes only
-// the settings it has flags for from the job.
+// reads it. A directory below a muxt.json with no entry for it is not found,
+// so the command's own flags and defaults apply. The command takes only the
+// settings it has flags for from the job.
 func entryJobFor(command, dir string, flagNames []string, getEnv func(string) string) (generateJob, bool, error) {
 	// A path that is not a directory has no entry. The command's runner is
 	// what says so, and a search for muxt.json under a file would fail first

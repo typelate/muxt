@@ -42,6 +42,9 @@ func generateJobs(wd string, flags *pflag.FlagSet, flagConfig *generate.RoutesFi
 			}
 			return jobs, nil
 		}
+		if err := requireEntry(wd); err != nil {
+			return nil, err
+		}
 	}
 	if err := finalizeGenerate(flagConfig, flags, deprecatedTemplatesVar, wd, getEnv, version); err != nil {
 		return nil, err
