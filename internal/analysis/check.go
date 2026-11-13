@@ -336,7 +336,7 @@ func callLine(qualifier types.Qualifier, call source.Call) string {
 // are not routes are listed without an error.
 func reportUnusedTemplates(logger *log.Logger, ts *html.Template, executedTemplates map[string][]TemplateExecution, own func(name string) bool, allowUnused bool) []error {
 	var errs []error
-	unusedRoutes, unusedPartials := partitionUnusedTemplates(ts, findUnusedTemplates(ts, executedTemplates, own), own)
+	unusedRoutes, unusedPartials := partitionUnusedTemplates(ts, findUnusedTemplates(ts, executedTemplates), own)
 	if len(unusedRoutes) > 0 {
 		// Route templates with no ExecuteTemplate caller usually mean
 		// the generated routes file is missing or stale, not that the
@@ -481,12 +481,7 @@ func followTemplate(ts *html.Template, name string, seen map[string]bool) {
 // A template is considered "used" if it:
 // 1. Is executed via ExecuteTemplate calls in the code
 // 2. Is referenced via {{template "name"}} from a used template
-//
-// own is the predicate partitionUnusedTemplates applies to partials. It is a
-// parameter here so both steps are given the one predicate; a template it
-// rejects is still reported unused, and the partition decides what to do
-// with it.
-func findUnusedTemplates(ts *html.Template, executedTemplates map[string][]TemplateExecution, own func(name string) bool) []string {
+func findUnusedTemplates(ts *html.Template, executedTemplates map[string][]TemplateExecution) []string {
 	allTemplates := ts.Templates()
 	if len(allTemplates) == 0 {
 		return nil

@@ -75,7 +75,7 @@ func TestFindUnusedTemplates(t *testing.T) {
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			got := findUnusedTemplates(parseTemplates(t, tt.templates), tt.executed, func(string) bool { return true })
+			got := findUnusedTemplates(parseTemplates(t, tt.templates), tt.executed)
 			assert.Equal(t, tt.want, got, "findUnusedTemplates")
 		})
 	}
@@ -246,7 +246,7 @@ func TestTemplatesWithoutATreeAreSkipped(t *testing.T) {
 		assert.Empty(t, partials, "partitionUnusedTemplates() partials, want the route only")
 	})
 	t.Run("findUnusedTemplates", func(t *testing.T) {
-		got := findUnusedTemplates(ts, executed(), func(string) bool { return true })
+		got := findUnusedTemplates(ts, executed())
 		assert.Equal(t, []string{"GET / Home()"}, got, "findUnusedTemplates() want only the route")
 	})
 	t.Run("executeTemplateTree", func(t *testing.T) {
