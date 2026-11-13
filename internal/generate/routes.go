@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"go/ast"
 	"go/token"
+	"io"
 	"log"
 	"maps"
 	"path/filepath"
@@ -150,8 +151,9 @@ func checkGeneratedNames(config RoutesFileConfiguration) error {
 // Loggers are where TemplateRoutesFiles reports. Notes are apart from
 // progress so a run over several packages can say which package each note is
 // about, while the progress lines sit under a heading that already says so.
+// The zero value is usable: a nil field drops what it would receive.
 type Loggers struct {
-	// Progress receives the lines RoutesFileConfiguration.Verbose asks for.
+	// Progress receives the lines RoutesFileConfiguration.Verbose asks for; nil drops them.
 	Progress *log.Logger
 	// Notes receives the notes and warnings about the routes; nil drops them.
 	Notes *log.Logger
@@ -161,6 +163,9 @@ type Loggers struct {
 // the package the files belong to, which is the one in the output file's
 // directory. defs are pkg's route definitions, resolved by muxt.ResolveDefinitions.
 func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, pkg source.Package, defs []muxt.Definition, logs Loggers) ([]GeneratedFile, error) {
+	if logs.Progress == nil {
+		logs.Progress = log.New(io.Discard, "", 0)
+	}
 	config.PackagePath = pkg.Types.Path()
 	config.PackageName = pkg.Types.Name()
 	config.SSETemplateDataType = cmp.Or(config.SSETemplateDataType, "SSETemplateData")

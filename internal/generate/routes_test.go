@@ -64,3 +64,24 @@ func (T) Stream(string) {}
 	_, err = TemplateRoutesFiles(".", config, pkg, defs, Loggers{Progress: log.New(io.Discard, "", 0)})
 	assert.ErrorContains(t, err, "failed to determine type for fooMessage")
 }
+
+// TestTemplateRoutesFilesDropsProgressWithZeroLoggers generates with Verbose
+// set and the zero Loggers: a nil Progress drops its lines as a nil Notes
+// drops notes.
+func TestTemplateRoutesFilesDropsProgressWithZeroLoggers(t *testing.T) {
+	config := testConfig()
+	config.Verbose = true
+	config.ReceiverType = "T"
+	pkg, receiver := testSource(t, `package server
+
+type T struct{}
+
+func (T) Index() string { return "" }
+`, "T", `{{define "GET / Index()"}}{{end}}`)
+	defs, err := muxt.ResolveDefinitions(pkg, receiver, fake.NewChecker().Fake())
+	require.NoError(t, err)
+
+	_, err = TemplateRoutesFiles(t.TempDir(), config, pkg, defs, Loggers{})
+
+	assert.NoError(t, err)
+}
