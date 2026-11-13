@@ -12,9 +12,6 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/tools/go/packages"
-
-	"github.com/typelate/muxt/internal/load"
 )
 
 type multiLineError struct{}
@@ -30,20 +27,17 @@ func (r textResult) WriteTo(w io.Writer) (int64, error) {
 }
 
 func TestWarnPartialAST(t *testing.T) {
-	parseError := packages.Error{Kind: packages.ParseError, Pos: "a.go:1:1", Msg: "expected 'package'"}
-	typeError := packages.Error{Kind: packages.TypeError, Pos: "a.go:2:1", Msg: "undefined: X"}
 	const warning = "warning: package has syntax errors, so these checks ran against a partial AST; run go build for the full picture\n"
 
 	for _, tt := range []struct {
-		name      string
-		pl        []*packages.Package
-		nilLogger bool
-		want      string
+		name           string
+		hasParseErrors bool
+		nilLogger      bool
+		want           string
 	}{
-		{name: "clean", pl: []*packages.Package{{}}},
-		{name: "type errors are expected before generate", pl: []*packages.Package{{Errors: []packages.Error{typeError}}}},
-		{name: "syntax errors", pl: []*packages.Package{{Errors: []packages.Error{parseError}}}, want: warning},
-		{name: "no logger", pl: []*packages.Package{{Errors: []packages.Error{parseError}}}, nilLogger: true},
+		{name: "clean"},
+		{name: "syntax errors", hasParseErrors: true, want: warning},
+		{name: "no logger", hasParseErrors: true, nilLogger: true},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			var buf bytes.Buffer
@@ -51,7 +45,7 @@ func TestWarnPartialAST(t *testing.T) {
 			if tt.nilLogger {
 				logger = nil
 			}
-			warnPartialAST(logger, load.FromPackages(tt.pl))
+			warnPartialAST(logger, tt.hasParseErrors)
 			assert.Equal(t, tt.want, buf.String(), "warnPartialAST() wrote")
 		})
 	}

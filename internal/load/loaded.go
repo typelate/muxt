@@ -79,9 +79,3 @@ func (l *Loaded) Imports(dirs []string) ImportGraph {
 	}
 	return graph
 }
-
-// FromPackages is a Loaded over packages a test built or type checked in
-// memory, so what reads a Loaded can run without the go command.
-func FromPackages(pl []*packages.Package) *Loaded {
-	return &Loaded{pl: pl}
-}

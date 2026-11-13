@@ -49,7 +49,7 @@ func runJobs(cmd *cobra.Command, loadPackages packageLoader, jobs []packageJob, 
 	if err != nil {
 		return err
 	}
-	warnPartialAST(log.New(cmd.ErrOrStderr(), "", 0), l)
+	warnPartialAST(log.New(cmd.ErrOrStderr(), "", 0), l.HasParseErrors())
 	if v.Ready != nil {
 		for i, job := range jobs {
 			if err := v.Ready(i, job, l); err != nil {

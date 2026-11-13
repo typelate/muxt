@@ -11,7 +11,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/typelate/muxt/internal/load"
 	"github.com/typelate/muxt/internal/muxt"
 )
 
@@ -22,8 +21,8 @@ import (
 // template checks are worth running on broken Go, so this does not stop
 // the command. What it stops is the silence: without it, a package go
 // build rejects gets the same clean output as one that passes.
-func warnPartialAST(logger *log.Logger, l *load.Loaded) {
-	if logger == nil || !l.HasParseErrors() {
+func warnPartialAST(logger *log.Logger, hasParseErrors bool) {
+	if logger == nil || !hasParseErrors {
 		return
 	}
 	logger.Printf("warning: package has syntax errors, so these checks ran against a partial AST; run go build for the full picture")
