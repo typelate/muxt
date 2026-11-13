@@ -89,6 +89,20 @@ func TestCommandHelpNamesReference(t *testing.T) {
 		})
 	}
 
+	for _, name := range []string{"config", "package", "def"} {
+		t.Run("generate "+name, func(t *testing.T) {
+			out := help(t, generateCommandName, name)
+			line := "Full reference: muxt documentation docs/reference/commands/generate.md"
+			assert.True(t, slices.Contains(strings.Split(out, "\n"), line), "muxt generate %s --help has no line %q", name, line)
+		})
+	}
+
+	t.Run("generate names muxt.json", func(t *testing.T) {
+		out := help(t, generateCommandName)
+		line := "With no flags it reads muxt.json: muxt documentation docs/reference/muxt-json.md"
+		assert.True(t, slices.Contains(strings.Split(out, "\n"), line), "muxt generate --help has no line %q", line)
+	})
+
 	for _, name := range []string{"completion", "help"} {
 		t.Run(name+" has no reference page", func(t *testing.T) {
 			assert.NotContains(t, help(t, name), "Full reference:", "muxt %s --help", name)

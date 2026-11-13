@@ -257,6 +257,8 @@ flags:
 --help:
 Create a package directory and its muxt.json entry
 
+Full reference: muxt documentation docs/reference/commands/generate.md
+
 Usage:
   muxt generate package NAME [flags]
 

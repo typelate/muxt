@@ -35,6 +35,7 @@ func generateCommand(workingDirectory *string, getEnv func(string) string, versi
 		Use:     generateCommandName,
 		Aliases: []string{"gen", "g"},
 		Short:   "Generate HTTP routes from templates",
+		Long:    generateLong(),
 		// Without Args cobra ignores positional arguments of a command that
 		// has a parent, so a misspelled sub-command would run a full generate.
 		Args: cobra.NoArgs,

@@ -5,6 +5,8 @@ flags:
 --help:
 Write an empty muxt.json in the working directory
 
+Full reference: muxt documentation docs/reference/commands/generate.md
+
 Usage:
   muxt generate config [flags]
 

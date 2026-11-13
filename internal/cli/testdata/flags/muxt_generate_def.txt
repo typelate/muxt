@@ -37,6 +37,8 @@ Without --output-file it prints the template it would add and a method stub to p
 
 The stub is a placeholder to rewrite: it returns any and its body returns nil. Its receiver is a pointer when the type declares a pointer method, a value otherwise. Imports are not added.
 
+Full reference: muxt documentation docs/reference/commands/generate.md
+
 Usage:
   muxt generate def NAME [flags]
 
