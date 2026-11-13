@@ -53,6 +53,10 @@ This function also receives an argument with a type matching the name given by o
 			Derived: func() string { return c.TemplateRouteTypeName + routeBuilderSuffix },
 			Usage:   `The type name for the type TemplateData.Route returns, whose methods return the route type. When not set, it is the route type name with Builder appended.`,
 		}),
+		boolSetting(&c.Logger, spec[bool]{
+			Name: outputRoutesFuncWithLoggerParam, Deprecated: []string{deprecatedLogger}, Example: "true",
+			Usage: `Adds a *slog.Logger parameter to the generated routes function and uses it to log ExecuteTemplate errors and debug information in handlers.`,
+		}),
 	}
 }
 

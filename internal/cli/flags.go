@@ -37,7 +37,6 @@ func addUseReceiverTypePackageVarToFlagSet(flagSet *pflag.FlagSet, out *string) 
 }
 
 func addOutputFlagsToFlagSet(flagSet *pflag.FlagSet, g *generate.RoutesFileConfiguration) {
-	flagSet.BoolVar(&g.Logger, outputRoutesFuncWithLoggerParam, false, outputRoutesFuncWithLoggerParamHelp)
 	flagSet.BoolVar(&g.PathPrefix, outputRoutesFuncWithPathPrefix, false, outputRoutesFuncWithPathPrefixHelp)
 	flagSet.BoolVar(&g.Middleware, outputRoutesFuncWithMiddlewareParam, false, outputRoutesFuncWithMiddlewareParamHelp)
 	flagSet.BoolVar(&g.OutputMultipleFiles, outputMultipleFiles, false, outputMultipleFilesHelp)
@@ -55,11 +54,9 @@ func addVerboseFlagToFlagSet(flagSet *pflag.FlagSet, out *bool) {
 }
 
 func addDeprecatedOutputFlagsToFlagSet(flagSet *pflag.FlagSet, g *generate.RoutesFileConfiguration) {
-	flagSet.BoolVar(&g.Logger, deprecatedLogger, false, "DEPRECATED: use --"+outputRoutesFuncWithLoggerParam+" instead. "+outputRoutesFuncWithLoggerParamHelp)
 	flagSet.BoolVar(&g.PathPrefix, deprecatedPathPrefix, false, "DEPRECATED: use --"+outputRoutesFuncWithPathPrefix+" instead. "+outputRoutesFuncWithPathPrefixHelp)
 	flagSet.BoolVar(&g.OutputHTMX, outputHTMXHelpers, false, "DEPRECATED: use --"+outputHTMX+" instead. "+outputHTMXHelp)
 
-	markDeprecated(flagSet, deprecatedLogger, outputRoutesFuncWithLoggerParam)
 	markDeprecated(flagSet, deprecatedPathPrefix, outputRoutesFuncWithPathPrefix)
 	markDeprecated(flagSet, outputHTMXHelpers, outputHTMX)
 }
