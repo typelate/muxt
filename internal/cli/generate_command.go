@@ -2,7 +2,6 @@ package cli
 
 import (
 	"cmp"
-	"errors"
 	"fmt"
 	"go/token"
 	"io/fs"
@@ -60,15 +59,17 @@ func generateCommand(workingDirectory *string, getEnv func(string) string, versi
 // command line gives dir, finalized like an entry, so flags and entries meet
 // the same rules.
 func generateSpec(config *generate.RoutesFileConfiguration, flags *pflag.FlagSet, deprecatedTemplatesVar string, getEnv func(string) string, version func() (string, bool)) jobSpec {
+	settings := generateSettings(config)
 	return jobSpec{
 		Name:         generateCommandName,
-		Settings:     generateSettings(config),
+		Settings:     settings,
 		Scope:        eachEntry,
 		RequireEntry: true,
 		Verbose:      config.Verbose,
 		Version:      version,
 		Fallback: func(dir string) (generate.RoutesFileConfiguration, error) {
-			if err := finalizeGenerate(config, flags, deprecatedTemplatesVar, dir, getEnv, version); err != nil {
+			env := generateEnv{Dir: dir, DeprecatedTemplatesVar: deprecatedTemplatesVar, GetEnv: getEnv, Version: version}
+			if err := finalizeGenerate(config, givenFlags(flags, settings), fromCommandLine, env); err != nil {
 				return generate.RoutesFileConfiguration{}, err
 			}
 			return *config, nil
@@ -76,26 +77,79 @@ func generateSpec(config *generate.RoutesFileConfiguration, flags *pflag.FlagSet
 	}
 }
 
+// settingSource is where a configuration came from, which decides how a rule
+// error names a setting.
+type settingSource uint8
+
+const (
+	// fromCommandLine names a setting as its flag: "--output-file".
+	fromCommandLine settingSource = iota + 1
+	// fromMuxtJSON names a setting as its muxt.json key: "output_file".
+	fromMuxtJSON
+)
+
+// flag is how an error names a setting where a flag would be written.
+func (s settingSource) flag(name string) string {
+	if s == fromMuxtJSON {
+		return muxtJSONKey(name)
+	}
+	return "--" + name
+}
+
+// bare is how an error names a setting where no leading dashes are written.
+func (s settingSource) bare(name string) string {
+	if s == fromMuxtJSON {
+		return muxtJSONKey(name)
+	}
+	return name
+}
+
+// RuleError is a rule a configuration breaks. Settings are the settings the
+// rule is about, named as the source spells them, and Rule is what is wrong.
+type RuleError struct {
+	Settings []string
+	Rule     string
+}
+
+func (e *RuleError) Error() string {
+	if len(e.Settings) == 0 {
+		return e.Rule
+	}
+	return strings.Join(e.Settings, " and ") + " " + e.Rule
+}
+
+// generateEnv is what finalizeGenerate reads from outside the configuration.
+type generateEnv struct {
+	// Dir is the package directory, where the generated file is or will be.
+	Dir string
+	// DeprecatedTemplatesVar is the value of the deprecated --templates-variable
+	// flag, which an old command line may carry alone.
+	DeprecatedTemplatesVar string
+	GetEnv                 func(string) string
+	// Version says what a header would record, and whether one is written.
+	Version func() (string, bool)
+}
+
 // finalizeGenerate turns flag values into the configuration a run writes
-// with, so every source of a configuration meets the same rules. flags stays
-// a *pflag.FlagSet, not a "was it given" func, because checkExplicitNames
-// also reads the given value to tell an empty one from an absent one.
-func finalizeGenerate(config *generate.RoutesFileConfiguration, flags *pflag.FlagSet, deprecatedTemplatesVar, dir string, getEnv func(string) string, version func() (string, bool)) error {
-	if err := fixTemplateVariables(&config.TemplatesVariables, deprecatedTemplatesVar); err != nil {
+// with, so every source of a configuration meets the same rules. g is what the
+// source gave, because an empty value is a mistake only where it was given.
+func finalizeGenerate(config *generate.RoutesFileConfiguration, g givenSettings, from settingSource, env generateEnv) error {
+	if err := fixTemplateVariables(&config.TemplatesVariables, env.DeprecatedTemplatesVar); err != nil {
 		return err
 	}
-	config.SilenceHTTPResponseWarning, _ = strconv.ParseBool(getEnv(envSilenceHTTPResponseWarning))
-	if err := checkExplicitNames(flags); err != nil {
+	config.SilenceHTTPResponseWarning, _ = strconv.ParseBool(env.GetEnv(envSilenceHTTPResponseWarning))
+	settings := generateSettings(config)
+	if err := checkNonEmpty(settings, g, from); err != nil {
 		return err
 	}
 	// Validation sees the names the run will generate, so a name
 	// that collides with a default or derived one is caught here.
-	applyDefaults(config, flags)
-	if err := validateGenerateConfiguration(*config); err != nil {
+	applyDefaults(config, settings, g)
+	if err := validateGenerateConfiguration(*config, from); err != nil {
 		return err
 	}
-	if v, ok := version(); ok && config.OutputMuxtVersion {
-		stable, err := header.Stable(v, filepath.Join(dir, config.OutputFileName))
+	if v, ok := env.Version(); ok && config.OutputMuxtVersion {
+		stable, err := header.Stable(v, filepath.Join(env.Dir, config.OutputFileName))
 		if err != nil {
 			return err
 		}
@@ -104,31 +158,26 @@ func finalizeGenerate(config *generate.RoutesFileConfiguration, flags *pflag.Fla
 	return nil
 }
 
-// explicitNameFlags are the flags that name a generated file or identifier,
-// deprecated spellings included. Left unset each has a default; set, it
-// must name something.
-var explicitNameFlags = []string{
-	outputFile,
-	outputReceiverInterface,
-	outputRoutesFunc,
-	outputTemplateDataType,
-	outputSSETemplateDataType,
-	outputTemplateRoutePathsType,
-	outputTemplateRouteType,
-	outputTemplateRouteBuilderType,
-	deprecatedReceiverInterface,
-	deprecatedRoutesFunc,
-	deprecatedTemplateDataType,
-	deprecatedTemplateRoutePathsType,
-}
+// emptyRule is what a setting that must name something breaks when it is
+// given empty.
+const emptyRule = "value must not be empty"
 
-// checkExplicitNames rejects a name flag that was passed with an empty
-// value. It runs before applyDefaults, which cannot tell an empty value
-// from one never given.
-func checkExplicitNames(flagSet *pflag.FlagSet) error {
-	for _, name := range explicitNameFlags {
-		if flagSet.Changed(name) && flagSet.Lookup(name).Value.String() == "" {
-			return fmt.Errorf("--%s value must not be empty", name)
+// checkNonEmpty rejects a setting that was given an empty value where it must
+// name something. It runs before applyDefaults, which cannot tell an empty
+// value from one never given. Every current name is checked in list order,
+// then every deprecated spelling, so a line giving two empty names reports the
+// current one.
+func checkNonEmpty(settings []setting, g givenSettings, from settingSource) error {
+	for _, s := range settings {
+		if s.nonEmpty && s.empty() && slices.Contains(g[s.name], s.name) {
+			return &RuleError{Settings: []string{from.flag(s.name)}, Rule: emptyRule}
+		}
+	}
+	for _, s := range settings {
+		for _, spelling := range s.deprecated {
+			if s.nonEmpty && s.empty() && slices.Contains(g[s.name], spelling) {
+				return &RuleError{Settings: []string{from.flag(spelling)}, Rule: emptyRule}
+			}
 		}
 	}
 	return nil
@@ -137,7 +186,7 @@ func checkExplicitNames(flagSet *pflag.FlagSet) error {
 // validateGenerateConfiguration rejects a configuration generate cannot
 // write. It is given the configuration after applyDefaults, so the names
 // it compares are the ones the run would generate.
-func validateGenerateConfiguration(config generate.RoutesFileConfiguration) error {
+func validateGenerateConfiguration(config generate.RoutesFileConfiguration, from settingSource) error {
 	if err := checkTemplatesVariables(config.TemplatesVariables); err != nil {
 		return err
 	}
@@ -152,60 +201,64 @@ func validateGenerateConfiguration(config generate.RoutesFileConfiguration) erro
 		{outputTemplateRouteBuilderType, config.TemplateRouteBuilderTypeName},
 	} {
 		if id.value != "" && !token.IsIdentifier(id.value) {
-			return errors.New(id.flag + errIdentSuffix)
+			return &RuleError{Settings: []string{from.bare(id.flag)}, Rule: identRule}
 		}
 	}
-	if err := checkGeneratedNamesDiffer(config); err != nil {
+	if err := checkGeneratedNamesDiffer(config, from); err != nil {
 		return err
 	}
 	if config.OutputHTMX && config.OutputDatastar {
-		return fmt.Errorf("--%s and --%s are mutually exclusive; a package targets one frontend library (to mix frontends, generate separate packages that share a mux)", outputHTMX, outputDatastar)
+		return &RuleError{
+			Settings: []string{from.flag(outputHTMX), from.flag(outputDatastar)},
+			Rule:     "are mutually exclusive; a package targets one frontend library (to mix frontends, generate separate packages that share a mux)",
+		}
 	}
-	if err := checkOutputFileName(config.OutputFileName); err != nil {
+	if err := checkOutputFileName(config.OutputFileName, from); err != nil {
 		return err
 	}
-	if err := checkStaticAssets(config); err != nil {
+	if err := checkStaticAssets(config, from); err != nil {
 		return err
 	}
-	return checkRecordable(useReceiverTypePackage, config.ReceiverPackage)
+	return checkRecordable(from, useReceiverTypePackage, config.ReceiverPackage)
 }
 
 // checkStaticAssets rejects a static assets mapping generate cannot embed
 // or serve. Whether the directory exists is for generate to say, since
 // the directory is relative to the package it writes into.
-func checkStaticAssets(config generate.RoutesFileConfiguration) error {
+func checkStaticAssets(config generate.RoutesFileConfiguration, from settingSource) error {
 	dir, urlPath := config.StaticAssetsDirectory, config.StaticAssetsPath
 	if dir == "" && urlPath == "" {
 		return nil
 	}
 	if dir == "" || urlPath == "" {
-		return fmt.Errorf("--%s and --%s must be given together", inputStaticAssetsDirectory, outputStaticAssetsPath)
+		return &RuleError{Settings: []string{from.flag(inputStaticAssetsDirectory), from.flag(outputStaticAssetsPath)}, Rule: "must be given together"}
 	}
+	pathSetting := []string{from.flag(outputStaticAssetsPath)}
 	if !strings.HasPrefix(urlPath, "/") {
-		return fmt.Errorf("--%s must start with %q: %q", outputStaticAssetsPath, "/", urlPath)
+		return &RuleError{Settings: pathSetting, Rule: fmt.Sprintf("must start with %q: %q", "/", urlPath)}
 	}
 	if urlPath == "/" {
 		// A file server at the root would take the 404s of the index
 		// route and of every path no template registers.
-		return fmt.Errorf("--%s must name a path below %q: %q", outputStaticAssetsPath, "/", urlPath)
+		return &RuleError{Settings: pathSetting, Rule: fmt.Sprintf("must name a path below %q: %q", "/", urlPath)}
 	}
 	segments := strings.Split(strings.TrimSuffix(urlPath[1:], "/"), "/")
 	if strings.ContainsAny(urlPath, "{}") || slices.Contains(segments, "") {
-		return fmt.Errorf("--%s must be a literal path without wildcards or empty segments: %q", outputStaticAssetsPath, urlPath)
+		return &RuleError{Settings: pathSetting, Rule: fmt.Sprintf("must be a literal path without wildcards or empty segments: %q", urlPath)}
 	}
 	trimmed := strings.TrimSuffix(dir, "/")
 	if path.IsAbs(dir) || slices.Contains(strings.Split(trimmed, "/"), "..") || strings.Contains(dir, `\`) || trimmed == "." || !fs.ValidPath(trimmed) {
-		return fmt.Errorf("--%s must be a slash-separated path inside the package directory: %q", inputStaticAssetsDirectory, dir)
+		return &RuleError{Settings: []string{from.flag(inputStaticAssetsDirectory)}, Rule: fmt.Sprintf("must be a slash-separated path inside the package directory: %q", dir)}
 	}
-	if err := checkRecordable(inputStaticAssetsDirectory, dir); err != nil {
+	if err := checkRecordable(from, inputStaticAssetsDirectory, dir); err != nil {
 		return err
 	}
-	return checkRecordable(outputStaticAssetsPath, urlPath)
+	return checkRecordable(from, outputStaticAssetsPath, urlPath)
 }
 
 // checkGeneratedNamesDiffer rejects two generated identifiers with one name:
 // both would be declared in the package.
-func checkGeneratedNamesDiffer(config generate.RoutesFileConfiguration) error {
+func checkGeneratedNamesDiffer(config generate.RoutesFileConfiguration, from settingSource) error {
 	generated := []struct{ flag, value string }{
 		{outputRoutesFunc, config.RoutesFunction},
 		{outputReceiverInterface, config.ReceiverInterface},
@@ -221,7 +274,10 @@ func checkGeneratedNamesDiffer(config generate.RoutesFileConfiguration) error {
 		}
 		for _, b := range generated[i+1:] {
 			if a.value == b.value {
-				return fmt.Errorf("--%s and --%s are both %s; each generated type needs its own name", a.flag, b.flag, a.value)
+				return &RuleError{
+					Settings: []string{from.flag(a.flag), from.flag(b.flag)},
+					Rule:     fmt.Sprintf("are both %s; each generated type needs its own name", a.value),
+				}
 			}
 		}
 	}
@@ -231,29 +287,30 @@ func checkGeneratedNamesDiffer(config generate.RoutesFileConfiguration) error {
 // checkOutputFileName rejects an --output-file generate cannot write: the
 // file is written to, and old generated files are looked for in, the
 // working directory.
-func checkOutputFileName(name string) error {
+func checkOutputFileName(name string, from settingSource) error {
 	if name == "" {
 		return nil
 	}
+	fileSetting := []string{from.flag(outputFile)}
 	if filepath.Ext(name) != ".go" {
-		return errors.New("output filename must use .go extension")
+		return &RuleError{Rule: "output filename must use .go extension"}
 	}
 	if filepath.Dir(name) != "." {
-		return fmt.Errorf("--%s must be a file name in the working directory: %s", outputFile, name)
+		return &RuleError{Settings: fileSetting, Rule: "must be a file name in the working directory: " + name}
 	}
 	if filepath.Base(name) == ".go" {
-		return fmt.Errorf("--%s needs a file name before the .go extension", outputFile)
+		return &RuleError{Settings: fileSetting, Rule: "needs a file name before the .go extension"}
 	}
-	return checkRecordable(outputFile, name)
+	return checkRecordable(from, outputFile, name)
 }
 
 // checkRecordable rejects a value the generated file's header cannot
 // record: the header joins the arguments with spaces and a later run
 // splits them on whitespace, so a value holding whitespace would read back
 // as two arguments.
-func checkRecordable(flag, value string) error {
+func checkRecordable(from settingSource, name, value string) error {
 	if strings.ContainsFunc(value, unicode.IsSpace) {
-		return fmt.Errorf("--%s must not contain whitespace: %q", flag, value)
+		return &RuleError{Settings: []string{from.flag(name)}, Rule: fmt.Sprintf("must not contain whitespace: %q", value)}
 	}
 	return nil
 }
@@ -309,28 +366,25 @@ func appendSwitchArg(args []string, name string, on bool) []string {
 	return append(args, "--"+name)
 }
 
-func applyDefaults(config *generate.RoutesFileConfiguration, flagSet *pflag.FlagSet) {
+func applyDefaults(config *generate.RoutesFileConfiguration, settings []setting, g givenSettings) {
 	config.PackageName = cmp.Or(config.PackageName, defaultPackageName)
 
-	// changed reports whether a name was given, by its flag or the
-	// deprecated spelling of it.
-	changed := func(names ...string) bool {
-		return slices.ContainsFunc(names, flagSet.Changed)
-	}
+	// g files a deprecated spelling under the name it spells, so has asks
+	// about either.
 	if !config.OutputExportedDefaultIdentifiers {
-		if !changed(outputRoutesFunc, deprecatedRoutesFunc) {
+		if !g.has(outputRoutesFunc) {
 			config.RoutesFunction = strcase.ToGoCamel(defaultRoutesFunctionName)
 		}
-		if !changed(outputReceiverInterface, deprecatedReceiverInterface) {
+		if !g.has(outputReceiverInterface) {
 			config.ReceiverInterface = strcase.ToGoCamel(defaultReceiverInterfaceName)
 		}
-		if !changed(outputTemplateDataType, deprecatedTemplateDataType) {
+		if !g.has(outputTemplateDataType) {
 			config.TemplateDataType = strcase.ToGoCamel(defaultTemplateDataTypeName)
 		}
-		if !changed(outputSSETemplateDataType) {
+		if !g.has(outputSSETemplateDataType) {
 			config.SSETemplateDataType = strcase.ToGoCamel(defaultSSETemplateDataTypeName)
 		}
-		if !changed(outputTemplateRoutePathsType, deprecatedTemplateRoutePathsType) {
+		if !g.has(outputTemplateRoutePathsType) {
 			config.TemplateRoutePathsTypeName = strcase.ToGoCamel(defaultTemplateRoutePathsTypeName)
 		}
 	} else {
@@ -342,14 +396,9 @@ func applyDefaults(config *generate.RoutesFileConfiguration, flagSet *pflag.Flag
 	}
 
 	// The route type is named after the paths type, and the route builder
-	// after the route type, unless their own flags say otherwise. This is
-	// the only place those conventions are applied.
-	if !flagSet.Changed(outputTemplateRouteType) {
-		config.TemplateRouteTypeName = defaultRouteTypeName(config.TemplateRoutePathsTypeName, config.OutputExportedDefaultIdentifiers)
-	}
-	if !flagSet.Changed(outputTemplateRouteBuilderType) {
-		config.TemplateRouteBuilderTypeName = config.TemplateRouteTypeName + routeBuilderSuffix
-	}
+	// after the route type, unless their own settings say otherwise. Their
+	// Derived functions are the only place those conventions are applied.
+	derive(settings, g)
 }
 
 // routeTypeSuffix is appended to a route paths type name that is not the

@@ -29,7 +29,8 @@ func parseGeneratedHeader(t *testing.T, args []string) generate.RoutesFileConfig
 	set.SetOutput(io.Discard)
 	addGenerateFlags(set, &config, &deprecated)
 	require.NoError(t, set.Parse(args), "parsing the header %q", args)
-	applyDefaults(&config, set)
+	settings := generateSettings(&config)
+	applyDefaults(&config, settings, givenFlags(set, settings))
 	return config
 }
 

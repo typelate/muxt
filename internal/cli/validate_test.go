@@ -3,6 +3,7 @@ package cli
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/typelate/muxt/internal/generate"
@@ -50,7 +51,7 @@ func TestValidateGenerateConfiguration(t *testing.T) {
 		{name: "two generated names alike", config: generate.RoutesFileConfiguration{RoutesFunction: "X", TemplateRouteBuilderTypeName: "X"}, wantErr: "--output-routes-func and --output-template-route-builder-type are both X; each generated type needs its own name"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			err := validateGenerateConfiguration(tt.config)
+			err := validateGenerateConfiguration(tt.config, fromCommandLine)
 			if tt.wantErr == "" {
 				require.NoError(t, err, "validateGenerateConfiguration()")
 				return
@@ -58,4 +59,35 @@ func TestValidateGenerateConfiguration(t *testing.T) {
 			require.EqualError(t, err, tt.wantErr, "validateGenerateConfiguration()")
 		})
 	}
+}
+
+// TestSettingSourceNamesSettings states that a rule error names a setting the
+// way its source spells it, and that RuleError joins the settings it is about.
+func TestSettingSourceNamesSettings(t *testing.T) {
+	for _, tt := range []struct {
+		from           settingSource
+		wantFlag, bare string
+	}{
+		{fromCommandLine, "--output-file", "output-file"},
+		{fromMuxtJSON, "output_file", "output_file"},
+	} {
+		assert.Equal(t, tt.wantFlag, tt.from.flag(outputFile), "flag(%q)", outputFile)
+		assert.Equal(t, tt.bare, tt.from.bare(outputFile), "bare(%q)", outputFile)
+	}
+	assert.EqualError(t, &RuleError{Rule: "output filename must use .go extension"}, "output filename must use .go extension")
+	assert.EqualError(t, &RuleError{Settings: []string{"a", "b"}, Rule: "are mutually exclusive"}, "a and b are mutually exclusive")
+}
+
+// TestCheckNonEmptyReportsCurrentNamesFirst states that a line giving an empty
+// deprecated spelling and an empty current name reports the current name,
+// whatever the list order.
+func TestCheckNonEmptyReportsCurrentNamesFirst(t *testing.T) {
+	var config generate.RoutesFileConfiguration
+	settings := generateSettings(&config)
+	got := givenSettings{
+		outputRoutesFunc:       {deprecatedRoutesFunc},
+		outputTemplateDataType: {outputTemplateDataType},
+	}
+	err := checkNonEmpty(settings, got, fromCommandLine)
+	assert.EqualError(t, err, "--output-template-data-type value must not be empty")
 }

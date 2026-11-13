@@ -3,8 +3,6 @@ package cli
 import (
 	"fmt"
 
-	"github.com/spf13/pflag"
-
 	"github.com/typelate/muxt/internal/composite"
 	"github.com/typelate/muxt/internal/generate"
 )
@@ -98,21 +96,23 @@ func entryFields() []entryField {
 // line meets.
 func entryConfiguration(e composite.Entry, dir string, getEnv func(string) string, version func() (string, bool)) (generate.RoutesFileConfiguration, error) {
 	var config generate.RoutesFileConfiguration
-	var deprecatedTemplatesVar string
-	flags := pflag.NewFlagSet("muxt.json", pflag.ContinueOnError)
-	addGenerateFlags(flags, &config, &deprecatedTemplatesVar)
+	setDefaults(generateSettings(&config))
+	// An entry gives a setting by its key, so each is given under its own
+	// name, the same as a command line that typed the current flag.
+	given := givenSettings{}
 	for _, field := range entryFields() {
-		given, err := field.Apply(&config, e)
+		applied, err := field.Apply(&config, e)
 		if err != nil {
 			return generate.RoutesFileConfiguration{}, err
 		}
-		// finalizeGenerate asks the flag set which names were given, the same
-		// as for a command line, so a set field counts as given.
-		if given {
-			flags.Lookup(field.Name).Changed = true
+		if applied {
+			given[field.Name] = []string{field.Name}
 		}
 	}
-	if err := finalizeGenerate(&config, flags, deprecatedTemplatesVar, dir, getEnv, version); err != nil {
+	// The entry meets the command-line rules, and their text, until a file's
+	// rule errors name the key instead.
+	env := generateEnv{Dir: dir, GetEnv: getEnv, Version: version}
+	if err := finalizeGenerate(&config, given, fromCommandLine, env); err != nil {
 		return generate.RoutesFileConfiguration{}, err
 	}
 	return config, nil
