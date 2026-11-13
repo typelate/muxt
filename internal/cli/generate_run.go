@@ -70,15 +70,7 @@ func generateRunner(loadPackages packageLoader) func(*cobra.Command, []generateJ
 		if len(jobs) == 0 {
 			return nil
 		}
-		dirs := make([]string, 0, len(jobs))
-		var patterns []string
-		for _, job := range jobs {
-			if err := requireDirectory(cmd.Name(), job.Dir); err != nil {
-				return err
-			}
-			dirs = append(dirs, job.Dir)
-			patterns = append(patterns, job.Config.ReceiverPackage)
-		}
+		several := len(jobs) > 1
 		// What was written is for -v; a run that has nothing to say is silent.
 		stdout := cmd.OutOrStdout()
 		verbose := jobs[0].Config.Verbose
@@ -87,18 +79,25 @@ func generateRunner(loadPackages packageLoader) func(*cobra.Command, []generateJ
 			wroteTo = stdout
 		}
 		stderr := log.New(cmd.ErrOrStderr(), "", 0)
-		l, err := loadPackages(jobs[0].Dir, dirs, patterns)
-		if err != nil {
+		// With several directories a failure names its package, since
+		// nothing else says which one it was.
+		failed := func(job generateJob, err error) error {
+			if several {
+				return fmt.Errorf("%s: %w", job.Key, err)
+			}
 			return err
 		}
-		warnPartialAST(stderr, l)
-		// The first load already holds a package that did not load, so it
-		// is refused before an earlier entry is written.
-		for _, job := range jobs {
-			if err := l.CheckLoaded(job.Config.OutputDirectory(job.Dir)); err != nil {
+		return runJobs(cmd, loadPackages, jobs, jobVisitor{
+			// The first load already holds a package that did not load, so it
+			// is refused before an earlier entry is written.
+			Ready: func(_ int, job generateJob, l *load.Loaded) error {
+				err := l.CheckLoaded(job.Config.OutputDirectory(job.Dir))
+				if err == nil {
+					return nil
+				}
 				// One package has no other entry to name, so it explains
 				// itself the way every later failure of it does.
-				if len(jobs) == 1 {
+				if !several {
 					printMultiLineError(cmd, err)
 					return err
 				}
@@ -106,55 +105,30 @@ func generateRunner(loadPackages packageLoader) func(*cobra.Command, []generateJ
 					return err
 				}
 				return &composite.InvalidEntryError{Path: job.File, Where: fmt.Sprintf("packages[%q]", job.Key), Err: err}
-			}
-		}
-		// changed holds the jobs written since the last load. A load that
-		// came before a write saw its package without the new files, so a
-		// job importing one of them needs a fresh load; one that imports
-		// none can use the load it has.
-		var changed []int
-		outputDirs := make([]string, len(jobs))
-		for i, job := range jobs {
-			outputDirs[i] = job.Config.OutputDirectory(job.Dir)
-		}
-		graph := l.Imports(outputDirs)
-		for _, i := range graph.Order() {
-			job := jobs[i]
-			// With several directories a failure names its package, since
-			// nothing else says which one it was.
-			failed := func(err error) error { return err }
-			if len(jobs) > 1 {
-				failed = func(err error) error { return fmt.Errorf("%s: %w", job.Key, err) }
-				if verbose {
+			},
+			Begin: func(_ int, job generateJob) {
+				if several && verbose {
 					// Several directories write to one stream, so each
 					// says whose lines follow.
 					_, _ = fmt.Fprintln(stdout, job.Key)
 				}
-			}
-			if graph.ImportsAny(i, changed) {
-				if l, err = loadPackages(jobs[0].Dir, dirs, patterns); err != nil {
-					return failed(err)
+			},
+			Visit: func(_ int, job generateJob, l *load.Loaded, several bool) (bool, error) {
+				files, err := resolveJob(cmd, l, job, several)
+				if err != nil {
+					return false, failed(job, err)
 				}
-				graph = l.Imports(outputDirs)
-				changed = nil
-			}
-			files, err := resolveJob(cmd, l, job, len(jobs) > 1)
-			if err != nil {
-				return failed(err)
-			}
-			jobStderr := stderr
-			if len(jobs) > 1 {
-				jobStderr = log.New(cmd.ErrOrStderr(), job.Key+": ", 0)
-			}
-			wrote, err := writeJob(wroteTo, jobStderr, job, files)
-			if err != nil {
-				return failed(err)
-			}
-			if wrote {
-				changed = append(changed, i)
-			}
-		}
-		return nil
+				jobStderr := stderr
+				if several {
+					jobStderr = log.New(cmd.ErrOrStderr(), job.Key+": ", 0)
+				}
+				wrote, err := writeJob(wroteTo, jobStderr, job, files)
+				if err != nil {
+					return false, failed(job, err)
+				}
+				return wrote, nil
+			},
+		})
 	}
 }
 

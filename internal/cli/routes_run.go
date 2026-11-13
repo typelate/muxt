@@ -1,13 +1,12 @@
 package cli
 
 import (
-	"log"
-
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
 	"github.com/typelate/muxt/internal/analysis"
 	"github.com/typelate/muxt/internal/composite"
+	"github.com/typelate/muxt/internal/load"
 )
 
 // routesJob is one package directory the route listing reads. It is a
@@ -87,57 +86,53 @@ func routesJobs(wd string, flags *pflag.FlagSet, flagConfig analysis.Definitions
 // imports.
 func routesRunner(loadPackages packageLoader) func(*cobra.Command, []routesJob) error {
 	return func(cmd *cobra.Command, jobs []routesJob) error {
-		if len(jobs) == 0 {
-			return nil
+		packageJobs := make([]generateJob, len(jobs))
+		for i, job := range jobs {
+			packageJobs[i] = job.generateJob
 		}
-		dirs := make([]string, 0, len(jobs))
-		outputDirs := make([]string, 0, len(jobs))
-		var patterns []string
-		for _, job := range jobs {
-			if err := requireDirectory(cmd.Name(), job.Dir); err != nil {
-				return err
-			}
-			dirs = append(dirs, job.Dir)
-			outputDirs = append(outputDirs, job.Config.OutputDirectory(job.Dir))
-			patterns = append(patterns, job.Config.ReceiverPackage)
-		}
-		l, err := loadPackages(jobs[0].Dir, dirs, patterns)
+		var (
+			asJSON, formatKnown bool
+			// Over several entries JSON is one array, not a value per package.
+			collected []routesListing
+		)
+		err := runJobs(cmd, loadPackages, packageJobs, jobVisitor{
+			Visit: func(i int, job generateJob, l *load.Loaded, several bool) (bool, error) {
+				if !formatKnown {
+					var err error
+					if asJSON, err = isJSON(cmd); err != nil {
+						return false, err
+					}
+					formatKnown = true
+				}
+				config := jobs[i].definitions()
+				pkg, receiver, err := l.PackageWithReceiver(job.Config.OutputDirectory(job.Dir), config.ReceiverPackage, config.ReceiverType, config.TemplatesVariables)
+				if err != nil {
+					printMultiLineError(cmd, err)
+					return false, err
+				}
+				results, err := analysis.NewRoutes(pkg, receiver)
+				if err != nil {
+					printMultiLineError(cmd, err)
+					return false, err
+				}
+				for n, result := range results {
+					listing := routesListing{Routes: result, Configuration: jobs[i].Report, printConfiguration: n == 0}
+					if several {
+						listing.Key = job.Key
+					}
+					if asJSON && several {
+						collected = append(collected, listing)
+						continue
+					}
+					if err := writeResult(cmd, cmd.OutOrStdout(), listing); err != nil {
+						return false, err
+					}
+				}
+				return false, nil
+			},
+		})
 		if err != nil {
 			return err
-		}
-		warnPartialAST(log.New(cmd.ErrOrStderr(), "", 0), l)
-		asJSON, err := isJSON(cmd)
-		if err != nil {
-			return err
-		}
-		// Over several entries JSON is one array, not a value per package.
-		var collected []routesListing
-		for _, i := range l.Imports(outputDirs).Order() {
-			job := jobs[i]
-			config := job.definitions()
-			pkg, receiver, err := l.PackageWithReceiver(outputDirs[i], config.ReceiverPackage, config.ReceiverType, config.TemplatesVariables)
-			if err != nil {
-				printMultiLineError(cmd, err)
-				return err
-			}
-			results, err := analysis.NewRoutes(pkg, receiver)
-			if err != nil {
-				printMultiLineError(cmd, err)
-				return err
-			}
-			for n, result := range results {
-				listing := routesListing{Routes: result, Configuration: job.Report, printConfiguration: n == 0}
-				if len(jobs) > 1 {
-					listing.Key = job.Key
-				}
-				if asJSON && len(jobs) > 1 {
-					collected = append(collected, listing)
-					continue
-				}
-				if err := writeResult(cmd, cmd.OutOrStdout(), listing); err != nil {
-					return err
-				}
-			}
 		}
 		if collected == nil {
 			return nil
