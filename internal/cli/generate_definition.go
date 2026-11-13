@@ -33,7 +33,9 @@ func generateDefinitionCommand(workingDirectory *string, getEnv func(string) str
 		Short:   "Add a route template to a template file",
 		Long: `Add a route template to a template file.
 
-The method stub it prints is a placeholder to rewrite: its result type is any, its body returns nil, and its receiver form follows what muxt infers. Imports are not added. Without --output-file it prints a txtar archive and writes nothing.`,
+Without --output-file it prints the template it would add and a method stub to paste, and changes nothing. With it, it writes the template file and prints the stub.
+
+The stub is a placeholder to rewrite: it returns any and its body returns nil. Its receiver is a pointer when the type declares a pointer method, a value otherwise. Imports are not added.`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cmd.SilenceUsage = true

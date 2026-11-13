@@ -102,7 +102,9 @@ func TestGenerateDefHelpSaysStubIsPlaceholder(t *testing.T) {
 	require.NoError(t, err, "muxt generate def --help")
 	for _, want := range []string{
 		"placeholder to rewrite",
-		"Without --output-file it prints a txtar archive and writes nothing.",
+		"Without --output-file it prints the template it would add and a method stub to paste, and changes nothing.",
+		"With it, it writes the template file and prints the stub.",
+		"Its receiver is a pointer when the type declares a pointer method, a value otherwise.",
 	} {
 		assert.Contains(t, stdout.String(), want, "muxt generate def --help")
 	}

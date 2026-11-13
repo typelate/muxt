@@ -26,7 +26,7 @@ Error: configure generate with fields in /home/me/app/muxt.json instead of flags
 |---|---|---|---|
 | `config` | `configuration` | Write an empty `muxt.json` in the working directory; fails if one exists. | none |
 | `package NAME` | | Create the package directory and its entry ([below](#generate-package)). | the `generate` flags, stored in the entry |
-| `def NAME` | `definition` | Add a route template named `NAME` to a template file. Without `--output-file` it prints a txtar archive of the files it would write and changes nothing. The method stub it prints is a placeholder to rewrite: its result type is `any`, and its body and receiver form follow what muxt infers. Imports are not added. | `--output-file`, `--output-document`, `--output-fragment`, `--use-receiver-type` |
+| `def NAME` | `definition` | Add a route template named `NAME` to a template file. Without `--output-file` it prints the template it would add and a method stub to paste, and changes nothing. With it, it writes the template file and prints the stub. The stub is a placeholder to rewrite: it returns `any` and its body returns `nil`. Its receiver is a pointer when the type declares a pointer method, a value otherwise. Imports are not added. | `--output-file`, `--output-document`, `--output-fragment`, `--use-receiver-type` |
 
 Steps: [move generate flags into muxt.json](../../how-to/muxt-json.md).
 
