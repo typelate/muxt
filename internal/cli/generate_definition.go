@@ -165,7 +165,7 @@ func inspectPackage(target definitionTarget, config generate.RoutesFileConfigura
 		}
 		duplicate := &generate.DuplicateDefinitionError{Name: name}
 		if position, ok := variable.NamePosition(name); ok {
-			duplicate.File, duplicate.Line = relativeTo(wd, position.Filename), position.Line
+			duplicate.File, duplicate.Line = pathBelow(wd, position.Filename), position.Line
 		}
 		return "", duplicate
 	}
@@ -184,10 +184,10 @@ func inspectPackage(target definitionTarget, config generate.RoutesFileConfigura
 	return generate.MethodStubs(pkg, receiver, name, l.StandardLibrary())
 }
 
-// relativeTo returns file relative to dir. The go command may report a path
+// pathBelow returns file relative to dir. The go command may report a path
 // with the symbolic links of a temporary directory resolved, so a file that
 // does not read as below dir is tried against the resolved dir too.
-func relativeTo(dir, file string) string {
+func pathBelow(dir, file string) string {
 	if rel, err := filepath.Rel(dir, file); err == nil && filepath.IsLocal(rel) {
 		return rel
 	}

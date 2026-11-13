@@ -54,7 +54,7 @@ func checkGeneratedFileNames(wd string, sourceFiles []string, pkg source.Package
 	for _, sourceFile := range ordered {
 		name := generatedFileName(sourceFile)
 		if first, ok := writtenFor[name]; ok {
-			return &GeneratedFileClashError{FileName: name, First: relativeTo(wd, first), Second: relativeTo(wd, sourceFile)}
+			return &GeneratedFileClashError{FileName: name, First: relativeOrSame(wd, first), Second: relativeOrSame(wd, sourceFile)}
 		}
 		writtenFor[name] = sourceFile
 	}
@@ -68,7 +68,9 @@ func generatedFileName(sourceFile string) string {
 	return strings.TrimSuffix(filepath.Base(sourceFile), filepath.Ext(sourceFile)) + "_template_routes_gen.go"
 }
 
-func relativeTo(dir, path string) string {
+// relativeOrSame returns path relative to dir, even when that is a ../ path,
+// and path itself when no relative path exists.
+func relativeOrSame(dir, path string) string {
 	if rel, err := filepath.Rel(dir, path); err == nil {
 		return rel
 	}
