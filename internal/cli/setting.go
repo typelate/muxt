@@ -104,6 +104,17 @@ func deprecatedUsage(name, usage string) string {
 	return "DEPRECATED: use --" + name + " instead. " + usage
 }
 
+// untold is the value a run uses for a setting it was not given, which the
+// header leaves out. A setting with Derived compares against Derived alone:
+// a value equal to Default but not to Derived must be recorded, or the
+// header reads back as the derived value.
+func untold[T any](s spec[T]) T {
+	if s.Derived != nil {
+		return s.Derived()
+	}
+	return s.Default
+}
+
 func stringSetting(p *string, s spec[string]) setting {
 	set := setting{
 		name:       s.Name,
@@ -118,7 +129,7 @@ func stringSetting(p *string, s spec[string]) setting {
 			markDeprecated(fs, spelling, s.Name)
 		},
 		arg: func() []string {
-			if *p == s.Default || (s.Derived != nil && *p == s.Derived()) {
+			if *p == untold(s) {
 				return nil
 			}
 			return []string{"--" + s.Name + "=" + *p}
@@ -147,7 +158,7 @@ func boolSetting(p *bool, s spec[bool]) setting {
 		},
 		arg: func() []string {
 			switch {
-			case *p == s.Default || (s.Derived != nil && *p == s.Derived()):
+			case *p == untold(s):
 				return nil
 			case *p:
 				return []string{"--" + s.Name}
@@ -180,7 +191,7 @@ func stringsSetting(p *[]string, s spec[[]string]) setting {
 			markDeprecated(fs, spelling, s.Name)
 		},
 		arg: func() []string {
-			if slices.Equal(*p, s.Default) || (s.Derived != nil && slices.Equal(*p, s.Derived())) {
+			if slices.Equal(*p, untold(s)) {
 				return nil
 			}
 			args := make([]string, 0, len(*p))
@@ -215,7 +226,7 @@ func bytesSetting(p *int64, s spec[int64]) setting {
 			markDeprecated(fs, spelling, s.Name)
 		},
 		arg: func() []string {
-			if *p == s.Default || (s.Derived != nil && *p == s.Derived()) {
+			if *p == untold(s) {
 				return nil
 			}
 			return []string{"--" + s.Name + "=" + strconv.FormatInt(*p, 10)}

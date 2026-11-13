@@ -94,6 +94,7 @@ func TestArgsRecordWhatDiffersFromTheDefault(t *testing.T) {
 		{name: "nothing given", want: nil},
 		{name: "a string whose derived setting follows it", commandLine: []string{"--name=Other"}, want: []string{"--name=Other"}},
 		{name: "a derived string differing from what it derives", commandLine: []string{"--route=Mine"}, want: []string{"--route=Mine"}},
+		{name: "a derived string given its default rather than what it derives", commandLine: []string{"--route="}, want: []string{"--route="}},
 		{name: "a switch turned on", commandLine: []string{"--loud"}, want: []string{"--loud"}},
 		{name: "a switch that defaults on turned off", commandLine: []string{"--quiet=false"}, want: []string{"--quiet=false"}},
 		{name: "a list, one argument each", commandLine: []string{"--use-templates-variable=a,b"}, want: []string{"--use-templates-variable=a", "--use-templates-variable=b"}},

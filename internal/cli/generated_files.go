@@ -129,8 +129,9 @@ func writeGeneratedFiles(stdout io.Writer, files []generate.GeneratedFile, confi
 func writeGeneratedFilesWith(stdout io.Writer, files []generate.GeneratedFile, config generate.RoutesFileConfiguration, replace func(path string, content []byte) (undo func() error, err error)) (map[string]bool, error) {
 	written := make(map[string]bool, len(files))
 	var undos []func() error
+	headerArgs := args(generateSettings(&config))
 	for _, file := range files {
-		content := header.Format(configToArgs(config), config.MuxtVersion) + file.Content
+		content := header.Format(headerArgs, config.MuxtVersion) + file.Content
 		undo, err := replace(file.Path, []byte(content))
 		if err != nil {
 			// Undo in reverse, so a path written twice ends as it began.

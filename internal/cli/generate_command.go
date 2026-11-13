@@ -319,53 +319,6 @@ func checkRecordable(from settingSource, name, value string) error {
 // builder type when --output-template-route-builder-type is not set.
 const routeBuilderSuffix = "Builder"
 
-func configToArgs(config generate.RoutesFileConfiguration) []string {
-	var args []string
-	if !isDefaultTemplatesVariable(&config.TemplatesVariables) {
-		for _, tv := range config.TemplatesVariables {
-			args = append(args, "--"+useTemplatesVariable+"="+tv)
-		}
-	}
-	args = appendValueArg(args, useReceiverType, config.ReceiverType, "")
-	args = appendValueArg(args, useReceiverTypePackage, config.ReceiverPackage, "")
-	args = appendValueArg(args, outputFile, config.OutputFileName, defaultOutputFileName)
-	args = appendValueArg(args, outputReceiverInterface, config.ReceiverInterface, defaultReceiverInterfaceName)
-	args = appendValueArg(args, outputRoutesFunc, config.RoutesFunction, defaultRoutesFunctionName)
-	args = appendValueArg(args, outputTemplateDataType, config.TemplateDataType, defaultTemplateDataTypeName)
-	args = appendValueArg(args, outputSSETemplateDataType, config.SSETemplateDataType, defaultSSETemplateDataTypeName)
-	args = appendValueArg(args, outputTemplateRoutePathsType, config.TemplateRoutePathsTypeName, defaultTemplateRoutePathsTypeName)
-	args = appendValueArg(args, outputTemplateRouteType, config.TemplateRouteTypeName, defaultRouteTypeName(config.TemplateRoutePathsTypeName, config.OutputExportedDefaultIdentifiers))
-	args = appendValueArg(args, outputTemplateRouteBuilderType, config.TemplateRouteBuilderTypeName, config.TemplateRouteTypeName+routeBuilderSuffix)
-	args = appendSwitchArg(args, outputRoutesFuncWithLoggerParam, config.Logger)
-	args = appendSwitchArg(args, outputRoutesFuncWithPathPrefix, config.PathPrefix)
-	args = appendSwitchArg(args, outputRoutesFuncWithMiddlewareParam, config.Middleware)
-	args = appendSwitchArg(args, outputMultipleFiles, config.OutputMultipleFiles)
-	args = appendSwitchArg(args, outputHTMX, config.OutputHTMX)
-	args = appendSwitchArg(args, outputDatastar, config.OutputDatastar)
-	args = appendValueArg(args, outputExportedDefaultIdentifiers, strconv.FormatBool(config.OutputExportedDefaultIdentifiers), "true")
-	args = appendValueArg(args, outputMuxtVersion, strconv.FormatBool(config.OutputMuxtVersion), "true")
-	if config.MultipartMaxMemory > 0 {
-		args = append(args, "--"+outputMultipartMaxMemory+"="+strconv.FormatInt(config.MultipartMaxMemory, 10))
-	}
-	args = appendValueArg(args, inputStaticAssetsDirectory, config.StaticAssetsDirectory, "")
-	args = appendValueArg(args, outputStaticAssetsPath, config.StaticAssetsPath, "")
-	return args
-}
-
-func appendValueArg(args []string, name, value, defaultValue string) []string {
-	if value == defaultValue {
-		return args
-	}
-	return append(args, "--"+name+"="+value)
-}
-
-func appendSwitchArg(args []string, name string, on bool) []string {
-	if !on {
-		return args
-	}
-	return append(args, "--"+name)
-}
-
 func applyDefaults(config *generate.RoutesFileConfiguration, settings []setting, g givenSettings) {
 	config.PackageName = cmp.Or(config.PackageName, defaultPackageName)
 
