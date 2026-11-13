@@ -247,6 +247,12 @@ func read(path string, keys Keys) (*File, error) {
 		return nil, shapeErr
 	}
 	if err != nil {
+		// The json package matches a struct field in any letter case, so a
+		// "Packages" holding a list fails as a Go type: name it as a key the
+		// file does not know instead.
+		if keyErr := checkTopKeys(path, data); keyErr != nil {
+			return nil, keyErr
+		}
 		return nil, fmt.Errorf("parsing %s: %w", path, err)
 	}
 	if err := checkKinds(path, raw, keys); err != nil {
@@ -285,15 +291,8 @@ func read(path string, keys Keys) (*File, error) {
 // and then for each packages entry. json.Unmarshal drops unknown keys without a
 // word, so the top-level keys are read again from data here.
 func (f *File) checkKeys(data []byte, raw rawFile, keys Keys) error {
-	var top map[string]json.RawMessage
-	if err := json.Unmarshal(data, &top); err != nil {
-		return fmt.Errorf("parsing %s: %w", f.Name, err)
-	}
-	topKnown := []string{"package_defaults", "packages"}
-	for _, key := range slices.Sorted(maps.Keys(top)) {
-		if !slices.Contains(topKnown, key) {
-			return &UnknownKeyError{Path: f.Name, Key: key, Suggestion: closestKey(key, topKnown)}
-		}
+	if err := checkTopKeys(f.Name, data); err != nil {
+		return err
 	}
 	// Sorted, so a did-you-mean hint between two equally close keys is the
 	// same every run.
@@ -307,6 +306,23 @@ func (f *File) checkKeys(data []byte, raw rawFile, keys Keys) error {
 		}
 		if err := checkEntryKeys(f.Name, fmt.Sprintf("packages[%q]", key), raw.Packages[key], keys.Deprecated, known); err != nil {
 			return err
+		}
+	}
+	return nil
+}
+
+// checkTopKeys returns an *UnknownKeyError for the first top-level key of
+// data, in sorted order, other than package_defaults and packages, matched in
+// their exact letter case. data is a JSON object, the file at path.
+func checkTopKeys(path string, data []byte) error {
+	var top map[string]json.RawMessage
+	if err := json.Unmarshal(data, &top); err != nil {
+		return fmt.Errorf("parsing %s: %w", path, err)
+	}
+	topKnown := []string{"package_defaults", "packages"}
+	for _, key := range slices.Sorted(maps.Keys(top)) {
+		if !slices.Contains(topKnown, key) {
+			return &UnknownKeyError{Path: path, Key: key, Suggestion: closestKey(key, topKnown)}
 		}
 	}
 	return nil

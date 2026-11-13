@@ -225,6 +225,37 @@ func TestFindRejectsARepeatedKey(t *testing.T) {
 	}
 }
 
+// TestFindRejectsATopLevelKeyInAnotherCase states that a top-level key in
+// another letter case is an unknown key, even when its value is the wrong
+// shape, and not a json error naming this package's Go types.
+func TestFindRejectsATopLevelKeyInAnotherCase(t *testing.T) {
+	for _, tt := range []struct {
+		name, file, want string
+	}{
+		{
+			name: "packages as a list",
+			file: `{"Packages": []}`,
+			want: `unknown key "Packages"; did you mean "packages"?`,
+		},
+		{
+			name: "package defaults as a number",
+			file: `{"Package_Defaults": 3, "packages": {}}`,
+			want: `unknown key "Package_Defaults"; did you mean "package_defaults"?`,
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := writeFile(t, tt.file)
+
+			_, _, err := composite.Find(dir, testKeys())
+
+			var typed *composite.UnknownKeyError
+			require.ErrorAs(t, err, &typed, "Find error %v", err)
+			path := filepath.Join(dir, composite.FileName)
+			assert.Equal(t, path+": "+tt.want, err.Error(), "message")
+		})
+	}
+}
+
 // TestFindAcceptsNullWhereAnObjectGoes states that null is an absent object
 // everywhere the shape check wants one.
 func TestFindAcceptsNullWhereAnObjectGoes(t *testing.T) {
