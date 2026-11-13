@@ -15,6 +15,7 @@ import (
 	"github.com/spf13/pflag"
 	"golang.org/x/tools/go/packages"
 
+	"github.com/typelate/muxt/internal/composite"
 	"github.com/typelate/muxt/internal/generate"
 	"github.com/typelate/muxt/internal/load"
 	"github.com/typelate/muxt/internal/muxt"
@@ -93,6 +94,16 @@ func generateRunner(loadPackages packageLoader) func(*cobra.Command, []generateJ
 			return err
 		}
 		warnPartialAST(stderr, pl)
+		// The first load already holds a package that did not load, so it
+		// is refused before an earlier entry is written.
+		for _, job := range jobs {
+			if err := load.CheckLoaded(job.Config.OutputDirectory(job.Dir), pl); err != nil {
+				if job.File == "" {
+					return err
+				}
+				return &composite.InvalidEntryError{Path: job.File, Where: fmt.Sprintf("packages[%q]", job.Key), Err: err}
+			}
+		}
 		// changed holds the directories written since the last load. A load
 		// that came before a write saw its package without the new files, so
 		// a job importing one of them needs a fresh load; one that imports

@@ -237,3 +237,26 @@ func TestGenerateReloadsPackagesWhenADependencyChanged(t *testing.T) {
 	require.NoError(t, err, "second generate")
 	assert.Equal(t, 1, loads, "package loads when both routes files are current")
 }
+
+// TestGenerateChecksEveryPackageLoadedBeforeWriting states that when the
+// package of a later muxt.json entry has no Go files, a flagless muxt generate
+// fails naming the file and that entry, and writes nothing for the entries
+// before it.
+func TestGenerateChecksEveryPackageLoadedBeforeWriting(t *testing.T) {
+	if testing.Short() {
+		t.Skip("loads packages with the go command")
+	}
+	dir := entryModule(t, map[string]string{"a": "A"}, nil)
+	require.NoError(t, os.Mkdir(filepath.Join(dir, "empty"), 0o755))
+	writeTestFile(t, dir, composite.FileName, `{"packages": {"example.com/m/a": {"use_receiver_type": "A"}, "example.com/m/empty": {}}}`)
+
+	_, _, err := generateWithLoader(t, dir)
+
+	var invalid *composite.InvalidEntryError
+	require.ErrorAs(t, err, &invalid, "error %v", err)
+	assert.Equal(t, filepath.Join(dir, composite.FileName), invalid.Path, "path")
+	assert.Equal(t, `packages["example.com/m/empty"]`, invalid.Where, "entry")
+	want := filepath.Join(dir, composite.FileName) + `: packages["example.com/m/empty"]: package example.com/m/empty at ` + filepath.Join(dir, "empty") + ` has no Go files for this build`
+	assert.Equal(t, want, err.Error(), "message")
+	assert.NoFileExists(t, filepath.Join(dir, "a", "template_routes.go"), "an earlier entry's routes file")
+}

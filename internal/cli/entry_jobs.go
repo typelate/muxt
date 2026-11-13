@@ -15,8 +15,10 @@ import (
 )
 
 // generateJob is one package directory and what to generate it with. Key is
-// the packages key the configuration came from; it is empty when flags gave it.
+// the packages key the configuration came from, and File the absolute path of
+// the muxt.json holding it; both are empty when flags gave the configuration.
 type generateJob struct {
+	File   string
 	Key    string
 	Dir    string
 	Config generate.RoutesFileConfiguration
@@ -151,7 +153,7 @@ func entryJobs(wd string, getEnv func(string) string, version func() (string, bo
 		if err != nil {
 			return nil, nil, false, &composite.InvalidEntryError{Path: f.Name, Where: fmt.Sprintf("packages[%q]", k), Err: err}
 		}
-		jobs = append(jobs, generateJob{Key: k, Dir: dir, Config: config})
+		jobs = append(jobs, generateJob{File: f.Name, Key: k, Dir: dir, Config: config})
 	}
 	return f, jobs, true, nil
 }

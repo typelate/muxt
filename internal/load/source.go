@@ -134,3 +134,14 @@ func Receiver(dir string, pl []*packages.Package, packagePath, ident string) (*t
 	}
 	return findType(pl, cmp.Or(packagePath, pkg.PkgPath), ident)
 }
+
+// CheckLoaded returns the error Package would for dir when pl holds no package
+// there, so a run can refuse before it writes anything what would stop that
+// directory's job anyway. A package that loaded with type errors is present
+// and passes: generate runs before a package compiles.
+func CheckLoaded(dir string, pl []*packages.Package) error {
+	if _, ok := packageInDirectory(pl, dir); !ok {
+		return NoPackageError(dir, pl)
+	}
+	return nil
+}
