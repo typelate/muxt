@@ -297,7 +297,7 @@ func TestEncodeRecordsTheSettingsGivenByCurrentName(t *testing.T) {
 	for key, value := range e {
 		got[key] = string(value)
 	}
-	assert.Equal(t, map[string]string{"name": `"Mount"`, "loud": `true`, "limit": `"61 MiB"`}, got, "recorded entry; a size is recorded as the flag prints it")
+	assert.Equal(t, map[string]string{"name": `"Mount"`, "loud": `true`, "limit": `"64000000"`}, got, "recorded entry; a size is recorded as exact decimal bytes")
 }
 
 func TestEncodeRecordsADeprecatedSpellingUnderTheCurrentKey(t *testing.T) {

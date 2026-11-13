@@ -72,11 +72,6 @@ func TestGeneratePackageRecordsToday(t *testing.T) {
 			commandLine: "generate package a --templates-variable x",
 			want:        "{\n\t\"packages\": {\n\t\t\"example.com/m/a\": {\n\t\t\t\"use_receiver_type\": \"T\",\n\t\t\t\"use_templates_variable\": [\n\t\t\t\t\"x\"\n\t\t\t]\n\t\t}\n\t}\n}\n",
 		},
-		{
-			name:        "a byte size is recorded as the human-readable form of the bytes",
-			commandLine: "generate package a --output-multipart-max-memory=64MB",
-			want:        "{\n\t\"packages\": {\n\t\t\"example.com/m/a\": {\n\t\t\t\"output_multipart_max_memory\": \"61 MiB\",\n\t\t\t\"use_receiver_type\": \"T\"\n\t\t}\n\t}\n}\n",
-		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			assert.Equal(t, tt.want, muxtJSONAfter(t, `{"packages": {}}`, tt.commandLine), "muxt.json")

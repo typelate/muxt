@@ -271,9 +271,8 @@ func bytesSetting(p *int64, s spec[int64]) setting {
 			}
 			return byteSize{p: p}.Set(text)
 		},
-		// The flag prints the size the run uses, 32 MiB when none was set,
-		// in a form its parser reads back.
-		encode: func() (json.RawMessage, error) { return json.Marshal(byteSize{p: p}.String()) },
+		// Exact bytes: a rounded "61 MiB" would read back as another size.
+		encode: func() (json.RawMessage, error) { return json.Marshal(strconv.FormatInt(*p, 10)) },
 	}
 	if s.Derived != nil {
 		set.derive = func() { *p = s.Derived() }

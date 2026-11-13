@@ -145,6 +145,11 @@ func TestGeneratePackageRecordsGivenFlags(t *testing.T) {
 			want:        map[string]string{"use_receiver_type": `"X"`, "output_routes_func": `"R"`},
 			wantAbsent:  []string{"receiver_type", "routes_func"},
 		},
+		{
+			name:        "a byte size is recorded as exact decimal bytes",
+			commandLine: "generate package workspace --output-multipart-max-memory=64MB",
+			want:        map[string]string{"output_multipart_max_memory": `"64000000"`},
+		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			root := moduleDir(t)
