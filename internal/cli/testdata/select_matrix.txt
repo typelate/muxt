@@ -1,3 +1,23 @@
+# Each cell is "== situation: command line", then what that command line chose,
+# one line per job, or the error it ended in. Paths are relative to the module
+# directory; $BASE in an error is the module directory.
+#
+# Fields of a job line (generate, routes, check, calls, callers, mutations):
+#   key               the muxt.json packages key of the entry, "" without one
+#   file              the muxt.json the entry came from, "" without one
+#   dir               the package directory the job runs in
+#   receiver          the receiver type the job resolved, and receiver-package its package
+#   templates         the templates variables the job reads
+#   output            the generated file name (generate)
+#   htmx, logger      the generate settings the job resolved
+#   verbose           whether -v was given
+#   allow-unused      whether check ignores unused templates
+#   report            for bare muxt, each setting group as SOURCE@FILE, in the
+#                     order a setting looks for its value
+# A load line is what generate def asked the loader for: the root, the
+# directories and the receiver package patterns. An error line is the error the
+# command line ended in; generate def ends in the stand-in load's error.
+
 == no muxt.json, root: generate generate -v
 generate key="" file="" dir="." receiver="" receiver-package="" templates=[templates] output="template_routes.go" htmx=false logger=false verbose=true
 == no muxt.json, root: muxt
@@ -10,7 +30,7 @@ calls dir="." templates=[templates]
 callers dir="." templates=[templates]
 == no muxt.json, root: def generate def GET /things/{id} GetThing(ctx, id)
 load root="." dirs=["."] patterns=[""]
-error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: no Go package found at $BASE
+error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: the selection test loads no package
 == no muxt.json, root: mutations test-template-mutations --dry-run
 mutations dir="." templates=[templates]
 == no muxt.json, package: generate generate -v
@@ -25,7 +45,7 @@ calls dir="contacts" templates=[templates]
 callers dir="contacts" templates=[templates]
 == no muxt.json, package: def generate def GET /things/{id} GetThing(ctx, id)
 load root="contacts" dirs=["contacts"] patterns=[""]
-error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: no Go package found at $BASE/contacts
+error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: the selection test loads no package
 == no muxt.json, package: mutations test-template-mutations --dry-run
 mutations dir="contacts" templates=[templates]
 == entries, file directory: generate generate -v
@@ -50,7 +70,7 @@ callers dir="inventory" templates=[catalogTemplates]
 callers dir="tasks" templates=[templates]
 == entries, file directory: def generate def GET /things/{id} GetThing(ctx, id)
 load root="." dirs=["."] patterns=[""]
-error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: no Go package found at $BASE
+error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: the selection test loads no package
 == entries, file directory: mutations test-template-mutations --dry-run
 error: $BASE/muxt.json: test-template-mutations tests one package; pass one of: contacts inventory tasks
 == entries and root entry, file directory: generate generate -v
@@ -80,7 +100,7 @@ callers dir="inventory" templates=[catalogTemplates]
 callers dir="tasks" templates=[templates]
 == entries and root entry, file directory: def generate def GET /things/{id} GetThing(ctx, id)
 load root="." dirs=["."] patterns=[""]
-error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: no Go package found at $BASE
+error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: the selection test loads no package
 == entries and root entry, file directory: mutations test-template-mutations --dry-run
 mutations dir="." templates=[templates]
 == entries, contacts: generate generate -v
@@ -95,7 +115,7 @@ calls dir="contacts" templates=[templates]
 callers dir="contacts" templates=[templates]
 == entries, contacts: def generate def GET /things/{id} GetThing(ctx, id)
 load root="contacts" dirs=["contacts"] patterns=["example.com/fieldkit/types"]
-error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: no Go package found at $BASE/contacts
+error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: the selection test loads no package
 == entries, contacts: mutations test-template-mutations --dry-run
 mutations dir="contacts" templates=[templates]
 == entries, inventory: generate generate -v
@@ -110,7 +130,7 @@ calls dir="inventory" templates=[catalogTemplates]
 callers dir="inventory" templates=[catalogTemplates]
 == entries, inventory: def generate def GET /things/{id} GetThing(ctx, id)
 load root="inventory" dirs=["inventory"] patterns=["example.com/fieldkit/types"]
-error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: no Go package found at $BASE/inventory
+error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: the selection test loads no package
 == entries, inventory: mutations test-template-mutations --dry-run
 mutations dir="inventory" templates=[catalogTemplates]
 == entries, tasks: generate generate -v
@@ -125,7 +145,7 @@ calls dir="tasks" templates=[templates]
 callers dir="tasks" templates=[templates]
 == entries, tasks: def generate def GET /things/{id} GetThing(ctx, id)
 load root="tasks" dirs=["tasks"] patterns=["example.com/fieldkit/types"]
-error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: no Go package found at $BASE/tasks
+error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: the selection test loads no package
 == entries, tasks: mutations test-template-mutations --dry-run
 mutations dir="tasks" templates=[templates]
 == entries, no entry for extra: generate generate -v
@@ -140,7 +160,7 @@ calls dir="extra" templates=[templates]
 callers dir="extra" templates=[templates]
 == entries, no entry for extra: def generate def GET /things/{id} GetThing(ctx, id)
 load root="extra" dirs=["extra"] patterns=[""]
-error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: no Go package found at $BASE/extra
+error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: the selection test loads no package
 == entries, no entry for extra: mutations test-template-mutations --dry-run
 mutations dir="extra" templates=[templates]
 == setting flags, contacts has an entry: generate generate -v --use-receiver-type=Server --use-templates-variable=templates
@@ -169,7 +189,7 @@ error: configure list-template-calls with fields in $BASE/muxt.json instead of f
 error: configure list-template-callers with fields in $BASE/muxt.json instead of flags: --use-templates-variable (use_templates_variable)
 == setting flags, entry names no receiver: def generate def GET /things/{id} GetThing(ctx, id) --use-receiver-type=Server
 load root="contacts" dirs=["contacts"] patterns=[""]
-error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: no Go package found at $BASE/contacts
+error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: the selection test loads no package
 == setting flags, entry names no receiver: mutations test-template-mutations --dry-run --use-templates-variable=templates
 error: configure test-template-mutations with fields in $BASE/muxt.json instead of flags: --use-templates-variable (use_templates_variable)
 == setting flags, file directory is not an entry: generate generate -v --use-receiver-type=Server
@@ -184,7 +204,7 @@ calls dir="." templates=[pages]
 callers dir="." templates=[pages]
 == setting flags, file directory is not an entry: def generate def GET /things/{id} GetThing(ctx, id) --use-receiver-type=Server
 load root="." dirs=["."] patterns=[""]
-error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: no Go package found at $BASE
+error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: the selection test loads no package
 == setting flags, file directory is not an entry: mutations test-template-mutations --dry-run --use-templates-variable=pages
 mutations dir="." templates=[pages]
 == setting flags, extra has no entry: generate generate -v --use-receiver-type=Server
@@ -199,7 +219,7 @@ calls dir="extra" templates=[pages]
 callers dir="extra" templates=[pages]
 == setting flags, extra has no entry: def generate def GET /things/{id} GetThing(ctx, id) --use-receiver-type=Server
 load root="extra" dirs=["extra"] patterns=[""]
-error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: no Go package found at $BASE/extra
+error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: the selection test loads no package
 == setting flags, extra has no entry: mutations test-template-mutations --dry-run --use-templates-variable=pages
 mutations dir="extra" templates=[pages]
 == empty packages, file directory: generate generate -v
@@ -214,7 +234,7 @@ calls dir="." templates=[templates]
 callers dir="." templates=[templates]
 == empty packages, file directory: def generate def GET /things/{id} GetThing(ctx, id)
 load root="." dirs=["."] patterns=[""]
-error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: no Go package found at $BASE
+error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: the selection test loads no package
 == empty packages, file directory: mutations test-template-mutations --dry-run
 mutations dir="." templates=[templates]
 == empty packages, contacts: generate generate -v
@@ -229,7 +249,7 @@ calls dir="contacts" templates=[templates]
 callers dir="contacts" templates=[templates]
 == empty packages, contacts: def generate def GET /things/{id} GetThing(ctx, id)
 load root="contacts" dirs=["contacts"] patterns=[""]
-error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: no Go package found at $BASE/contacts
+error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: the selection test loads no package
 == empty packages, contacts: mutations test-template-mutations --dry-run
 mutations dir="contacts" templates=[templates]
 == stale entry, file directory: generate generate -v
@@ -244,7 +264,7 @@ error: $BASE/muxt.json: packages["example.com/fieldkit/ghost"]: directory $BASE/
 error: $BASE/muxt.json: packages["example.com/fieldkit/ghost"]: directory $BASE/ghost does not exist
 == stale entry, file directory: def generate def GET /things/{id} GetThing(ctx, id)
 load root="." dirs=["."] patterns=[""]
-error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: no Go package found at $BASE
+error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: the selection test loads no package
 == stale entry, file directory: mutations test-template-mutations --dry-run
 error: $BASE/muxt.json: test-template-mutations tests one package; pass one of: contacts ghost
 == stale entry, contacts: generate generate -v
@@ -259,7 +279,7 @@ calls dir="contacts" templates=[templates]
 callers dir="contacts" templates=[templates]
 == stale entry, contacts: def generate def GET /things/{id} GetThing(ctx, id)
 load root="contacts" dirs=["contacts"] patterns=[""]
-error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: no Go package found at $BASE/contacts
+error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: the selection test loads no package
 == stale entry, contacts: mutations test-template-mutations --dry-run
 mutations dir="contacts" templates=[templates]
 == listed directory that does not exist: generate generate -v
@@ -274,7 +294,7 @@ calls dir="ghost" templates=[templates]
 callers dir="ghost" templates=[templates]
 == listed directory that does not exist: def generate def GET /things/{id} GetThing(ctx, id)
 load root="ghost" dirs=["ghost"] patterns=[""]
-error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: no Go package found at $BASE/ghost
+error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: the selection test loads no package
 == listed directory that does not exist: mutations test-template-mutations --dry-run
 mutations dir="ghost" templates=[templates]
 == listed directory that does not exist, flags: generate generate -v --use-receiver-type=Server
@@ -289,7 +309,7 @@ calls dir="ghost" templates=[pages]
 callers dir="ghost" templates=[pages]
 == listed directory that does not exist, flags: def generate def GET /things/{id} GetThing(ctx, id) --use-receiver-type=Server
 load root="ghost" dirs=["ghost"] patterns=[""]
-error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: no Go package found at $BASE/ghost
+error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: the selection test loads no package
 == listed directory that does not exist, flags: mutations test-template-mutations --dry-run --use-templates-variable=pages
 mutations dir="ghost" templates=[pages]
 == -C module: generate generate -v
@@ -314,7 +334,7 @@ callers dir="inventory" templates=[catalogTemplates]
 callers dir="tasks" templates=[templates]
 == -C module: def generate def GET /things/{id} GetThing(ctx, id)
 load root="." dirs=["."] patterns=[""]
-error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: no Go package found at $BASE
+error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: the selection test loads no package
 == -C module: mutations test-template-mutations --dry-run
 error: $BASE/muxt.json: test-template-mutations tests one package; pass one of: contacts inventory tasks
 == -C inventory: generate generate -v
@@ -329,7 +349,7 @@ calls dir="inventory" templates=[catalogTemplates]
 callers dir="inventory" templates=[catalogTemplates]
 == -C inventory: def generate def GET /things/{id} GetThing(ctx, id)
 load root="inventory" dirs=["inventory"] patterns=["example.com/fieldkit/types"]
-error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: no Go package found at $BASE/inventory
+error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: the selection test loads no package
 == -C inventory: mutations test-template-mutations --dry-run
 mutations dir="inventory" templates=[catalogTemplates]
 == -C extra: generate generate -v
@@ -344,7 +364,7 @@ calls dir="extra" templates=[templates]
 callers dir="extra" templates=[templates]
 == -C extra: def generate def GET /things/{id} GetThing(ctx, id)
 load root="extra" dirs=["extra"] patterns=[""]
-error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: no Go package found at $BASE/extra
+error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: the selection test loads no package
 == -C extra: mutations test-template-mutations --dry-run
 mutations dir="extra" templates=[templates]
 == -C directory that does not exist, below the file: generate generate -v
@@ -359,7 +379,7 @@ calls dir="typo" templates=[templates]
 callers dir="typo" templates=[templates]
 == -C directory that does not exist, below the file: def generate def GET /things/{id} GetThing(ctx, id)
 load root="typo" dirs=["typo"] patterns=[""]
-error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: no Go package found at $BASE/typo
+error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: the selection test loads no package
 == -C directory that does not exist, below the file: mutations test-template-mutations --dry-run
 mutations dir="typo" templates=[templates]
 == -C directory that does not exist, no muxt.json: generate generate -v
@@ -374,7 +394,7 @@ calls dir="typo" templates=[templates]
 callers dir="typo" templates=[templates]
 == -C directory that does not exist, no muxt.json: def generate def GET /things/{id} GetThing(ctx, id)
 load root="typo" dirs=["typo"] patterns=[""]
-error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: no Go package found at $BASE/typo
+error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: the selection test loads no package
 == -C directory that does not exist, no muxt.json: mutations test-template-mutations --dry-run
 mutations dir="typo" templates=[templates]
 == -C directory that does not exist, flag: generate generate -v --use-receiver-type=Server
@@ -389,7 +409,7 @@ calls dir="typo" templates=[pages]
 callers dir="typo" templates=[pages]
 == -C directory that does not exist, flag: def generate def GET /things/{id} GetThing(ctx, id) --use-receiver-type=Server
 load root="typo" dirs=["typo"] patterns=[""]
-error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: no Go package found at $BASE/typo
+error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: the selection test loads no package
 == -C directory that does not exist, flag: mutations test-template-mutations --dry-run --use-templates-variable=pages
 mutations dir="typo" templates=[pages]
 == .: check inventory

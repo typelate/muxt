@@ -107,6 +107,37 @@ func (r *selectionRecord) line(format string, args ...any) {
 	_, _ = fmt.Fprintf(&r.out, format+"\n", args...)
 }
 
+// standInLoadError is what the recording loader returns, so a cell that
+// reaches a load ends in a message that says the load was a stand-in, not in
+// an error a real load could give.
+type standInLoadError struct{}
+
+func (standInLoadError) Error() string { return "the selection test loads no package" }
+
+// selectionHeader opens the golden. The cells' own parse ignores everything
+// before the first "== ".
+const selectionHeader = `# Each cell is "== situation: command line", then what that command line chose,
+# one line per job, or the error it ended in. Paths are relative to the module
+# directory; $BASE in an error is the module directory.
+#
+# Fields of a job line (generate, routes, check, calls, callers, mutations):
+#   key               the muxt.json packages key of the entry, "" without one
+#   file              the muxt.json the entry came from, "" without one
+#   dir               the package directory the job runs in
+#   receiver          the receiver type the job resolved, and receiver-package its package
+#   templates         the templates variables the job reads
+#   output            the generated file name (generate)
+#   htmx, logger      the generate settings the job resolved
+#   verbose           whether -v was given
+#   allow-unused      whether check ignores unused templates
+#   report            for bare muxt, each setting group as SOURCE@FILE, in the
+#                     order a setting looks for its value
+# A load line is what generate def asked the loader for: the root, the
+# directories and the receiver package patterns. An error line is the error the
+# command line ended in; generate def ends in the stand-in load's error.
+
+`
+
 // recordSelection runs the command line in wd with runners that record the
 // jobs they are given, and a loader that records the directories it is asked
 // for, so nothing is loaded. It returns the record and the error the command
@@ -163,12 +194,12 @@ func recordSelection(base, wd string, args ...string) (string, error) {
 		// package_defaults and entries can set, is what the chosen
 		// configuration shows. The receiver type, the templates variables
 		// and the method stub need a loaded package, and stay pinned by the
-		// generate def tests and scripts. The empty load ends in "no
-		// Go package found", where a real load ends in the package's own
-		// error; that text says nothing about selection.
+		// generate def tests and scripts. The load returns standInLoadError,
+		// where a real load ends in the package's own error; that text says
+		// nothing about selection.
 		load: func(root string, dirs, patterns []string) (*load.Loaded, error) {
 			r.line("load root=%q dirs=%q patterns=%q", r.rel(root), r.rels(dirs), patterns)
-			return &load.Loaded{}, nil
+			return nil, standInLoadError{}
 		},
 	})
 	if err != nil {
@@ -339,6 +370,7 @@ func TestEveryCommandSelects(t *testing.T) {
 	}
 	if *update {
 		var sb strings.Builder
+		sb.WriteString(selectionHeader)
 		for i, c := range cells {
 			fmt.Fprintf(&sb, "== %s\n%s", c.name, got[i])
 		}
