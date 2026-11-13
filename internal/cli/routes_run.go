@@ -143,6 +143,6 @@ func routesRunner(loadPackages packageLoader) func(*cobra.Command, []routesJob) 
 		if collected == nil {
 			return nil
 		}
-		return writeJSONList(cmd.OutOrStdout(), collected)
+		return writeListings(cmd.OutOrStdout(), collected)
 	}
 }

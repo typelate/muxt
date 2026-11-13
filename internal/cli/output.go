@@ -118,13 +118,13 @@ func isJSON(cmd *cobra.Command) (bool, error) {
 	return format == "json", err
 }
 
-// writeJSONList writes items as one JSON array, for a run whose several
-// results would otherwise be several top-level values that no JSON parser reads
-// as a document.
-func writeJSONList[T any](w io.Writer, items []T) error {
-	buf, err := json.Marshal(items, resultJSON)
+// writeListings writes listings as one JSON array, for a run whose several
+// results would otherwise be several top-level values that no JSON parser
+// reads as a document.
+func writeListings(w io.Writer, listings []routesListing) error {
+	buf, err := json.Marshal(listings, resultJSON)
 	if err != nil {
-		return err
+		return fmt.Errorf("encoding route listings: %w", err)
 	}
 	_, err = w.Write(append(buf, '\n'))
 	return err

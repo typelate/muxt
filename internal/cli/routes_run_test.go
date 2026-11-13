@@ -392,6 +392,7 @@ func TestRoutesJSONOverSeveralEntriesIsOneDocument(t *testing.T) {
 	require.NoError(t, err, "muxt --format json")
 	var several []struct{ Key string }
 	require.NoError(t, json.Unmarshal([]byte(stdout), &several), "output:\n%s", stdout)
+	require.Len(t, several, 2, "output:\n%s", stdout)
 	assert.Equal(t, []string{testModule, testModule + "/workspace"}, []string{several[0].Key, several[1].Key}, "keys")
 
 	stdout, _, err = listWithLoader(t, filepath.Join(dir, "workspace"), "--format", "json")
