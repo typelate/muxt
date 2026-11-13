@@ -134,7 +134,7 @@ func TestGenerateDefWithoutOutputFilePrintsStubInArchive(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			dir := definitionModule(t, "", nil)
 
-			stdout, stderr, err := runCommandArgs(dir, []string{"generate", "def", tt.route, "--use-receiver-type=T"}, runners{load: loadFromGoCommand})
+			stdout, stderr, err := runCommandArgs(dir, []string{"generate", "def", tt.route, "--use-receiver-type=T"}, runners{load: load.InDirectories})
 
 			require.NoError(t, err)
 			want := "-- " + tt.base + ".gohtml --\n" + generate.DefineBlock(tt.route, generate.FragmentBody) + "\n" +
@@ -242,7 +242,7 @@ func TestGenerateDefRefusesNameAlreadyDefined(t *testing.T) {
 		"index.gohtml": "{{define \"GET /bar Bar()\"}}{{end}}\n\n{{define \"GET /foo Index()\"}}{{end}}\n",
 	})
 
-	_, _, err := runCommandArgs(dir, []string{"generate", "def", "GET /foo Index()", "--output-file=other.gohtml"}, runners{load: loadFromGoCommand})
+	_, _, err := runCommandArgs(dir, []string{"generate", "def", "GET /foo Index()", "--output-file=other.gohtml"}, runners{load: load.InDirectories})
 
 	require.EqualError(t, err, `template "GET /foo Index()" is already defined at index.gohtml:3`)
 	duplicate, ok := errors.AsType[*generate.DuplicateDefinitionError](err)
@@ -262,7 +262,7 @@ func TestGenerateDefSaysWhenItCannotCheckForDuplicates(t *testing.T) {
 	writeTestFile(t, dir, "go.mod", "module example.com/m\n\ngo 1.24\n")
 	writeTestFile(t, dir, "m.go", "package m\n")
 
-	_, _, err := runCommandArgs(dir, []string{"generate", "def", "GET /foo Index()", "--output-file=index.gohtml"}, runners{load: loadFromGoCommand})
+	_, _, err := runCommandArgs(dir, []string{"generate", "def", "GET /foo Index()", "--output-file=index.gohtml"}, runners{load: load.InDirectories})
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), `cannot check whether "GET /foo Index()" is already defined`)
@@ -354,7 +354,7 @@ func TestGenerateDefPrintsMethodStubForUndefinedMethod(t *testing.T) {
 			dir := definitionModule(t, tt.methods, files)
 			args := append([]string{"generate", "def", "GET /foo/{id} Index(ctx, id)", "--output-file=index.gohtml"}, tt.flags...)
 
-			stdout, _, err := runCommandArgs(dir, args, runners{load: loadFromGoCommand})
+			stdout, _, err := runCommandArgs(dir, args, runners{load: load.InDirectories})
 
 			require.NoError(t, err)
 			assert.Equal(t, tt.want, stdout, "stdout")
@@ -405,7 +405,7 @@ func TestGenerateDefPrintsNoStubForDefinedMethod(t *testing.T) {
 	require.NoError(t, err)
 	writeTestFile(t, dir, "m.go", strings.Replace(string(goFile), "import (\n", "import (\n\t\"context\"\n", 1))
 
-	stdout, _, err := runCommandArgs(dir, []string{"generate", "def", "GET /foo/{id} Index(ctx, id)", "--output-file=index.gohtml"}, runners{load: loadFromGoCommand})
+	stdout, _, err := runCommandArgs(dir, []string{"generate", "def", "GET /foo/{id} Index(ctx, id)", "--output-file=index.gohtml"}, runners{load: load.InDirectories})
 
 	require.NoError(t, err)
 	assert.Empty(t, stdout, "stdout")
@@ -440,7 +440,7 @@ func TestGenerateDefRefusesFileTheTemplatesVariableDoesNotRead(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			dir := module(t, tt.embed, tt.parse)
 
-			_, _, err := runCommandArgs(dir, []string{"generate", "def", "GET /x X()", "--output-file=extra.gohtml"}, runners{load: loadFromGoCommand})
+			_, _, err := runCommandArgs(dir, []string{"generate", "def", "GET /x X()", "--output-file=extra.gohtml"}, runners{load: load.InDirectories})
 
 			require.EqualError(t, err, fmt.Sprintf(tt.want, filepath.Join(dir, "extra.gohtml")))
 			_, ok := errors.AsType[*load.UnreadFileError](err)
@@ -451,7 +451,7 @@ func TestGenerateDefRefusesFileTheTemplatesVariableDoesNotRead(t *testing.T) {
 	t.Run("both match", func(t *testing.T) {
 		dir := module(t, "*.gohtml", `"*.gohtml"`)
 
-		_, _, err := runCommandArgs(dir, []string{"generate", "def", "GET /x X()", "--output-file=extra.gohtml"}, runners{load: loadFromGoCommand})
+		_, _, err := runCommandArgs(dir, []string{"generate", "def", "GET /x X()", "--output-file=extra.gohtml"}, runners{load: load.InDirectories})
 
 		require.NoError(t, err)
 		assert.FileExists(t, filepath.Join(dir, "extra.gohtml"))

@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/typelate/muxt/internal/analysis"
+	"github.com/typelate/muxt/internal/load"
 	"github.com/typelate/muxt/internal/mutation"
 )
 
@@ -28,14 +29,14 @@ const (
 
 func Commands(wd string, args []string, getEnv func(string) string, stdin io.Reader, stdout, stderr io.Writer) error {
 	return commands(wd, args, getEnv, cliVersion, stdin, stdout, stderr, runners{
-		routes:    routesRunner(loadFromGoCommand),
-		check:     checkRunner(loadFromGoCommand),
-		generate:  generateRunner(loadFromGoCommand),
-		callers:   callersRunner(loadFromGoCommand),
-		calls:     callsRunner(loadFromGoCommand),
+		routes:    routesRunner(load.InDirectories),
+		check:     checkRunner(load.InDirectories),
+		generate:  generateRunner(load.InDirectories),
+		callers:   callersRunner(load.InDirectories),
+		calls:     callsRunner(load.InDirectories),
 		mutations: runTemplateMutations,
 		format:    runFormatCommand,
-		load:      loadFromGoCommand,
+		load:      load.InDirectories,
 	})
 }
 

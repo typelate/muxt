@@ -69,7 +69,7 @@ func generateWithLoader(t *testing.T, dir string, flags ...string) (stdout strin
 	t.Helper()
 	counting := func(root string, dirs, patterns []string) (*load.Loaded, error) {
 		loads++
-		return loadFromGoCommand(root, dirs, patterns)
+		return load.InDirectories(root, dirs, patterns)
 	}
 	var out bytes.Buffer
 	err = commands(dir, append([]string{"generate"}, flags...), func(string) string { return "" }, func() (string, bool) { return "v1.2.3", true }, strings.NewReader(""), &out, &bytes.Buffer{}, runners{
@@ -341,7 +341,7 @@ func TestGenerateOfOnePackagePrintsItsLoadDiagnostic(t *testing.T) {
 			var stdout, stderr bytes.Buffer
 
 			err := commands(dir, append([]string{"generate"}, tt.flags...), func(string) string { return "" }, func() (string, bool) { return "v1.2.3", true }, strings.NewReader(""), &stdout, &stderr, runners{
-				generate: generateRunner(loadFromGoCommand),
+				generate: generateRunner(load.InDirectories),
 			})
 
 			var lookup *load.PackageLookupError

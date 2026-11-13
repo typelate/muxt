@@ -24,11 +24,6 @@ import (
 // extra imports.
 type packageLoader func(root string, dirs, patterns []string) (*load.Loaded, error)
 
-// loadFromGoCommand is the packageLoader that runs the go command.
-func loadFromGoCommand(root string, dirs, patterns []string) (*load.Loaded, error) {
-	return load.InDirectories(root, dirs, patterns)
-}
-
 // generateRunner generates jobs from one load, one directory at a time, a
 // package after the packages it imports. A job's files are all written before
 // the next job is resolved, so a failure leaves the earlier jobs written.

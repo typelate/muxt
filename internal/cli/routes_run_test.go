@@ -137,7 +137,7 @@ func listWithLoader(t *testing.T, dir string, args ...string) (stdout string, lo
 	t.Helper()
 	counting := func(root string, dirs, patterns []string) (*load.Loaded, error) {
 		loads++
-		return loadFromGoCommand(root, dirs, patterns)
+		return load.InDirectories(root, dirs, patterns)
 	}
 	var out bytes.Buffer
 	err = commands(dir, args, func(string) string { return "" }, func() (string, bool) { return "v1.2.3", true }, strings.NewReader(""), &out, &bytes.Buffer{}, runners{
