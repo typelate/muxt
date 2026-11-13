@@ -13,6 +13,7 @@ import (
 	"golang.org/x/tools/txtar"
 
 	"github.com/typelate/muxt/internal/generate"
+	"github.com/typelate/muxt/internal/load"
 	"github.com/typelate/muxt/internal/muxt"
 )
 
@@ -178,7 +179,7 @@ func inspectPackage(target definitionTarget, config generate.RoutesFileConfigura
 	if config.ReceiverType == "" {
 		return "", nil
 	}
-	receiver, err := l.Receiver(wd, config.ReceiverPackage, config.ReceiverType)
+	receiver, err := l.Receiver(wd, load.ReceiverName{Package: config.ReceiverPackage, Type: config.ReceiverType})
 	if err != nil {
 		return "", err
 	}

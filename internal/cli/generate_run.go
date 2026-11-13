@@ -110,7 +110,7 @@ func resolveJob(cmd *cobra.Command, l *load.Loaded, job packageJob, several bool
 		printMultiLineError(cmd, err)
 	}
 	config := job.Config
-	pkg, receiver, err := l.PackageWithReceiver(config.OutputDirectory(job.Dir), config.ReceiverPackage, config.ReceiverType, config.TemplatesVariables)
+	pkg, receiver, err := l.PackageWithReceiver(config.OutputDirectory(job.Dir), load.ReceiverName{Package: config.ReceiverPackage, Type: config.ReceiverType}, config.TemplatesVariables)
 	if err != nil {
 		report(err)
 		return nil, err

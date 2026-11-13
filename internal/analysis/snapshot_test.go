@@ -188,7 +188,7 @@ func snapshot(t *testing.T, config any, archive *txtar.Archive) map[string]strin
 			got["log.txt"] = relative(logs.String())
 		}
 	case analysis.DefinitionsConfiguration:
-		pkg, receiver, err := load.PackageWithReceiver(dir, pl, config.ReceiverPackage, config.ReceiverType, config.TemplatesVariables)
+		pkg, receiver, err := load.PackageWithReceiver(dir, pl, load.ReceiverName{Package: config.ReceiverPackage, Type: config.ReceiverType}, config.TemplatesVariables)
 		if err != nil {
 			runErr = err
 			break

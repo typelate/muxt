@@ -43,14 +43,14 @@ func (l *Loaded) Package(dir string, variables []string) (source.Package, error)
 }
 
 // PackageWithReceiver is Package with the receiver type its routes call.
-func (l *Loaded) PackageWithReceiver(dir, receiverPackage, receiverType string, variables []string) (source.Package, *types.Named, error) {
-	return PackageWithReceiver(dir, l.pl, receiverPackage, receiverType, variables)
+func (l *Loaded) PackageWithReceiver(dir string, name ReceiverName, variables []string) (source.Package, *types.Named, error) {
+	return PackageWithReceiver(dir, l.pl, name, variables)
 }
 
 // Receiver returns the named receiver type, looked up from the package in dir
-// when receiverPackage is empty.
-func (l *Loaded) Receiver(dir, receiverPackage, receiverType string) (*types.Named, error) {
-	return Receiver(dir, l.pl, receiverPackage, receiverType)
+// when name.Package is empty.
+func (l *Loaded) Receiver(dir string, name ReceiverName) (*types.Named, error) {
+	return Receiver(dir, l.pl, name)
 }
 
 // CheckFileRead reports a *UnreadFileError when no templates variable of the

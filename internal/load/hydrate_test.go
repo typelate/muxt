@@ -42,7 +42,7 @@ func TestHydration(t *testing.T) {
 	})
 
 	t.Run("the package, its receiver, and each variable", func(t *testing.T) {
-		pkg, receiver, err := load.PackageWithReceiver(dir, pl, "", "Server", []string{"templates"})
+		pkg, receiver, err := load.PackageWithReceiver(dir, pl, load.ReceiverName{Type: "Server"}, []string{"templates"})
 		require.NoError(t, err)
 		assert.Equal(t, "Server", receiver.Obj().Name())
 		require.Len(t, pkg.Variables, 1)
@@ -56,13 +56,13 @@ func TestHydration(t *testing.T) {
 	})
 
 	t.Run("no receiver named is none looked up", func(t *testing.T) {
-		_, receiver, err := load.PackageWithReceiver(dir, pl, "", "", []string{"templates"})
+		_, receiver, err := load.PackageWithReceiver(dir, pl, load.ReceiverName{}, []string{"templates"})
 		require.NoError(t, err)
 		assert.Nil(t, receiver)
 	})
 
 	t.Run("a missing receiver is reported before a missing variable", func(t *testing.T) {
-		_, _, err := load.PackageWithReceiver(dir, pl, "", "Srever", []string{"nope"})
+		_, _, err := load.PackageWithReceiver(dir, pl, load.ReceiverName{Type: "Srever"}, []string{"nope"})
 		require.EqualError(t, err, "could not find receiver type Srever in example.com/server; did you mean Server?")
 	})
 
@@ -77,21 +77,21 @@ func TestHydration(t *testing.T) {
 		})
 		withModels := append(append(pl[:1:1], models[0]), pl[1:]...)
 
-		pkg, receiver, err := load.PackageWithReceiver(dir, withModels, "example.com/models", "Handler", []string{"templates"})
+		pkg, receiver, err := load.PackageWithReceiver(dir, withModels, load.ReceiverName{Package: "example.com/models", Type: "Handler"}, []string{"templates"})
 		require.NoError(t, err)
 		assert.Equal(t, "example.com/models", receiver.Obj().Pkg().Path(), "the receiver is looked up in the package named")
 		assert.Equal(t, "example.com/server", pkg.Types.Path(), "the templates are read from the package at dir")
 
-		_, _, err = load.PackageWithReceiver(dir, withModels, "example.com/models", "Server", nil)
+		_, _, err = load.PackageWithReceiver(dir, withModels, load.ReceiverName{Package: "example.com/models", Type: "Server"}, nil)
 		assert.EqualError(t, err, "could not find receiver type Server in example.com/models", "a receiver package is not the package at dir")
 
-		_, _, err = load.PackageWithReceiver(dir, pl, "example.com/models", "Handler", nil)
+		_, _, err = load.PackageWithReceiver(dir, pl, load.ReceiverName{Package: "example.com/models", Type: "Handler"}, nil)
 		assert.EqualError(t, err, "could not find receiver type Handler in example.com/models", "a receiver package the load did not reach")
 	})
 
 	t.Run("the routes file belongs to the package in its own directory", func(t *testing.T) {
 		config := generate.RoutesFileConfiguration{OutputFileName: filepath.Join("sub", "routes.go"), ReceiverType: "Srever"}
-		_, _, err := load.PackageWithReceiver(config.OutputDirectory(dir), pl, config.ReceiverPackage, config.ReceiverType, config.TemplatesVariables)
+		_, _, err := load.PackageWithReceiver(config.OutputDirectory(dir), pl, load.ReceiverName{Package: config.ReceiverPackage, Type: config.ReceiverType}, config.TemplatesVariables)
 		require.Error(t, err)
 		assert.Equal(t, "no Go package found at "+filepath.Join(dir, "sub"), err.Error(), "a missing package is reported before a missing receiver")
 	})

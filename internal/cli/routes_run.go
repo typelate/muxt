@@ -85,7 +85,7 @@ func routesRunner(loadPackages packageLoader) func(*cobra.Command, []routesJob) 
 					formatKnown = true
 				}
 				config := jobs[i].definitions()
-				pkg, receiver, err := l.PackageWithReceiver(job.Config.OutputDirectory(job.Dir), config.ReceiverPackage, config.ReceiverType, config.TemplatesVariables)
+				pkg, receiver, err := l.PackageWithReceiver(job.Config.OutputDirectory(job.Dir), load.ReceiverName{Package: config.ReceiverPackage, Type: config.ReceiverType}, config.TemplatesVariables)
 				if err != nil {
 					printMultiLineError(cmd, err)
 					if entryErr, ok := entryVariableError(job, err); ok {

@@ -156,7 +156,7 @@ func snapshot(t *testing.T, config generate.RoutesFileConfiguration, archive *tx
 	}
 
 	pl := loadtest.Package(t, dir, "example.com/server", files)
-	pkg, receiver, err := load.PackageWithReceiver(config.OutputDirectory(dir), pl, config.ReceiverPackage, config.ReceiverType, config.TemplatesVariables)
+	pkg, receiver, err := load.PackageWithReceiver(config.OutputDirectory(dir), pl, load.ReceiverName{Package: config.ReceiverPackage, Type: config.ReceiverType}, config.TemplatesVariables)
 	if err != nil {
 		return fail(err)
 	}

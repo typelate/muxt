@@ -9,14 +9,14 @@ import (
 )
 
 // PackageWithReceiver reads the package at dir and the receiver type,
-// nil when receiverType is empty. The receiver is read first, so a missing
+// nil when name.Type is empty. The receiver is read first, so a missing
 // package is reported before a missing receiver -- both by Receiver -- and
 // either before a templates variable that does not evaluate.
-func PackageWithReceiver(dir string, pl []*packages.Package, receiverPackage, receiverType string, variables []string) (source.Package, *types.Named, error) {
+func PackageWithReceiver(dir string, pl []*packages.Package, name ReceiverName, variables []string) (source.Package, *types.Named, error) {
 	var receiver *types.Named
-	if receiverType != "" {
+	if name.Type != "" {
 		var err error
-		if receiver, err = Receiver(dir, pl, receiverPackage, receiverType); err != nil {
+		if receiver, err = Receiver(dir, pl, name); err != nil {
 			return source.Package{}, nil, err
 		}
 	}

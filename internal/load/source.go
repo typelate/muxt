@@ -125,14 +125,21 @@ func executeTemplateCalls(pkg *packages.Package, variable types.Object) iter.Seq
 	}
 }
 
-// Receiver finds the receiver type named ident in the package at dir among
-// pl, or in the package with import path packagePath when it is set.
-func Receiver(dir string, pl []*packages.Package, packagePath, ident string) (*types.Named, error) {
+// ReceiverName names the type a route calls: Type, declared in the package
+// with import path Package, or in the package being read when Package is empty.
+type ReceiverName struct {
+	Package string
+	Type    string
+}
+
+// Receiver finds the receiver type named by name in the package at dir among
+// pl, or in the package with import path name.Package when it is set.
+func Receiver(dir string, pl []*packages.Package, name ReceiverName) (*types.Named, error) {
 	pkg, ok := packageInDirectory(pl, dir)
 	if !ok {
 		return nil, NoPackageError(dir, pl)
 	}
-	return findType(pl, cmp.Or(packagePath, pkg.PkgPath), ident)
+	return findType(pl, cmp.Or(name.Package, pkg.PkgPath), name.Type)
 }
 
 // CheckLoaded returns the error Package would for dir when pl holds no package
