@@ -107,6 +107,12 @@ func routesRunner(loadPackages packageLoader) func(*cobra.Command, []routesJob) 
 			return err
 		}
 		warnPartialAST(log.New(cmd.ErrOrStderr(), "", 0), pl)
+		asJSON, err := isJSON(cmd)
+		if err != nil {
+			return err
+		}
+		// Over several entries JSON is one array, not a value per package.
+		var collected []routesListing
 		for _, i := range importOrder(pl, outputDirs) {
 			job := jobs[i]
 			config := job.definitions()
@@ -125,11 +131,18 @@ func routesRunner(loadPackages packageLoader) func(*cobra.Command, []routesJob) 
 				if len(jobs) > 1 {
 					listing.Key = job.Key
 				}
+				if asJSON && len(jobs) > 1 {
+					collected = append(collected, listing)
+					continue
+				}
 				if err := writeResult(cmd, cmd.OutOrStdout(), listing); err != nil {
 					return err
 				}
 			}
 		}
-		return nil
+		if collected == nil {
+			return nil
+		}
+		return writeJSONList(cmd.OutOrStdout(), collected)
 	}
 }

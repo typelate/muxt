@@ -145,6 +145,10 @@ func (r configurationReport) WriteTo(w io.Writer) (int64, error) {
 //
 // Key is the packages key of the muxt.json entry when the run lists several
 // entries, so a reader can tell whose listing follows; it is absent otherwise.
+//
+// With --format json a run over several entries writes one array holding each
+// listing, since several top-level objects are not a JSON document; a run over
+// one package writes the object alone.
 type routesListing struct {
 	*analysis.Routes
 	Configuration      configurationReport

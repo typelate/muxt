@@ -359,11 +359,16 @@ func TestRoutesJSONNamesEachEntry(t *testing.T) {
 		t.Helper()
 		stdout, _, err := listWithLoader(t, dir, "--format", "json")
 		require.NoError(t, err, "muxt --format json")
-		var keys []string
-		decoder := json.NewDecoder(strings.NewReader(stdout))
-		for decoder.More() {
+		var listings []struct{ Key string }
+		if strings.HasPrefix(stdout, "[") {
+			require.NoError(t, json.Unmarshal([]byte(stdout), &listings), "output:\n%s", stdout)
+		} else {
 			var listing struct{ Key string }
-			require.NoError(t, decoder.Decode(&listing), "output:\n%s", stdout)
+			require.NoError(t, json.Unmarshal([]byte(stdout), &listing), "output:\n%s", stdout)
+			listings = append(listings, listing)
+		}
+		var keys []string
+		for _, listing := range listings {
 			keys = append(keys, listing.Key)
 		}
 		return keys
@@ -372,4 +377,25 @@ func TestRoutesJSONNamesEachEntry(t *testing.T) {
 	dir := entryModule(t, map[string]string{".": "Root", "workspace": "Space"}, nil)
 	assert.Equal(t, []string{testModule, testModule + "/workspace"}, keysOf(t, dir), "keys over two entries")
 	assert.Equal(t, []string{""}, keysOf(t, filepath.Join(dir, "workspace")), "keys over one package")
+}
+
+// TestRoutesJSONOverSeveralEntriesIsOneDocument states that with --format json
+// a listing over several entries is one JSON array holding each package's
+// object in import order, and a listing over one package is the object alone.
+func TestRoutesJSONOverSeveralEntriesIsOneDocument(t *testing.T) {
+	if testing.Short() {
+		t.Skip("loads packages with the go command")
+	}
+	dir := entryModule(t, map[string]string{".": "Root", "workspace": "Space"}, nil)
+
+	stdout, _, err := listWithLoader(t, dir, "--format", "json")
+	require.NoError(t, err, "muxt --format json")
+	var several []struct{ Key string }
+	require.NoError(t, json.Unmarshal([]byte(stdout), &several), "output:\n%s", stdout)
+	assert.Equal(t, []string{testModule, testModule + "/workspace"}, []string{several[0].Key, several[1].Key}, "keys")
+
+	stdout, _, err = listWithLoader(t, filepath.Join(dir, "workspace"), "--format", "json")
+	require.NoError(t, err, "muxt --format json in one package")
+	var one struct{ Key string }
+	require.NoError(t, json.Unmarshal([]byte(stdout), &one), "output:\n%s", stdout)
 }
