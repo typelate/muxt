@@ -21,16 +21,13 @@ type routesJob struct {
 
 // newRoutesJobs is a routesJob for each job sel chose, each with the report of
 // its configuration: the muxt.json it came from, or the flags and defaults.
-func newRoutesJobs(sel selection) ([]routesJob, error) {
+func newRoutesJobs(sel selection) []routesJob {
 	jobs := make([]routesJob, len(sel.Jobs))
 	for i, job := range sel.Jobs {
-		report, err := newConfigurationReport(sel.EntryFile(job), job.Key, job.Given, job.Config)
-		if err != nil {
-			return nil, err
-		}
+		report := newConfigurationReport(sel.EntryFile(job), job.Key, job.Given, job.Config)
 		jobs[i] = routesJob{packageJob: job, Report: report}
 	}
-	return jobs, nil
+	return jobs
 }
 
 // definitions is the part of the job's configuration the listing resolves with.

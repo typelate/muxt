@@ -13,7 +13,7 @@ import (
 
 // newConfigurationReport reports every setting of config, which the entry for
 // key in f produced, under the source that gave it. f is nil when no entry did.
-func newConfigurationReport(f *composite.File, key string, given givenSettings, config generate.RoutesFileConfiguration) (analysis.ConfigurationReport, error) {
+func newConfigurationReport(f *composite.File, key string, given givenSettings, config generate.RoutesFileConfiguration) analysis.ConfigurationReport {
 	// The sources in the order a setting looks for its value: the command
 	// line, the entry itself, then package_defaults. A setting none of them
 	// gives is a default. Flags and an entry never configure one run, so at
@@ -70,7 +70,7 @@ func newConfigurationReport(f *composite.File, key string, given givenSettings, 
 			report = append(report, group)
 		}
 	}
-	return report, nil
+	return report
 }
 
 // routesListing is one templates variable's routes with the configuration the

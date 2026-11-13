@@ -121,11 +121,7 @@ The documentation for this version is in the binary:
 			if err != nil {
 				return err
 			}
-			jobs, err := newRoutesJobs(sel)
-			if err != nil {
-				return err
-			}
-			return run.routes(cmd, jobs)
+			return run.routes(cmd, newRoutesJobs(sel))
 		},
 	}
 	rootCmd.PersistentFlags().StringVarP(&changeDir, "change-directory", "C", "", "change the working directory")
