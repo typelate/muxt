@@ -350,3 +350,23 @@ func declaredVarNames(file *ast.File) []string {
 	}
 	return names
 }
+
+// TestGeneratePackageRefusesExistingEntry states that muxt generate package
+// fails, and writes nothing, when muxt.json already has an entry for the
+// package, even though its directory does not exist.
+func TestGeneratePackageRefusesExistingEntry(t *testing.T) {
+	root := moduleDir(t)
+	existing := `{"packages": {"` + importPath("widgets") + `": {"use_templates_variable": ["x"]}}}`
+	require.NoError(t, os.WriteFile(filepath.Join(root, "muxt.json"), []byte(existing), 0o644))
+
+	_, err := runCommand(t, root, "generate package widgets")
+
+	var exists *composite.ExistsError
+	require.ErrorAs(t, err, &exists)
+	require.EqualError(t, err, filepath.Join(root, "muxt.json")+`: packages["`+importPath("widgets")+`"] already exists; nothing was written`)
+	_, statErr := os.Stat(filepath.Join(root, "widgets"))
+	assert.ErrorIs(t, statErr, os.ErrNotExist, "no directory is created")
+	got, err := os.ReadFile(filepath.Join(root, "muxt.json"))
+	require.NoError(t, err)
+	assert.Equal(t, existing, string(got), "muxt.json is unchanged")
+}

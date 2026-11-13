@@ -4,13 +4,17 @@ import "fmt"
 
 // ExistsError reports a file or directory a command would create that is
 // already there, so the command wrote nothing. Path is the name the message
-// gives it, an absolute path an editor can open.
+// gives it, an absolute path an editor can open. Where, when set, names what
+// in the file at Path exists, such as packages["example.com/m/a"].
 type ExistsError struct {
-	Path string
+	Path, Where string
 }
 
 // Error returns the name and the fact that nothing was written, on one line.
 func (e *ExistsError) Error() string {
+	if e.Where != "" {
+		return fmt.Sprintf("%s: %s already exists; nothing was written", e.Path, e.Where)
+	}
 	return fmt.Sprintf("%s already exists; nothing was written", e.Path)
 }
 
