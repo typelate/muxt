@@ -181,6 +181,21 @@ func MethodStub(spec MethodSpec) (string, error) {
 	return buf.String(), nil
 }
 
+// builder makes nodes that sit on a line of the file it lays out.
+type builder struct {
+	file *token.File
+}
+
+// pos is the position of the start of line, counted from 1.
+func (b builder) pos(line int) token.Pos {
+	return b.file.LineStart(line)
+}
+
+// ident is the identifier name on line.
+func (b builder) ident(name string, line int) *ast.Ident {
+	return &ast.Ident{NamePos: b.pos(line), Name: name}
+}
+
 // typeExpr returns the expression that spells tp as qualify would.
 func typeExpr(tp types.Type, qualify types.Qualifier) (ast.Expr, error) {
 	text := types.TypeString(tp, qualify)
