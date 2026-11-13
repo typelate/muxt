@@ -8,7 +8,7 @@ import "fmt"
 type DuplicateDefinitionError struct {
 	// Name is the template name asked for.
 	Name string
-	// File is where Name is defined, relative to the working directory, or
+	// File is where Name is defined, an absolute path an editor can open, or
 	// empty when the definition has no known location.
 	File string
 	// Line is the line of the definition in File, or 0 when File is empty.

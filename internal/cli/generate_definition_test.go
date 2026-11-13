@@ -232,8 +232,8 @@ type T struct{}
 }
 
 // TestGenerateDefRefusesNameAlreadyDefined states that a name the package's
-// templates already define fails, naming the file and line relative to the
-// working directory, and that nothing is written.
+// templates already define fails, naming the file by absolute path and the
+// line, and that nothing is written.
 func TestGenerateDefRefusesNameAlreadyDefined(t *testing.T) {
 	if testing.Short() {
 		t.Skip("loads packages with the go command")
@@ -244,10 +244,11 @@ func TestGenerateDefRefusesNameAlreadyDefined(t *testing.T) {
 
 	_, _, err := runCommandArgs(dir, []string{"generate", "def", "GET /foo Index()", "--output-file=other.gohtml"}, runners{load: load.InDirectories})
 
-	require.EqualError(t, err, `template "GET /foo Index()" is already defined at index.gohtml:3`)
+	file := filepath.Join(dir, "index.gohtml")
+	require.EqualError(t, err, `template "GET /foo Index()" is already defined at `+file+`:3`)
 	duplicate, ok := errors.AsType[*generate.DuplicateDefinitionError](err)
 	require.True(t, ok, "error is a *generate.DuplicateDefinitionError")
-	assert.Equal(t, generate.DuplicateDefinitionError{Name: "GET /foo Index()", File: "index.gohtml", Line: 3}, *duplicate)
+	assert.Equal(t, generate.DuplicateDefinitionError{Name: "GET /foo Index()", File: file, Line: 3}, *duplicate)
 	assert.NoFileExists(t, filepath.Join(dir, "other.gohtml"))
 }
 

@@ -164,7 +164,7 @@ func inspectPackage(target definitionTarget, config generate.RoutesFileConfigura
 		}
 		duplicate := &generate.DuplicateDefinitionError{Name: name}
 		if position, ok := variable.NamePosition(name); ok {
-			duplicate.File, duplicate.Line = pathBelow(wd, position.Filename), position.Line
+			duplicate.File, duplicate.Line = position.Filename, position.Line
 		}
 		return "", duplicate
 	}
@@ -181,21 +181,6 @@ func inspectPackage(target definitionTarget, config generate.RoutesFileConfigura
 		return "", err
 	}
 	return generate.MethodStubs(pkg, receiver, name, l.StandardLibrary())
-}
-
-// pathBelow returns file relative to dir. The go command may report a path
-// with the symbolic links of a temporary directory resolved, so a file that
-// does not read as below dir is tried against the resolved dir too.
-func pathBelow(dir, file string) string {
-	if rel, err := filepath.Rel(dir, file); err == nil && filepath.IsLocal(rel) {
-		return rel
-	}
-	if real, err := filepath.EvalSymlinks(dir); err == nil {
-		if rel, err := filepath.Rel(real, file); err == nil && filepath.IsLocal(rel) {
-			return rel
-		}
-	}
-	return file
 }
 
 // writeDefinitionArchive writes a txtar archive to w holding the template file
