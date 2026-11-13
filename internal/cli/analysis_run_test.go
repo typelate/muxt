@@ -148,3 +148,25 @@ func TestListingsStopAtTheFirstFailingMuxtJSONEntry(t *testing.T) {
 
 	require.EqualError(t, err, testModule+"/other: variable templates not found in package "+testModule+"/other", "muxt list-template-calls")
 }
+
+// TestCheckNamesTheMuxtJSONEntryAheadOfItsDiagnostics states that muxt check
+// over several entries prints the key of the entry that fails ahead of that
+// entry's diagnostics, on the stream the diagnostics use, and prints nothing
+// for the entries that pass.
+func TestCheckNamesTheMuxtJSONEntryAheadOfItsDiagnostics(t *testing.T) {
+	if testing.Short() {
+		t.Skip("loads packages with the go command")
+	}
+	dir := generatedEntryModule(t, map[string]string{".": "Root", "workspace": "Space"}, map[string][]string{".": {"workspace"}})
+	writeTestFile(t, dir, "page.gohtml", `{{define "GET /Root RootPage()"}}<p>{{.Missing}}</p>{{end}}`)
+
+	stdout, stderr, _, err := analyzeWithLoader(t, dir, "check")
+
+	require.Error(t, err, "muxt check")
+	assert.Regexp(t, `\A`+regexp.QuoteMeta(testModule+"/workspace")+`\nok: \d+ templates?\n\z`, stdout, "stdout")
+	assert.Equal(t, testModule+"\n"+
+		"$DIR/template_routes.go:38:13 ExecuteTemplate \"GET /Root RootPage()\" *TemplateData[RoutesReceiver, any]\n"+
+		"$DIR/page.gohtml:1:39: executing \"GET /Root RootPage()\" at <.Missing>: field or method Missing not found on TemplateData[RoutesReceiver, any]\n"+
+		"\n"+
+		"Error: "+testModule+": 1 error\n", strings.ReplaceAll(stderr, dir, "$DIR"), "stderr")
+}

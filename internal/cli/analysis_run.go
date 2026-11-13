@@ -22,13 +22,37 @@ func namedFailure(job packageJob, several bool, err error) error {
 	return fmt.Errorf("%s: %w", job.Key, err)
 }
 
+// keyedWriter writes key and a newline ahead of the first thing written to w,
+// so a job that reports nothing prints nothing, and one that reports
+// something says whose it is.
+type keyedWriter struct {
+	w       io.Writer
+	key     string
+	written bool
+}
+
+func (k *keyedWriter) Write(p []byte) (int, error) {
+	if !k.written {
+		k.written = true
+		if _, err := io.WriteString(k.w, k.key+"\n"); err != nil {
+			return 0, err
+		}
+	}
+	return k.w.Write(p)
+}
+
 // checkRunner checks jobs from one load, a package after the packages it
 // imports, and stops at the first one that fails.
 func checkRunner(loadPackages packageLoader) func(*cobra.Command, []packageJob, analysis.CheckConfiguration) error {
 	return func(cmd *cobra.Command, jobs []packageJob, config analysis.CheckConfiguration) error {
-		logger := log.New(cmd.ErrOrStderr(), "", 0)
 		return runJobs(cmd, loadPackages, jobs, jobVisitor{
 			Visit: func(_ int, job packageJob, l *load.Loaded, several bool) (bool, error) {
+				// Over several jobs the diagnostics of one say which it is.
+				var diagnostics io.Writer = cmd.ErrOrStderr()
+				if several {
+					diagnostics = &keyedWriter{w: diagnostics, key: job.Key}
+				}
+				logger := log.New(diagnostics, "", 0)
 				config.TemplatesVariables = job.Config.TemplatesVariables
 				pkg, err := l.Package(job.Dir, config.TemplatesVariables)
 				if err != nil {
