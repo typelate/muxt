@@ -178,6 +178,29 @@ func TestPackageSharedFSWithoutEmbedDirective(t *testing.T) {
 	assert.NotContains(t, err.Error(), "not found", "Package error")
 }
 
+// TestPackageSharedFSWithoutEmbedDirectiveBesideOneWith states that the
+// variable ParseFS names is the one asked for its directive: a package that
+// embeds files into another variable still leaves this one holding none.
+func TestPackageSharedFSWithoutEmbedDirectiveBesideOneWith(t *testing.T) {
+	if testing.Short() {
+		t.Skip("loads packages with the go command")
+	}
+	dir := writeModule(t, map[string]string{
+		"go.mod":                     "module example.com/m\n\ngo 1.24\n",
+		"lib/lib.go":                 "package lib\n\nimport \"embed\"\n\n//go:embed *.gohtml\nvar Other embed.FS\n\nvar FS embed.FS\n",
+		"lib/lib.gohtml":             `{{define "shared"}}{{end}}`,
+		"workspace/workspace.go":     "package workspace\n\nimport (\n\t\"html/template\"\n\n\t\"example.com/m/lib\"\n)\n\nvar templates = template.Must(template.ParseFS(lib.FS, \"*.gohtml\"))\n",
+		"workspace/workspace.gohtml": `{{define "GET / Home()"}}{{end}}`,
+	})
+	_, pl, err := Packages(filepath.Join(dir, "workspace"))
+	require.NoError(t, err, "Packages")
+
+	_, err = Package(filepath.Join(dir, "workspace"), pl, []string{"templates"})
+
+	require.Error(t, err, "Package")
+	assert.ErrorContains(t, err, "lib.FS has no //go:embed directive, so it holds no files", "Package error")
+}
+
 // TestPackageImportThatDoesNotParse states that a package of this module that
 // embeds nothing is not parsed, so a syntax error in an import no ParseFS
 // call names does not fail the load.
