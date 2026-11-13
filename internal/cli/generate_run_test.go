@@ -67,15 +67,23 @@ func (%s) %sPage() any { return nil }
 // generate runner and the go command, counting how often packages are loaded.
 func generateWithLoader(t *testing.T, dir string, flags ...string) (stdout string, loads int, err error) {
 	t.Helper()
+	stdout, _, loads, err = generateWithLoaderOutput(t, dir, flags...)
+	return stdout, loads, err
+}
+
+// generateWithLoaderOutput is generateWithLoader that also returns what the run
+// wrote to stderr.
+func generateWithLoaderOutput(t *testing.T, dir string, flags ...string) (stdout, stderr string, loads int, err error) {
+	t.Helper()
 	counting := func(root string, dirs, patterns []string) (*load.Loaded, error) {
 		loads++
 		return load.InDirectories(root, dirs, patterns)
 	}
-	var out bytes.Buffer
-	err = commands(dir, append([]string{"generate"}, flags...), func(string) string { return "" }, func() (string, bool) { return "v1.2.3", true }, strings.NewReader(""), &out, &bytes.Buffer{}, runners{
+	var out, errOut bytes.Buffer
+	err = commands(dir, append([]string{"generate"}, flags...), func(string) string { return "" }, func() (string, bool) { return "v1.2.3", true }, strings.NewReader(""), &out, &errOut, runners{
 		generate: generateRunner(counting),
 	})
-	return out.String(), loads, err
+	return out.String(), errOut.String(), loads, err
 }
 
 // TestGenerateEveryMuxtJSONEntryLoadsOnce states that a flagless muxt generate
@@ -189,15 +197,17 @@ func TestGenerateSucceedsQuietly(t *testing.T) {
 	}
 	dir := entryModule(t, map[string]string{".": "Root", "workspace": "Space"}, nil)
 
-	stdout, _, err := generateWithLoader(t, dir)
+	stdout, stderr, _, err := generateWithLoaderOutput(t, dir)
 
 	require.NoError(t, err, "generate")
 	assert.Empty(t, stdout, "stdout of a run over several entries")
+	assert.Empty(t, stderr, "stderr of a run over several entries")
 
-	stdout, _, err = generateWithLoader(t, filepath.Join(dir, "workspace"))
+	stdout, stderr, _, err = generateWithLoaderOutput(t, filepath.Join(dir, "workspace"))
 
 	require.NoError(t, err, "generate in workspace")
 	assert.Empty(t, stdout, "stdout of a run over one entry")
+	assert.Empty(t, stderr, "stderr of a run over one entry")
 }
 
 // TestGenerateMuxtJSONEntriesInImportOrder states that a muxt generate over

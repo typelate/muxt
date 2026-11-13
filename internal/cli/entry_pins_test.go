@@ -59,11 +59,10 @@ func muxtJSONAfter(t *testing.T, file, commandLine string) string {
 	return string(got)
 }
 
-// TestGeneratePackageRecordsToday states what muxt generate package writes for
-// the flags that reach it by a deprecated spelling or in a form the entry
-// cannot hold as typed. Each of these is a known quirk, so a later change
-// that fixes one shows as a flip of exactly one row here.
-func TestGeneratePackageRecordsToday(t *testing.T) {
+// TestGeneratePackageRecordsDeprecatedTemplatesVariableUnderCurrentKey states
+// that muxt generate package writes the deprecated --templates-variable flag
+// into the entry as use_templates_variable, the key a muxt.json holds.
+func TestGeneratePackageRecordsDeprecatedTemplatesVariableUnderCurrentKey(t *testing.T) {
 	for _, tt := range []struct {
 		name, commandLine, want string
 	}{

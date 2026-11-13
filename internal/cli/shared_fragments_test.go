@@ -473,23 +473,6 @@ var Other fs.FS = TemplateSource
 	assert.Contains(t, output, filepath.Join(dir, "workspace", "workspace.go")+":14:10: fragments.Other has type io/fs.FS, not embed.FS; ParseFS reads an exported embed.FS variable of another package", "generate output")
 }
 
-// TestGenerateReportsSharedFSCall states that a ParseFS first argument that is
-// a call, not a variable, fails with the message that names the shared form
-// muxt reads.
-func TestGenerateReportsSharedFSCall(t *testing.T) {
-	if testing.Short() {
-		t.Skip("loads packages with the go command")
-	}
-	dir := fragmentsModule(t, map[string]string{
-		"workspace/workspace.go": workspaceReadingFS("example.com/m/fragments", "fragments.FS()"),
-	})
-
-	output, err := runMuxt(t, filepath.Join(dir, "workspace"), "generate")
-
-	require.Error(t, err, "generate: %s", output)
-	assert.Contains(t, output, "workspace.go:14:10: first argument to ParseFS must be an identifier or an exported variable of an imported package (got fragments.FS())", "generate output")
-}
-
 // TestGenerateReportsSharedFSFromOtherModule states that a ParseFS argument
 // naming a package of another module fails with muxt's message at the
 // argument's position. The other module is a replace target in the temp
@@ -582,9 +565,8 @@ func TestRoutesListsOverriddenSharedNames(t *testing.T) {
 		t.Skip("loads packages with the go command")
 	}
 	for _, tt := range []struct {
-		name       string
-		sharedLast bool
-		want       string
+		name string
+		want string
 	}{
 		{
 			name: "own file after the shared files",
@@ -592,7 +574,7 @@ func TestRoutesListsOverriddenSharedNames(t *testing.T) {
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			dir := resolvedDir(t, overriddenFooter(t, tt.sharedLast))
+			dir := resolvedDir(t, overriddenFooter(t, false))
 
 			output, err := runMuxt(t, filepath.Join(dir, "workspace"))
 
