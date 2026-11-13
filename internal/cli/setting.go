@@ -2,9 +2,13 @@ package cli
 
 import (
 	"fmt"
+	"maps"
 	"math"
+	"slices"
+	"strconv"
 
 	"github.com/dustin/go-humanize"
+	"github.com/spf13/pflag"
 
 	"github.com/typelate/muxt/internal/generate"
 )
@@ -39,3 +43,310 @@ func (b byteSize) Set(v string) error {
 }
 
 func (byteSize) Type() string { return "bytes" }
+
+// spec declares one setting: what a person types, what it falls back to, and
+// what it says in --help. It is one value per setting so a flag, its default
+// and its deprecated spellings cannot drift apart.
+type spec[T any] struct {
+	// Name is the flag name, which muxt.json spells with underscores.
+	Name  string
+	Usage string
+	// Default is the value when the setting is not given.
+	Default T
+	// Deprecated are the old flag names: each is registered hidden and marked
+	// deprecated, and names its replacement in its usage.
+	Deprecated []string
+	// NonEmpty means a given empty value is an error, because the setting
+	// names something.
+	NonEmpty bool
+	// Derived, when set, is the value of a setting that was not given. It
+	// reads the configuration it was built over, so it only means something
+	// after the settings it depends on have their values.
+	Derived func() T
+	// Example is a flag argument unlike Default, for tests that exercise
+	// every setting the same way.
+	Example string
+}
+
+// setting is one declaration bound to one configuration field. Its closures
+// are built by the constructor for the field's kind, so no code outside a
+// constructor switches on a kind, and a field of an unsupported kind does not
+// compile.
+type setting struct {
+	name       string
+	deprecated []string
+	nonEmpty   bool
+	// field is the pointer the setting is bound to, kept so a test can prove
+	// every configuration field is bound once. It is an any because the kinds
+	// of field differ and nothing in production reads it back.
+	field any
+
+	setDefault         func()
+	register           func(fs *pflag.FlagSet)
+	registerDeprecated func(fs *pflag.FlagSet, spelling string)
+	// arg renders the header arguments that record the value, none when it
+	// is what a run would use without being told.
+	arg func() []string
+	// empty reports whether the value is empty, which matters only to a
+	// NonEmpty setting.
+	empty func() bool
+	// derive writes the Derived value, nil when the setting has none.
+	derive      func()
+	reportValue func() any
+}
+
+// deprecatedUsage is the usage of a deprecated spelling: it says what to write
+// instead, then what the setting does.
+func deprecatedUsage(name, usage string) string {
+	return "DEPRECATED: use --" + name + " instead. " + usage
+}
+
+func stringSetting(p *string, s spec[string]) setting {
+	set := setting{
+		name:       s.Name,
+		deprecated: s.Deprecated,
+		nonEmpty:   s.NonEmpty,
+		field:      p,
+		setDefault: func() { *p = s.Default },
+		register:   func(fs *pflag.FlagSet) { fs.StringVar(p, s.Name, s.Default, s.Usage) },
+		registerDeprecated: func(fs *pflag.FlagSet, spelling string) {
+			fs.StringVar(p, spelling, s.Default, deprecatedUsage(s.Name, s.Usage))
+			markDeprecated(fs, spelling, s.Name)
+		},
+		arg: func() []string {
+			if *p == s.Default || (s.Derived != nil && *p == s.Derived()) {
+				return nil
+			}
+			return []string{"--" + s.Name + "=" + *p}
+		},
+		empty:       func() bool { return *p == "" },
+		reportValue: func() any { return *p },
+	}
+	if s.Derived != nil {
+		set.derive = func() { *p = s.Derived() }
+	}
+	return set
+}
+
+func boolSetting(p *bool, s spec[bool]) setting {
+	set := setting{
+		name:       s.Name,
+		deprecated: s.Deprecated,
+		nonEmpty:   s.NonEmpty,
+		field:      p,
+		setDefault: func() { *p = s.Default },
+		register:   func(fs *pflag.FlagSet) { fs.BoolVar(p, s.Name, s.Default, s.Usage) },
+		registerDeprecated: func(fs *pflag.FlagSet, spelling string) {
+			fs.BoolVar(p, spelling, s.Default, deprecatedUsage(s.Name, s.Usage))
+			markDeprecated(fs, spelling, s.Name)
+		},
+		arg: func() []string {
+			switch {
+			case *p == s.Default || (s.Derived != nil && *p == s.Derived()):
+				return nil
+			case *p:
+				return []string{"--" + s.Name}
+			default:
+				return []string{"--" + s.Name + "=false"}
+			}
+		},
+		empty:       func() bool { return false },
+		reportValue: func() any { return *p },
+	}
+	if s.Derived != nil {
+		set.derive = func() { *p = s.Derived() }
+	}
+	return set
+}
+
+// stringsSetting is a list of strings. The current name splits a value on
+// commas; a deprecated spelling takes one value per flag, as it always did.
+func stringsSetting(p *[]string, s spec[[]string]) setting {
+	set := setting{
+		name:       s.Name,
+		deprecated: s.Deprecated,
+		nonEmpty:   s.NonEmpty,
+		field:      p,
+		setDefault: func() { *p = slices.Clone(s.Default) },
+		register:   func(fs *pflag.FlagSet) { fs.StringSliceVar(p, s.Name, s.Default, s.Usage) },
+		registerDeprecated: func(fs *pflag.FlagSet, spelling string) {
+			fs.StringArrayVar(p, spelling, s.Default, deprecatedUsage(s.Name, s.Usage))
+			markDeprecated(fs, spelling, s.Name)
+		},
+		arg: func() []string {
+			if slices.Equal(*p, s.Default) || (s.Derived != nil && slices.Equal(*p, s.Derived())) {
+				return nil
+			}
+			args := make([]string, 0, len(*p))
+			for _, v := range *p {
+				args = append(args, "--"+s.Name+"="+v)
+			}
+			return args
+		},
+		empty:       func() bool { return slices.Contains(*p, "") },
+		reportValue: func() any { return *p },
+	}
+	if s.Derived != nil {
+		set.derive = func() { *p = s.Derived() }
+	}
+	return set
+}
+
+// bytesSetting is a size in bytes, parsed from the human-readable form and
+// written in the header as exact decimal bytes. Zero means generate's own
+// default.
+func bytesSetting(p *int64, s spec[int64]) setting {
+	set := setting{
+		name:       s.Name,
+		deprecated: s.Deprecated,
+		nonEmpty:   s.NonEmpty,
+		field:      p,
+		setDefault: func() { *p = s.Default },
+		register:   func(fs *pflag.FlagSet) { fs.Var(byteSize{p: p}, s.Name, s.Usage) },
+		registerDeprecated: func(fs *pflag.FlagSet, spelling string) {
+			fs.Var(byteSize{p: p}, spelling, deprecatedUsage(s.Name, s.Usage))
+			markDeprecated(fs, spelling, s.Name)
+		},
+		arg: func() []string {
+			if *p == s.Default || (s.Derived != nil && *p == s.Derived()) {
+				return nil
+			}
+			return []string{"--" + s.Name + "=" + strconv.FormatInt(*p, 10)}
+		},
+		empty:       func() bool { return false },
+		reportValue: func() any { return byteSize{p: p}.String() },
+	}
+	if s.Derived != nil {
+		set.derive = func() { *p = s.Derived() }
+	}
+	return set
+}
+
+// receiverTypeSetting is the receiver type, which bare muxt and generate read.
+func receiverTypeSetting(p *string) setting {
+	return stringSetting(p, spec[string]{
+		Name:       useReceiverType,
+		Usage:      useReceiverTypeHelp,
+		Deprecated: []string{deprecatedReceiverType, deprecatedFindReceiverType},
+		Example:    "T",
+	})
+}
+
+// receiverPackageSetting is the package that holds the receiver type.
+func receiverPackageSetting(p *string) setting {
+	return stringSetting(p, spec[string]{
+		Name:       useReceiverTypePackage,
+		Usage:      useReceiverTypePackageHelp,
+		Deprecated: []string{deprecatedReceiverTypePackage, deprecatedFindReceiverTypePackage},
+		Example:    "example.com/m/types",
+	})
+}
+
+// setDefaults gives every setting its Default, so a configuration built with
+// no flag parsing still starts where the flags would.
+func setDefaults(settings []setting) {
+	for _, s := range settings {
+		s.setDefault()
+	}
+}
+
+// register adds each setting's current name to fs. Registering sets the
+// field to its default.
+func register(fs *pflag.FlagSet, settings []setting) {
+	for _, s := range settings {
+		s.register(fs)
+	}
+}
+
+// registerWithDeprecated is register, then each deprecated spelling, hidden
+// and marked, so the old command lines keep working.
+func registerWithDeprecated(fs *pflag.FlagSet, settings []setting) {
+	register(fs, settings)
+	for _, s := range settings {
+		for _, spelling := range s.deprecated {
+			s.registerDeprecated(fs, spelling)
+		}
+	}
+}
+
+// addDeprecatedTemplatesVariable registers --templates-variable, the one
+// deprecated spelling that is not a setting of its own: it fills p, which the
+// command reads when it finalizes the configuration, since an old command
+// line may carry only this spelling.
+func addDeprecatedTemplatesVariable(fs *pflag.FlagSet, p *string) {
+	fs.StringVar(p, deprecatedTemplatesVariable, "", deprecatedUsage(useTemplatesVariable, useTemplatesVariableHelp))
+	markDeprecated(fs, deprecatedTemplatesVariable, useTemplatesVariable)
+}
+
+// givenSettings maps a setting's name to the spellings that gave it, sorted.
+// A setting absent from the map was not given.
+type givenSettings map[string][]string
+
+// has reports whether the setting called name was given by any spelling.
+func (g givenSettings) has(name string) bool {
+	_, ok := g[name]
+	return ok
+}
+
+// spellings returns every spelling that gave a setting, sorted and without
+// repeats.
+func (g givenSettings) spellings() []string {
+	var all []string
+	for _, name := range slices.Sorted(maps.Keys(g)) {
+		all = append(all, g[name]...)
+	}
+	slices.Sort(all)
+	return slices.Compact(all)
+}
+
+// givenFlags returns the settings fs was given, by the spelling typed. A
+// flag that is not a spelling of a setting, such as --verbose, is not
+// configuration and is left out. --templates-variable is filed under the
+// templates variable setting when the list has one.
+func givenFlags(fs *pflag.FlagSet, settings []setting) givenSettings {
+	given := givenSettings{}
+	fs.Visit(func(f *pflag.Flag) {
+		if name, ok := settingNamed(settings, f.Name); ok {
+			given[name] = append(given[name], f.Name)
+		}
+	})
+	for _, spellings := range given {
+		slices.Sort(spellings)
+	}
+	return given
+}
+
+// settingNamed returns the name of the setting that spelling is the flag name
+// or a deprecated spelling of.
+func settingNamed(settings []setting, spelling string) (string, bool) {
+	for _, s := range settings {
+		if s.name == spelling || slices.Contains(s.deprecated, spelling) {
+			return s.name, true
+		}
+		if spelling == deprecatedTemplatesVariable && s.name == useTemplatesVariable {
+			return s.name, true
+		}
+	}
+	return "", false
+}
+
+// derive writes the Derived value of each setting that has one and was not
+// given, in list order, so a later setting sees the earlier ones.
+func derive(settings []setting, g givenSettings) {
+	for _, s := range settings {
+		if s.derive != nil && !g.has(s.name) {
+			s.derive()
+		}
+	}
+}
+
+// args returns the generated-file header arguments that record a finalized
+// configuration, in list order, leaving out each setting that has the value a
+// run would use anyway.
+func args(settings []setting) []string {
+	var out []string
+	for _, s := range settings {
+		out = append(out, s.arg()...)
+	}
+	return out
+}

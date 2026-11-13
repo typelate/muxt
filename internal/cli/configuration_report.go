@@ -33,12 +33,12 @@ type configurationReport []settingGroup
 // the source is in, empty for flags and defaults.
 type settingGroup struct {
 	Source   string
-	Settings []setting
+	Settings []reportLine
 	File     string `json:",omitzero"`
 }
 
-// setting is one muxt.json key and the value the run uses for it.
-type setting struct {
+// reportLine is one muxt.json key and the value the run uses for it.
+type reportLine struct {
 	Key   string
 	Value any
 }
@@ -50,7 +50,7 @@ func newConfigurationReport(f *composite.File, key string, flagNames []string, c
 	// line, the entry itself, then package_defaults. A setting none of them
 	// gives is a default. Flags and an entry never configure one run, so at
 	// most one of the first two is present.
-	type source struct {
+	type reportSource struct {
 		group settingGroup
 		gives func(entryField) (bool, error)
 	}
@@ -61,17 +61,17 @@ func newConfigurationReport(f *composite.File, key string, flagNames []string, c
 			return field.Apply(new(generate.RoutesFileConfiguration), entry)
 		}
 	}
-	var sources []source
+	var sources []reportSource
 	if len(flagNames) > 0 {
-		sources = append(sources, source{
+		sources = append(sources, reportSource{
 			group: settingGroup{Source: "flags"},
 			gives: func(field entryField) (bool, error) { return slices.Contains(flagNames, field.Name), nil },
 		})
 	}
 	if f != nil {
 		sources = append(sources,
-			source{group: settingGroup{Source: fmt.Sprintf("packages[%q]", key), File: f.Name}, gives: givenBy(f.Packages[key])},
-			source{group: settingGroup{Source: "package_defaults", File: f.Name}, gives: givenBy(f.Defaults)},
+			reportSource{group: settingGroup{Source: fmt.Sprintf("packages[%q]", key), File: f.Name}, gives: givenBy(f.Packages[key])},
+			reportSource{group: settingGroup{Source: "package_defaults", File: f.Name}, gives: givenBy(f.Defaults)},
 		)
 	}
 	defaults := settingGroup{Source: "defaults"}
@@ -80,7 +80,7 @@ func newConfigurationReport(f *composite.File, key string, flagNames []string, c
 	fields := entryFields()
 	slices.SortFunc(fields, func(a, b entryField) int { return cmp.Compare(a.Name, b.Name) })
 	for _, field := range fields {
-		s := setting{Key: muxtJSONKey(field.Name), Value: field.Value(config)}
+		s := reportLine{Key: muxtJSONKey(field.Name), Value: field.Value(config)}
 		group := &defaults
 		for i := range sources {
 			given, err := sources[i].gives(field)
