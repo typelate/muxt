@@ -192,6 +192,8 @@ type SharedReplacesOwnError struct {
 	Own, Shared muxtsource.Site
 }
 
+// Error leads with the package's own definition, the file its author edits,
+// then names the fix: parse the shared files first so the package's own win.
 func (e *SharedReplacesOwnError) Error() string {
 	return fmt.Sprintf("%s: template %q is replaced by %s; parse the shared embed.FS before this package's own files",
 		e.Own.Position, e.Name, e.Shared.Position)

@@ -15,6 +15,8 @@ type DuplicateDefinitionError struct {
 	Line int
 }
 
+// Error names the existing definition's file and line when they are known,
+// since a definition read from memory has no location to point at.
 func (e *DuplicateDefinitionError) Error() string {
 	if e.File == "" {
 		return fmt.Sprintf("template %q is already defined", e.Name)

@@ -491,6 +491,7 @@ type NotRouteNameError struct {
 	Name string
 }
 
+// Error quotes the name, which may hold spaces or be empty.
 func (e *NotRouteNameError) Error() string {
 	return fmt.Sprintf("%q is not a route template name", e.Name)
 }

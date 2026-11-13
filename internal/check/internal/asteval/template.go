@@ -84,6 +84,11 @@ func recordParsedLiteral(meta *TemplateMetadata, arg ast.Expr, rootName, leftDel
 	})
 }
 
+// EvaluateTemplateSelector evaluates one call of a template construction
+// chain, such as New("x"), Parse("...") or ParseFS(fsys, "*.gohtml"). chain is
+// what the calls before it built; the result is the chain after this call, so
+// each step sees the delimiters an earlier Delims call set. A call muxt cannot
+// read is an error that names its file and line.
 func EvaluateTemplateSelector(scope Scope, chain Chain, expression ast.Expr, funcs TemplateFunctions, fm map[string]any, meta *TemplateMetadata) (Chain, error) {
 	call, ok := expression.(*ast.CallExpr)
 	if !ok {

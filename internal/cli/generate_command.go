@@ -113,6 +113,8 @@ type RuleError struct {
 	Rule     string
 }
 
+// Error joins the settings with "and" before the rule, so the message names
+// each setting by the spelling its source used.
 func (e *RuleError) Error() string {
 	if len(e.Settings) == 0 {
 		return e.Rule

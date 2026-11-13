@@ -23,6 +23,8 @@ type GeneratedFileClashError struct {
 	First, Second string
 }
 
+// Error names both template files by absolute path so the one to rename can be
+// opened from the message.
 func (e *GeneratedFileClashError) Error() string {
 	return fmt.Sprintf("%s would be written for both %s and %s; rename one template file", e.FileName, e.First, e.Second)
 }
