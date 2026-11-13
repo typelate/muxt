@@ -185,14 +185,19 @@ func TestOverridesIn(t *testing.T) {
 
 func TestOverridesInRejectsSharedReplacingOwn(t *testing.T) {
 	// A file named s*.gohtml is in the shared package. The error names the
-	// own definition replaced and the shared one that replaced it.
+	// own definition replaced and the shared one that replaced it; a row
+	// with no own file states a chain that loads.
 	for _, tt := range []struct {
 		chain []string
 		own   string
 		kept  string
 	}{
 		{chain: []string{"a.gohtml", "s.gohtml"}, own: "a.gohtml", kept: "s.gohtml"},
+		{chain: []string{"s.gohtml", "a.gohtml"}},
+		{chain: []string{"a.gohtml", "s.gohtml", "b.gohtml"}},
 		{chain: []string{"s1.gohtml", "a.gohtml", "s2.gohtml"}, own: "a.gohtml", kept: "s2.gohtml"},
+		{chain: []string{"a.gohtml", "b.gohtml"}},
+		{chain: []string{"s1.gohtml", "s2.gohtml"}},
 		{chain: []string{"a.gohtml", "b.gohtml", "s.gohtml"}, own: "b.gohtml", kept: "s.gohtml"},
 	} {
 		t.Run(strings.Join(tt.chain, ","), func(t *testing.T) {
@@ -209,6 +214,12 @@ func TestOverridesInRejectsSharedReplacingOwn(t *testing.T) {
 
 			_, err := overridesIn(ordered)
 
+			if tt.own == "" {
+				if err != nil {
+					t.Errorf("overridesIn(%q) error = %v, want none", tt.chain, err)
+				}
+				return
+			}
 			got, ok := errors.AsType[*SharedReplacesOwnError](err)
 			if !ok {
 				t.Fatalf("overridesIn(%q) error = %v, want *SharedReplacesOwnError", tt.chain, err)
