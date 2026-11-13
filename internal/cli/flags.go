@@ -36,7 +36,6 @@ func addUseReceiverTypePackageVarToFlagSet(flagSet *pflag.FlagSet, out *string) 
 }
 
 func addOutputFlagsToFlagSet(flagSet *pflag.FlagSet, g *generate.RoutesFileConfiguration) {
-	flagSet.Var(byteSize{p: &g.MultipartMaxMemory}, outputMultipartMaxMemory, outputMultipartMaxMemoryHelp)
 	flagSet.StringVar(&g.StaticAssetsDirectory, inputStaticAssetsDirectory, "", inputStaticAssetsDirectoryHelp)
 	flagSet.StringVar(&g.StaticAssetsPath, outputStaticAssetsPath, "", outputStaticAssetsPathHelp)
 }

@@ -85,6 +85,10 @@ This function also receives an argument with a type matching the name given by o
 			Name: outputMuxtVersion, Default: true, Example: "false",
 			Usage: `When false, the muxt version is left out of generated files: the "// muxt version:" header comment is omitted and no MuxtVersion method is added to TemplateData. Defaults to true.`,
 		}),
+		bytesSetting(&c.MultipartMaxMemory, spec[int64]{
+			Name: outputMultipartMaxMemory, Example: "64MB",
+			Usage: `Maximum memory used by request.ParseMultipartForm in generated handlers. Accepts a human-readable byte size (e.g. 32MB, 64MiB, 1GB).`,
+		}),
 	}
 }
 
