@@ -51,6 +51,23 @@ func (e *ParseError) Unwrap() error {
 	return e.Err
 }
 
+// ShapeError reports a value in a muxt.json that is not an object where the
+// file needs one. Line and Col are the 1-based position of the value. Where
+// names it, such as "packages" or packages["example.com/m"], and Want is what
+// it must be, finishing the sentence that starts with Where.
+type ShapeError struct {
+	Path      string
+	Line, Col int
+	Where     string
+	Want      string
+}
+
+// Error returns the path, the position, and what the value must be on one
+// line.
+func (e *ShapeError) Error() string {
+	return fmt.Sprintf("%s:%d:%d: %s must be %s", e.Path, e.Line, e.Col, e.Where, e.Want)
+}
+
 // UnknownKeyError reports a key in a muxt.json that nothing reads: a key of an
 // entry that no generate flag reads, or a top-level key other than
 // package_defaults and packages. Where names the entry, such as

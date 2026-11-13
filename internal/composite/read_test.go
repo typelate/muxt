@@ -1,6 +1,7 @@
 package composite_test
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -122,17 +123,67 @@ func TestFindRejectsWrongJSONTypeWithAnError(t *testing.T) {
 	assert.Equal(t, composite.KindBool, typed.Want, "kind")
 }
 
-// TestFindKeepsTheJSONMessageForAWrongOuterShape states that a wrong shape
-// outside the entries, such as a list of packages, reads as the json package
-// says it.
-func TestFindKeepsTheJSONMessageForAWrongOuterShape(t *testing.T) {
-	dir := writeFile(t, `{"packages": []}`)
+// TestFindRejectsAWrongOuterShape states that a value that is not an object
+// where the file needs one is a *composite.ShapeError naming the place and the
+// position of the value, without the json package's Go type names.
+func TestFindRejectsAWrongOuterShape(t *testing.T) {
+	for _, tt := range []struct {
+		name, file, want string
+		line, col        int
+	}{
+		{
+			name: "file is a list",
+			file: `[]`,
+			want: `muxt.json must be a JSON object`,
+			line: 1, col: 1,
+		},
+		{
+			name: "file is a string after a newline",
+			file: "\n  \"x\"",
+			want: `muxt.json must be a JSON object`,
+			line: 2, col: 3,
+		},
+		{
+			name: "packages is a list",
+			file: `{"packages": []}`,
+			want: `packages must be an object keyed by import path`,
+			line: 1, col: 14,
+		},
+		{
+			name: "package defaults is a number",
+			file: `{"package_defaults": 3}`,
+			want: `package_defaults must be a JSON object`,
+			line: 1, col: 22,
+		},
+		{
+			name: "entry is a list",
+			file: `{"packages": {"example.com/m": []}}`,
+			want: `packages["example.com/m"] must be a JSON object`,
+			line: 1, col: 32,
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := writeFile(t, tt.file)
+
+			_, _, err := composite.Find(dir, testKeys())
+
+			var typed *composite.ShapeError
+			require.ErrorAs(t, err, &typed, "Find error %v", err)
+			path := filepath.Join(dir, composite.FileName)
+			assert.Equal(t, fmt.Sprintf("%s:%d:%d: %s", path, tt.line, tt.col, tt.want), err.Error(), "message")
+			assert.Equal(t, path, typed.Path, "path")
+		})
+	}
+}
+
+// TestFindAcceptsNullWhereAnObjectGoes states that null is an absent object
+// everywhere the shape check wants one.
+func TestFindAcceptsNullWhereAnObjectGoes(t *testing.T) {
+	dir := writeFile(t, `{"package_defaults": null, "packages": {"example.com/m": null}}`)
 
 	_, _, err := composite.Find(dir, testKeys())
 
-	require.Error(t, err, "Find")
-	path := filepath.Join(dir, composite.FileName)
-	assert.Equal(t, "parsing "+path+": json: cannot unmarshal array into Go struct field File.packages of type map[string]composite.Entry", err.Error(), "message")
+	require.NoError(t, err, "Find")
 }
 
 // TestFindRejectsANullKeyItDoesNotAccept states that a key read drops as null

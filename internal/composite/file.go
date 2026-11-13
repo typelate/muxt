@@ -240,12 +240,13 @@ func read(path string, keys Keys) (*File, error) {
 			line, col := position(data, syntax.Offset)
 			return nil, &ParseError{Path: path, Line: line, Col: col, Err: syntax}
 		}
-		// A wrong outer shape, such as a list where packages goes. Decoding
-		// into File says so in the json package's words, naming the field.
-		var f File
-		if typedErr := json.Unmarshal(data, &f); typedErr != nil {
-			err = typedErr
-		}
+	}
+	// A wrong outer shape, such as a list where packages goes, is reported
+	// from the tokens: the json package would name this package's Go types.
+	if shapeErr := checkShape(path, data); shapeErr != nil {
+		return nil, shapeErr
+	}
+	if err != nil {
 		return nil, fmt.Errorf("parsing %s: %w", path, err)
 	}
 	if err := checkKinds(path, raw, keys); err != nil {
