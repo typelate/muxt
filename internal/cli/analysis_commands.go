@@ -2,7 +2,6 @@ package cli
 
 import (
 	"fmt"
-	"path/filepath"
 	"regexp"
 	"strings"
 
@@ -42,11 +41,6 @@ func checkCommand(workingDirectory *string, getEnv func(string) string, run func
 			if found {
 				config.TemplatesVariables = job.Config.TemplatesVariables
 			}
-			config.Dir, err = filepath.Abs(*workingDirectory)
-			if err != nil {
-				return fmt.Errorf("%s: working directory: %w", checkCommandName, err)
-			}
-			config.ModuleRoot, _ = moduleRoot(config.Dir)
 			return run(cmd, dir, config)
 		},
 	}

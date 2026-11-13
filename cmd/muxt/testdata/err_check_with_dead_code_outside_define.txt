@@ -8,7 +8,7 @@ cmpenv stderr want-err.txt
 
 -- want-err.txt --
 Unused templates:
-  - template.gohtml:1:31: "template.gohtml"
+  - $WORK/template.gohtml:1:31: "template.gohtml"
 -- template.gohtml --
 {{/* This comment is fine */}}
 

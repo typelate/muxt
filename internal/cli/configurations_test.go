@@ -624,17 +624,17 @@ func TestCommandLineConfigurations(t *testing.T) {
 		{
 			name: "check",
 			args: "check",
-			want: analysis.CheckConfiguration{TemplatesVariables: []string{"templates"}, Dir: "/work"},
+			want: analysis.CheckConfiguration{TemplatesVariables: []string{"templates"}},
 		},
 		{
 			name: "check verbosely",
 			args: "check -v",
-			want: analysis.CheckConfiguration{Verbose: true, TemplatesVariables: []string{"templates"}, Dir: "/work"},
+			want: analysis.CheckConfiguration{Verbose: true, TemplatesVariables: []string{"templates"}},
 		},
 		{
 			name: "check allowing unused templates",
 			args: "check --allow-unused",
-			want: analysis.CheckConfiguration{AllowUnused: true, TemplatesVariables: []string{"templates"}, Dir: "/work"},
+			want: analysis.CheckConfiguration{AllowUnused: true, TemplatesVariables: []string{"templates"}},
 		},
 		{
 			name: "the route listing",
@@ -857,7 +857,7 @@ func TestCheckIgnoresAReceiverType(t *testing.T) {
 		},
 	})
 	require.NoError(t, err, "muxt check --receiver-type=T")
-	assert.Equal(t, analysis.CheckConfiguration{TemplatesVariables: []string{"templates"}, Dir: "/work"}, got, "muxt check --receiver-type=T")
+	assert.Equal(t, analysis.CheckConfiguration{TemplatesVariables: []string{"templates"}}, got, "muxt check --receiver-type=T")
 	assert.Equal(t, "Flag --receiver-type has been deprecated, muxt check reads the receiver type from the generated routes file and ignores this flag\n", stderr.String(), "stderr")
 }
 

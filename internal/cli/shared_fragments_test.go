@@ -621,13 +621,11 @@ func TestRoutesListsOverriddenSharedNames(t *testing.T) {
 	})
 }
 
-// TestCheckNamesSharedFileRelativeToWorkingDirectory states that an error in a
-// shared file's template names the file relative to the directory muxt runs in,
-// with line and column, and that a template of the package's own file in the
-// same run is named from the same base. The working directory is the base
-// after -C is applied, so -C workspace prints what running inside workspace
-// prints.
-func TestCheckNamesSharedFileRelativeToWorkingDirectory(t *testing.T) {
+// TestCheckNamesSharedFileByAbsolutePath states that an error in a shared
+// file's template names the file by its absolute path, with line and column,
+// and that a template of the package's own file in the same run is named the
+// same way, so an editor can open either from the output.
+func TestCheckNamesSharedFileByAbsolutePath(t *testing.T) {
 	if testing.Short() {
 		t.Skip("loads packages with the go command")
 	}
@@ -635,6 +633,10 @@ func TestCheckNamesSharedFileRelativeToWorkingDirectory(t *testing.T) {
 		"fragments/layout.gohtml": `{{define "layout"}}<main>{{.Nope}}</main>{{end}}`,
 		"workspace/own.gohtml":    `{{define "orphan"}}<i></i>{{end}}`,
 	})
+	// The go command prints the directory with symlinks resolved, which on
+	// macOS turns /var into /private/var.
+	dir, err := filepath.EvalSymlinks(dir)
+	require.NoError(t, err, "resolve module directory")
 	workspace := filepath.Join(dir, "workspace")
 	output, err := runMuxt(t, workspace, "generate", "--use-receiver-type=T")
 	require.NoError(t, err, "generate: %s", output)
@@ -642,10 +644,8 @@ func TestCheckNamesSharedFileRelativeToWorkingDirectory(t *testing.T) {
 	output, err = runMuxt(t, workspace, "check")
 
 	require.Error(t, err, "check: %s", output)
-	assert.Contains(t, output, "../fragments/layout.gohtml:1:28: executing \"layout\" at <.Nope>", "check output")
-	assert.Contains(t, output, `  - own.gohtml:1:20: "orphan"`, "check output")
-	assert.NotContains(t, output, filepath.Join(dir, "fragments"), "check output names no absolute template path")
-	assert.NotContains(t, output, filepath.Join(dir, "workspace", "own.gohtml"), "check output names no absolute template path")
+	assert.Contains(t, output, filepath.Join(dir, "fragments", "layout.gohtml")+":1:28: executing \"layout\" at <.Nope>", "check output")
+	assert.Contains(t, output, "  - "+filepath.Join(dir, "workspace", "own.gohtml")+`:1:20: "orphan"`, "check output")
 }
 
 // TestCheckStillReportsUnusedOwnTemplate states that exempting the other
