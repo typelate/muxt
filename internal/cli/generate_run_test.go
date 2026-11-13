@@ -14,6 +14,7 @@ import (
 	"golang.org/x/tools/go/packages"
 
 	"github.com/typelate/muxt/internal/composite"
+	"github.com/typelate/muxt/internal/load"
 )
 
 // entryModule writes a module whose packages are the keys of receivers, each
@@ -314,4 +315,42 @@ func TestGenerateNotesNameTheirEntry(t *testing.T) {
 
 	require.NoError(t, err, "generate in a")
 	assert.True(t, strings.HasPrefix(stdout, "note: S does not define Missing("), "stdout of a run over one entry:\n%s", stdout)
+}
+
+// TestGenerateOfOnePackagePrintsItsLoadDiagnostic states that a run of one
+// package whose directory has no Go files, from flags or from a single
+// muxt.json entry, prints the multi-line diagnostic to stderr the way a run
+// did before generate checked packages up front, and returns the error
+// unwrapped.
+func TestGenerateOfOnePackagePrintsItsLoadDiagnostic(t *testing.T) {
+	if testing.Short() {
+		t.Skip("loads packages with the go command")
+	}
+	for _, tt := range []struct {
+		name  string
+		entry string
+		flags []string
+	}{
+		{name: "flags", flags: []string{"--use-receiver-type=S"}},
+		{name: "one entry", entry: `{"packages": {"example.com/m": {"use_receiver_type": "S"}}}`},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			writeTestFile(t, dir, "go.mod", "module example.com/m\n\ngo 1.24\n")
+			if tt.entry != "" {
+				writeTestFile(t, dir, composite.FileName, tt.entry)
+			}
+			var stdout, stderr bytes.Buffer
+
+			err := commands(dir, append([]string{"generate"}, tt.flags...), func(string) string { return "" }, func() (string, bool) { return "v1.2.3", true }, strings.NewReader(""), &stdout, &stderr, runners{
+				generate: generateRunner(loadFromGoCommand),
+			})
+
+			var lookup *load.PackageLookupError
+			require.ErrorAs(t, err, &lookup, "error %v", err)
+			assert.Equal(t, "Error:\n"+lookup.MultiLineError()+"\n", stderr.String(), "stderr")
+			assert.Contains(t, stderr.String(), "\tmuxt loads Go packages like the go command and inherits GOWORK, GOFLAGS, and GOROOT", "stderr hint")
+			assert.Empty(t, stdout.String(), "stdout")
+		})
+	}
 }

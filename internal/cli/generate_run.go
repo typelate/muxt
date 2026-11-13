@@ -98,6 +98,12 @@ func generateRunner(loadPackages packageLoader) func(*cobra.Command, []generateJ
 		// is refused before an earlier entry is written.
 		for _, job := range jobs {
 			if err := load.CheckLoaded(job.Config.OutputDirectory(job.Dir), pl); err != nil {
+				// One package has no other entry to name, so it explains
+				// itself the way every later failure of it does.
+				if len(jobs) == 1 {
+					printMultiLineError(cmd, err)
+					return err
+				}
 				if job.File == "" {
 					return err
 				}
