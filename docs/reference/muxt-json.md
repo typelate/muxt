@@ -28,6 +28,8 @@
 
 `muxt fmt` does not read the file.
 
+In the file's directory, a package with a templates variable and no entry is neither generated nor checked.
+
 Only a flagless `muxt generate` needs an entry. In a directory with none, the other commands use their own flags and defaults.
 
 `muxt generate config` creates the file, `muxt generate package NAME` adds an entry, `muxt generate def NAME` adds a route template.

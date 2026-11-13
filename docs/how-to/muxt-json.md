@@ -70,7 +70,7 @@ Both flags lines become entries ([keys](../reference/muxt-json.md)):
 
 ## 4. Keep one go:generate
 
-Delete the `//go:generate` line from `workspace`. In the root package, where `muxt.json` sits, the line becomes:
+Delete the `//go:generate` line from `workspace`. Every package whose line you delete needs an entry: [a package with no entry is skipped](../reference/muxt-json.md). In the root package, where `muxt.json` sits, the line becomes:
 
 ```go
 //go:generate muxt generate
