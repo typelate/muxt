@@ -122,6 +122,24 @@ func TestSharedFilesOtherModuleError(t *testing.T) {
 	}
 }
 
+// TestSharedFilesStandardLibraryPackage states that a ParseFS argument naming a
+// standard library package, which has no module path, says the package holds
+// no embed.FS muxt can read instead of naming an empty module.
+func TestSharedFilesStandardLibraryPackage(t *testing.T) {
+	scope, selector := sharedArgument(t, "TemplateSource", namedType("embed", "FS"), "net/http", "")
+
+	_, _, err := sharedFiles(scope, selector)
+
+	var typed OtherModuleError
+	if !errors.As(err, &typed) {
+		t.Fatalf("sharedFiles(fragments.TemplateSource) error = %v (%T), want OtherModuleError", err, err)
+	}
+	const want = "workspace.go:5:9: package net/http is in the standard library, which holds no embed.FS muxt can read; a shared embed.FS must come from a package of this module (example.com/m)"
+	if got := err.Error(); got != want {
+		t.Errorf("sharedFiles(fragments.TemplateSource) error = %q, want %q", got, want)
+	}
+}
+
 // TestSharedFilesUnavailablePackage states that a ParseFS argument naming a
 // package the evaluation was given no embedded files for fails with a
 // SharedPackageUnavailableError, not an OtherModuleError, and that the message

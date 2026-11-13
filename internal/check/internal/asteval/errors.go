@@ -58,6 +58,9 @@ type OtherModuleError struct {
 
 // Error is one line: the position, what failed and how to fix it.
 func (e OtherModuleError) Error() string {
+	if e.OtherModule == "" {
+		return fmt.Sprintf("%s: package %s is in the standard library, which holds no embed.FS muxt can read; a shared embed.FS must come from a package of this module (%s)", e.Position, e.ImportPath, e.ThisModule)
+	}
 	return fmt.Sprintf("%s: package %s is in module %s, not in this module (%s); a shared embed.FS must come from a package of this module", e.Position, e.ImportPath, e.OtherModule, e.ThisModule)
 }
 
