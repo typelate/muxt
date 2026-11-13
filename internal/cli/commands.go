@@ -14,6 +14,7 @@ import (
 )
 
 const (
+	rootCommandName                = "muxt"
 	generateCommandName            = "generate"
 	versionCommandName             = "version"
 	checkCommandName               = "check"
@@ -114,7 +115,11 @@ The documentation for this version is in the binary:
 			if err := checkFormat(cmd); err != nil {
 				return err
 			}
-			jobs, err := routesJobs(*workingDirectory, cmd.Flags(), rootCommandConfig, getEnv)
+			sel, err := selectJobs(rootSpec(rootCommandConfig, getEnv), *workingDirectory, cmd.Flags(), getEnv)
+			if err != nil {
+				return err
+			}
+			jobs, err := newRoutesJobs(sel)
 			if err != nil {
 				return err
 			}

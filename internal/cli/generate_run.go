@@ -11,45 +11,12 @@ import (
 	"slices"
 
 	"github.com/spf13/cobra"
-	"github.com/spf13/pflag"
 
 	"github.com/typelate/muxt/internal/composite"
 	"github.com/typelate/muxt/internal/generate"
 	"github.com/typelate/muxt/internal/load"
 	"github.com/typelate/muxt/internal/muxt"
 )
-
-// generateJobs chooses what a generate run writes. With no generate flag given
-// and a muxt.json entry for wd, the entry configures the run; otherwise the
-// flags do. Flags win outright so a command line never half-merges with a
-// file. It reads the file itself, since nothing else needs it yet.
-func generateJobs(wd string, flags *pflag.FlagSet, flagConfig *generate.RoutesFileConfiguration, deprecatedTemplatesVar string, getEnv func(string) string, version func() (string, bool)) ([]packageJob, error) {
-	if flagNames := givenSettingFlags(flags, generateSettingFlags()); len(flagNames) > 0 {
-		if err := rejectConfiguredDirectory(generateCommandName, wd, flagNames); err != nil {
-			return nil, err
-		}
-	} else {
-		_, jobs, found, err := entryJobs(wd, getEnv, version)
-		if err != nil {
-			return nil, err
-		}
-		if found {
-			// Verbose is a run setting, never a muxt.json key, so every job
-			// takes it from the command line.
-			for i := range jobs {
-				jobs[i].Config.Verbose = flagConfig.Verbose
-			}
-			return jobs, nil
-		}
-		if err := requireEntry(wd); err != nil {
-			return nil, err
-		}
-	}
-	if err := finalizeGenerate(flagConfig, flags, deprecatedTemplatesVar, wd, getEnv, version); err != nil {
-		return nil, err
-	}
-	return []packageJob{{Dir: wd, Config: *flagConfig}}, nil
-}
 
 // packageLoader is the only way a run asks for packages, so one go command
 // run can serve several package directories and a test can answer without one.

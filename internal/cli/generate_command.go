@@ -42,11 +42,11 @@ func generateCommand(workingDirectory *string, getEnv func(string) string, versi
 			// The flags parsed, so what follows rejects their values, and
 			// the usage text would only bury the error that says why.
 			cmd.SilenceUsage = true
-			jobs, err := generateJobs(*workingDirectory, cmd.Flags(), &config, deprecatedTemplatesVar, getEnv, version)
+			sel, err := selectJobs(generateSpec(&config, cmd.Flags(), deprecatedTemplatesVar, getEnv, version), *workingDirectory, cmd.Flags(), getEnv)
 			if err != nil {
 				return err
 			}
-			return run(cmd, jobs)
+			return run(cmd, sel.Jobs)
 		},
 	}
 
@@ -54,6 +54,26 @@ func generateCommand(workingDirectory *string, getEnv func(string) string, versi
 	cmd.AddCommand(generateConfigCommand(workingDirectory), generatePackageCommand(workingDirectory, getEnv, version), generateDefinitionCommand(workingDirectory, getEnv, loadPackages))
 
 	return cmd
+}
+
+// generateSpec is generate's jobSpec. Its Fallback is the configuration the
+// command line gives dir, finalized like an entry, so flags and entries meet
+// the same rules.
+func generateSpec(config *generate.RoutesFileConfiguration, flags *pflag.FlagSet, deprecatedTemplatesVar string, getEnv func(string) string, version func() (string, bool)) jobSpec {
+	return jobSpec{
+		Name:         generateCommandName,
+		Settings:     generateSettingFlags(),
+		Scope:        eachEntry,
+		RequireEntry: true,
+		Verbose:      config.Verbose,
+		Version:      version,
+		Fallback: func(dir string) (generate.RoutesFileConfiguration, error) {
+			if err := finalizeGenerate(config, flags, deprecatedTemplatesVar, dir, getEnv, version); err != nil {
+				return generate.RoutesFileConfiguration{}, err
+			}
+			return *config, nil
+		},
+	}
 }
 
 // finalizeGenerate turns flag values into the configuration a run writes

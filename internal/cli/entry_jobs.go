@@ -65,28 +65,6 @@ func rejectConfiguredDirectory(command, wd string, flagNames []string) error {
 	return &composite.ConfiguredDirectoryError{Path: lookup.File.Name, Command: command, Flags: flagNames}
 }
 
-// requireEntry returns a *composite.MissingEntryError when the nearest
-// muxt.json is above wd and has no entry for it. Only a flagless generate
-// needs one, because only it writes from the file; every other command reads
-// a package and falls back to its own flags and defaults.
-func requireEntry(wd string) error {
-	lookup, err := lookupMuxtJSONEntry(wd)
-	if err != nil || lookup.File == nil || lookup.HasEntry {
-		return err
-	}
-	ownKey, err := lookup.File.KeyFor(lookup.File.Dir)
-	if err != nil {
-		return fmt.Errorf("muxt.json entry for %s: %w", lookup.File.Dir, err)
-	}
-	if lookup.Key == ownKey {
-		if len(lookup.File.Packages) == 0 {
-			return &composite.EmptyPackagesError{Path: lookup.File.Name}
-		}
-		return nil
-	}
-	return &composite.MissingEntryError{Path: lookup.File.Name, Key: lookup.Key}
-}
-
 // entryJobs returns the jobs the nearest muxt.json gives a flagless run in wd.
 // In the file's own directory that is one job per entry, and every entry is
 // validated before any job is returned. In a sub-directory it is that

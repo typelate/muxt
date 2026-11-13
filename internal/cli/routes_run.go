@@ -2,10 +2,9 @@ package cli
 
 import (
 	"github.com/spf13/cobra"
-	"github.com/spf13/pflag"
 
 	"github.com/typelate/muxt/internal/analysis"
-	"github.com/typelate/muxt/internal/composite"
+	"github.com/typelate/muxt/internal/generate"
 	"github.com/typelate/muxt/internal/load"
 )
 
@@ -18,15 +17,18 @@ type routesJob struct {
 	Report configurationReport
 }
 
-// newRoutesJob is the job for a packageJob, with the report of its
-// configuration. f is the muxt.json the job's entry came from, nil when flags
-// configured it, and flagNames are the flags that did.
-func newRoutesJob(f *composite.File, flagNames []string, job packageJob) (routesJob, error) {
-	report, err := newConfigurationReport(f, job.Key, flagNames, job.Config)
-	if err != nil {
-		return routesJob{}, err
+// newRoutesJobs is a routesJob for each job sel chose, each with the report of
+// its configuration: the muxt.json it came from, or the flags and defaults.
+func newRoutesJobs(sel selection) ([]routesJob, error) {
+	jobs := make([]routesJob, len(sel.Jobs))
+	for i, job := range sel.Jobs {
+		report, err := newConfigurationReport(sel.EntryFile(job), job.Key, job.Given, job.Config)
+		if err != nil {
+			return nil, err
+		}
+		jobs[i] = routesJob{packageJob: job, Report: report}
 	}
-	return routesJob{packageJob: job, Report: report}, nil
+	return jobs, nil
 }
 
 // definitions is the part of the job's configuration the listing resolves with.
@@ -39,47 +41,26 @@ func (j routesJob) definitions() analysis.DefinitionsConfiguration {
 	}
 }
 
-// routesJobs chooses what the route listing reads, the way generateJobs
-// chooses what generate writes: with no shared flag given and a muxt.json
-// entry for wd, the entry decides; otherwise the flags do.
-func routesJobs(wd string, flags *pflag.FlagSet, flagConfig analysis.DefinitionsConfiguration, getEnv func(string) string) ([]routesJob, error) {
-	flagNames := givenSettingFlags(flags, rootSettingFlags())
-	if len(flagNames) > 0 {
-		if err := rejectConfiguredDirectory("muxt", wd, flagNames); err != nil {
-			return nil, err
-		}
-	} else {
-		f, jobs, found, err := entryJobs(wd, getEnv, noVersion)
-		if err != nil {
-			return nil, err
-		}
-		if found {
-			listing := make([]routesJob, len(jobs))
-			for i, job := range jobs {
-				// Verbose is a run setting, never a muxt.json key.
-				job.Config.Verbose = flagConfig.Verbose
-				if listing[i], err = newRoutesJob(f, nil, job); err != nil {
-					return nil, err
-				}
+// rootSpec is the jobSpec of bare muxt. Only the three shared flags are read
+// from the command line, so the rest of its Fallback is what an empty entry
+// gives.
+func rootSpec(flagConfig analysis.DefinitionsConfiguration, getEnv func(string) string) jobSpec {
+	return jobSpec{
+		Name:     rootCommandName,
+		Settings: rootSettingFlags(),
+		Scope:    eachEntry,
+		Verbose:  flagConfig.Verbose,
+		Fallback: func(dir string) (generate.RoutesFileConfiguration, error) {
+			config, err := defaultConfiguration(dir, getEnv)
+			if err != nil {
+				return generate.RoutesFileConfiguration{}, err
 			}
-			return listing, nil
-		}
+			config.ReceiverPackage = flagConfig.ReceiverPackage
+			config.ReceiverType = flagConfig.ReceiverType
+			config.TemplatesVariables = flagConfig.TemplatesVariables
+			return config, nil
+		},
 	}
-	// Only the three shared flags are read from the command line, so the
-	// rest of the configuration is what an empty entry gives.
-	config, err := defaultConfiguration(wd, getEnv)
-	if err != nil {
-		return nil, err
-	}
-	config.Verbose = flagConfig.Verbose
-	config.ReceiverPackage = flagConfig.ReceiverPackage
-	config.ReceiverType = flagConfig.ReceiverType
-	config.TemplatesVariables = flagConfig.TemplatesVariables
-	job, err := newRoutesJob(nil, flagNames, packageJob{Dir: wd, Config: config})
-	if err != nil {
-		return nil, err
-	}
-	return []routesJob{job}, nil
 }
 
 // routesRunner lists jobs from one load, a package after the packages it
