@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/typelate/muxt/internal/analysis"
 	"github.com/typelate/muxt/internal/composite"
 	"github.com/typelate/muxt/internal/generate"
 )
@@ -190,9 +191,9 @@ func TestSettingEmptyAndReportValue(t *testing.T) {
 	assert.False(t, byName["name"].empty(), "a name")
 	c.Name = ""
 	assert.True(t, byName["name"].empty(), "an empty name")
-	assert.Equal(t, []string{"a", ""}, byName[useTemplatesVariable].reportValue(), "list")
-	assert.Equal(t, "64 MiB", byName["limit"].reportValue(), "bytes")
-	assert.Equal(t, true, byName["quiet"].reportValue(), "bool")
+	assert.Equal(t, analysis.ListValue([]string{"a", ""}), byName[useTemplatesVariable].reportValue(), "list")
+	assert.Equal(t, analysis.TextValue("64 MiB"), byName["limit"].reportValue(), "bytes")
+	assert.Equal(t, analysis.FlagValue(true), byName["quiet"].reportValue(), "bool")
 	assert.True(t, byName[useTemplatesVariable].nonEmpty, "nonEmpty")
 	assert.False(t, byName["route"].nonEmpty, "not nonEmpty")
 }

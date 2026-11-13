@@ -34,7 +34,46 @@ type SettingGroup struct {
 // ReportLine is one muxt.json key and the value the run uses for it.
 type ReportLine struct {
 	Key   string
-	Value any
+	Value ReportValue
+}
+
+// ReportValue is the value of one setting: a string, a boolean or a list of
+// strings, the kinds a muxt.json key holds. It is a closed type so the report
+// needs no any, and it writes as the JSON value of that kind.
+type ReportValue struct {
+	text string
+	flag bool
+	list []string
+	kind reportKind
+}
+
+type reportKind int
+
+const (
+	textKind reportKind = iota
+	flagKind
+	listKind
+)
+
+// TextValue is the report value of a string setting.
+func TextValue(s string) ReportValue { return ReportValue{kind: textKind, text: s} }
+
+// FlagValue is the report value of a boolean setting.
+func FlagValue(b bool) ReportValue { return ReportValue{kind: flagKind, flag: b} }
+
+// ListValue is the report value of a list setting.
+func ListValue(l []string) ReportValue { return ReportValue{kind: listKind, list: l} }
+
+// MarshalJSON writes the value as the JSON of its kind.
+func (v ReportValue) MarshalJSON() ([]byte, error) {
+	switch v.kind {
+	case flagKind:
+		return json.Marshal(v.flag)
+	case listKind:
+		return json.Marshal(v.list)
+	default:
+		return json.Marshal(v.text)
+	}
 }
 
 // WriteTo writes the section as text: one heading per source, a line per

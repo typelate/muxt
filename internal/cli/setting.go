@@ -11,6 +11,7 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/spf13/pflag"
 
+	"github.com/typelate/muxt/internal/analysis"
 	"github.com/typelate/muxt/internal/composite"
 	"github.com/typelate/muxt/internal/generate"
 )
@@ -100,7 +101,7 @@ type setting struct {
 	empty func() bool
 	// derive writes the Derived value, nil when the setting has none.
 	derive      func()
-	reportValue func() any
+	reportValue func() analysis.ReportValue
 	// decode sets the field from the JSON value of the setting's key.
 	decode func(value json.RawMessage) error
 	// encode returns the JSON value that records the field in a muxt.json.
@@ -145,7 +146,7 @@ func stringSetting(p *string, s spec[string]) setting {
 			return []string{"--" + s.Name + "=" + *p}
 		},
 		empty:       func() bool { return *p == "" },
-		reportValue: func() any { return *p },
+		reportValue: func() analysis.ReportValue { return analysis.TextValue(*p) },
 		decode:      func(value json.RawMessage) error { return json.Unmarshal(value, p) },
 		encode:      func() (json.RawMessage, error) { return json.Marshal(*p) },
 	}
@@ -180,7 +181,7 @@ func boolSetting(p *bool, s spec[bool]) setting {
 			}
 		},
 		empty:       func() bool { return false },
-		reportValue: func() any { return *p },
+		reportValue: func() analysis.ReportValue { return analysis.FlagValue(*p) },
 		decode:      func(value json.RawMessage) error { return json.Unmarshal(value, p) },
 		encode:      func() (json.RawMessage, error) { return json.Marshal(*p) },
 	}
@@ -217,7 +218,7 @@ func stringsSetting(p *[]string, s spec[[]string]) setting {
 			return args
 		},
 		empty:       func() bool { return slices.Contains(*p, "") },
-		reportValue: func() any { return *p },
+		reportValue: func() analysis.ReportValue { return analysis.ListValue(*p) },
 		decode: func(value json.RawMessage) error {
 			// A list of its own, so the setting never aliases what it was
 			// given or what an earlier decode left.
@@ -261,7 +262,7 @@ func bytesSetting(p *int64, s spec[int64]) setting {
 			return []string{"--" + s.Name + "=" + strconv.FormatInt(*p, 10)}
 		},
 		empty:       func() bool { return false },
-		reportValue: func() any { return byteSize{p: p}.String() },
+		reportValue: func() analysis.ReportValue { return analysis.TextValue(byteSize{p: p}.String()) },
 		decode: func(value json.RawMessage) error {
 			// The flag's own parser turns "64MB" into bytes, so the entry
 			// and the command line accept the same values.
