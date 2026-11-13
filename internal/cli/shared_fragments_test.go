@@ -230,7 +230,9 @@ func TestFmtWriteLeavesSharedFilesAlone(t *testing.T) {
 // TestGenerateMultipleFilesNamesClashWithSharedFile states that with
 // --output-multiple-files a route in the other package's layout.gohtml and a
 // route in the package's own layout.gohtml, which would write the same
-// generated file, fail naming both template files.
+// generated file, fail naming both template files. The rule is stated in
+// internal/generate; this is the one test that the real loader gives it the
+// shared file.
 func TestGenerateMultipleFilesNamesClashWithSharedFile(t *testing.T) {
 	if testing.Short() {
 		t.Skip("loads packages with the go command")
@@ -681,39 +683,11 @@ func TestCheckNamesSharedFileByAbsolutePath(t *testing.T) {
 	assert.Contains(t, output, "  - "+filepath.Join(dir, "workspace", "own.gohtml")+`:1:20: "orphan"`, "check output")
 }
 
-// TestCheckStillReportsUnusedOwnTemplate states that exempting the other
-// package's templates leaves the package's own unused template reported, and
-// that a route template in a shared file with no generated handler is reported
-// too, since the package generates the handlers of the routes it parses.
-func TestCheckStillReportsUnusedOwnTemplate(t *testing.T) {
-	if testing.Short() {
-		t.Skip("loads packages with the go command")
-	}
-	dir := fragmentsModule(t, map[string]string{
-		"fragments/shared.gohtml": `{{define "GET /shared SharedPage()"}}{{template "layout" .}}{{end}}`,
-		"workspace/own.gohtml":    `{{define "orphan"}}<i></i>{{end}}`,
-	})
-	workspace := filepath.Join(dir, "workspace")
-
-	output, err := runMuxt(t, workspace, "check")
-
-	require.Error(t, err, "check before generate: %s", output)
-	assert.Contains(t, output, "Route templates with no generated handler", "check output")
-	assert.Contains(t, output, `"GET /shared SharedPage()"`, "check output")
-
-	output, err = runMuxt(t, workspace, "generate", "--use-receiver-type=T")
-	require.NoError(t, err, "generate: %s", output)
-
-	output, err = runMuxt(t, workspace, "check")
-
-	require.Error(t, err, "check: %s", output)
-	assert.Contains(t, output, "Unused templates:", "check output")
-	assert.Contains(t, output, `"orphan"`, "check output")
-}
-
 // TestCheckDoesNotReportUnusedSharedTemplate states that a template defined in
 // the other package's file that the package never calls is not reported as
-// unused: the package that owns the file is the one that can remove it.
+// unused: the package that owns the file is the one that can remove it. The
+// rule is stated on a hand-built package in internal/analysis; this is the one
+// test that the real loader marks the definition as shared.
 func TestCheckDoesNotReportUnusedSharedTemplate(t *testing.T) {
 	if testing.Short() {
 		t.Skip("loads packages with the go command")
