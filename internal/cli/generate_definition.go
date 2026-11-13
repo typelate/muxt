@@ -38,7 +38,10 @@ func generateDefinitionCommand(workingDirectory *string, getEnv func(string) str
 		Use:     "def NAME",
 		Aliases: []string{"definition"},
 		Short:   "Add a route template to a template file",
-		Args:    cobra.ExactArgs(1),
+		Long: `Add a route template to a template file.
+
+The method stub it prints is a placeholder to rewrite: its result type is any, its body returns nil, and its receiver form follows what muxt infers. Imports are not added. Without --output-file it prints a txtar archive and writes nothing.`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cmd.SilenceUsage = true
 			if fragment && document {

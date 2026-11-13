@@ -95,3 +95,15 @@ func TestCommandHelpNamesReference(t *testing.T) {
 		})
 	}
 }
+
+func TestGenerateDefHelpSaysStubIsPlaceholder(t *testing.T) {
+	var stdout bytes.Buffer
+	err := commands(t.TempDir(), []string{"generate", "def", "--help"}, func(string) string { return "" }, cliVersion, strings.NewReader(""), &stdout, io.Discard, runners{})
+	require.NoError(t, err, "muxt generate def --help")
+	for _, want := range []string{
+		"placeholder to rewrite",
+		"Without --output-file it prints a txtar archive and writes nothing.",
+	} {
+		assert.Contains(t, stdout.String(), want, "muxt generate def --help")
+	}
+}
