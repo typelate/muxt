@@ -65,6 +65,10 @@ This function also receives an argument with a type matching the name given by o
 			Name: outputRoutesFuncWithMiddlewareParam, Example: "true",
 			Usage: `Adds a middleware parameter with type func(next http.Handler) http.Handler to the generated routes function and wraps every registered handler with it. Passing nil registers handlers unwrapped.`,
 		}),
+		boolSetting(&c.OutputMultipleFiles, spec[bool]{
+			Name: outputMultipleFiles, Example: "true",
+			Usage: `Split generated routes into separate files per template source file. By default, all routes are written to a single file.`,
+		}),
 	}
 }
 
