@@ -303,3 +303,50 @@ func TestGenerateConfigurationIsAliasOfConfig(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "{\n\t\"packages\": {}\n}\n", string(got), "muxt.json")
 }
+
+// TestGeneratePackageDeclaresTemplatesVariable states that the Go file of the
+// new package declares the first templates variable of the resolved entry: the
+// given --use-templates-variable, else package_defaults, else templates, so the
+// next generate finds the variable the entry names.
+func TestGeneratePackageDeclaresTemplatesVariable(t *testing.T) {
+	for _, tt := range []struct {
+		name        string
+		muxtJSON    string
+		commandLine string
+		want        string
+	}{
+		{name: "default", muxtJSON: `{}`, commandLine: "generate package widgets", want: "templates"},
+		{name: "flag", muxtJSON: `{}`, commandLine: "generate package widgets --use-templates-variable=widgetTemplates", want: "widgetTemplates"},
+		{name: "first of several", muxtJSON: `{}`, commandLine: "generate package widgets --use-templates-variable=a,b", want: "a"},
+		{name: "package_defaults", muxtJSON: `{"package_defaults": {"use_templates_variable": ["pages"]}}`, commandLine: "generate package widgets", want: "pages"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			root := moduleDir(t)
+			require.NoError(t, os.WriteFile(filepath.Join(root, "muxt.json"), []byte(tt.muxtJSON), 0o644))
+
+			_, err := runCommand(t, root, tt.commandLine)
+
+			require.NoError(t, err)
+			file, err := parser.ParseFile(token.NewFileSet(), filepath.Join(root, "widgets", "widgets.go"), nil, parser.AllErrors)
+			require.NoError(t, err, "widgets.go parses")
+			assert.Contains(t, declaredVarNames(file), tt.want, "templates variable")
+		})
+	}
+}
+
+// declaredVarNames returns the names of the package-level variables in file.
+func declaredVarNames(file *ast.File) []string {
+	var names []string
+	for _, decl := range file.Decls {
+		gen, ok := decl.(*ast.GenDecl)
+		if !ok || gen.Tok != token.VAR {
+			continue
+		}
+		for _, spec := range gen.Specs {
+			for _, name := range spec.(*ast.ValueSpec).Names {
+				names = append(names, name.Name)
+			}
+		}
+	}
+	return names
+}

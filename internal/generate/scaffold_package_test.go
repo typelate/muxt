@@ -70,3 +70,16 @@ func declaredGenDeclNames(file *ast.File, tok token.Token) []string {
 	}
 	return names
 }
+
+// TestPackageDeclaresGivenTemplatesVariable states that the parsed templates
+// variable of the new file has the name the spec gives, so the entry that
+// names it finds it.
+func TestPackageDeclaresGivenTemplatesVariable(t *testing.T) {
+	_, src, err := PackageFile(PackageFileSpec{Name: "widgets", ReceiverType: "T", TemplatesVariable: "widgetTemplates"})
+
+	require.NoError(t, err)
+	file, err := parser.ParseFile(token.NewFileSet(), "widgets.go", src, parser.AllErrors)
+	require.NoError(t, err, "source parses")
+	assert.Contains(t, declaredGenDeclNames(file, token.VAR), "widgetTemplates", "parsed templates variable")
+	assert.NotContains(t, declaredGenDeclNames(file, token.VAR), "templates", "default variable")
+}

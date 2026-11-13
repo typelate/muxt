@@ -91,7 +91,13 @@ func scaffoldPackage(out io.Writer, wd, name string, flags *pflag.FlagSet, confi
 	if err := os.Mkdir(dir, 0o755); err != nil {
 		return fmt.Errorf("creating %s: %w", name, err)
 	}
-	filename, src, err := generate.PackageFile(generate.PackageFileSpec{Name: name, ReceiverType: receiver})
+	// The entry names the variable the next generate looks for, so the file
+	// declares the first one the resolved entry names.
+	var templatesVariable string
+	if len(resolved.UseTemplatesVariable) > 0 {
+		templatesVariable = resolved.UseTemplatesVariable[0]
+	}
+	filename, src, err := generate.PackageFile(generate.PackageFileSpec{Name: name, ReceiverType: receiver, TemplatesVariable: templatesVariable})
 	if err != nil {
 		return err
 	}

@@ -2,6 +2,7 @@ package generate
 
 import (
 	"bytes"
+	"cmp"
 	"fmt"
 	"go/ast"
 	"go/format"
@@ -17,6 +18,9 @@ type PackageFileSpec struct {
 	Name string
 	// ReceiverType is the struct type the generated routes call methods on.
 	ReceiverType string
+	// TemplatesVariable names the variable that holds the parsed templates,
+	// the one the package's muxt.json entry reads. Empty means "templates".
+	TemplatesVariable string
 }
 
 // formattedLines is how many lines the file has once printed: the package
@@ -42,6 +46,7 @@ func PackageFile(spec PackageFileSpec) (filename string, src []byte, err error) 
 		return "", nil, fmt.Errorf("laying out %s.go", spec.Name)
 	}
 	b := builder{file: tf}
+	templatesVariable := cmp.Or(spec.TemplatesVariable, "templates")
 
 	embedDoc := &ast.CommentGroup{List: []*ast.Comment{{Slash: b.pos(8), Text: "//go:embed *.gohtml"}}}
 	file := &ast.File{
@@ -67,7 +72,7 @@ func PackageFile(spec PackageFileSpec) (filename string, src []byte, err error) 
 			&ast.GenDecl{
 				TokPos: b.pos(11),
 				Tok:    token.VAR,
-				Specs:  []ast.Spec{b.valueSpec("templates", nil, b.parseTemplates(11), 11)},
+				Specs:  []ast.Spec{b.valueSpec(templatesVariable, nil, b.parseTemplates(11), 11)},
 			},
 			&ast.GenDecl{
 				TokPos: b.pos(13),
