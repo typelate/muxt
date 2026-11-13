@@ -16,7 +16,7 @@ import (
 type routesJob struct {
 	packageJob
 	// Report is the Configuration section the listing starts with.
-	Report configurationReport
+	Report analysis.ConfigurationReport
 }
 
 // newRoutesJobs is a routesJob for each job sel chose, each with the report of

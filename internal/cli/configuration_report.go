@@ -1,9 +1,7 @@
 package cli
 
 import (
-	"bytes"
 	"cmp"
-	"encoding/json/v2"
 	"fmt"
 	"io"
 	"slices"
@@ -13,45 +11,15 @@ import (
 	"github.com/typelate/muxt/internal/generate"
 )
 
-// configurationReport is the Configuration section of the route listing: every
-// generate setting, once. It is the --format json value of the listing's
-// Configuration member, an array of groups, each a Source and its Settings in
-// order, each a Key as muxt.json writes it and its Value:
-//
-//	"Configuration": [
-//		{"Source": "defaults", "Settings": [{"Key": "output_file", "Value": "template_routes.go"}]}
-//	]
-//
-// The two groups from a muxt.json, packages["<key>"] and package_defaults, also
-// have a File member holding that file's absolute path, so an editor can open
-// it from any directory. Text writes that path once above both, since a reader sees the
-// file first and then its entry. The groups and their settings are arrays, not
-// objects, because their order is part of what the report says.
-type configurationReport []settingGroup
-
-// settingGroup is the settings that come from one source. File is the muxt.json
-// the source is in, empty for flags and defaults.
-type settingGroup struct {
-	Source   string
-	Settings []reportLine
-	File     string `json:",omitzero"`
-}
-
-// reportLine is one muxt.json key and the value the run uses for it.
-type reportLine struct {
-	Key   string
-	Value any
-}
-
 // newConfigurationReport reports every setting of config, which the entry for
 // key in f produced, under the source that gave it. f is nil when no entry did.
-func newConfigurationReport(f *composite.File, key string, given givenSettings, config generate.RoutesFileConfiguration) (configurationReport, error) {
+func newConfigurationReport(f *composite.File, key string, given givenSettings, config generate.RoutesFileConfiguration) (analysis.ConfigurationReport, error) {
 	// The sources in the order a setting looks for its value: the command
 	// line, the entry itself, then package_defaults. A setting none of them
 	// gives is a default. Flags and an entry never configure one run, so at
 	// most one of the first two is present.
 	type reportSource struct {
-		group settingGroup
+		group analysis.SettingGroup
 		// gives reports whether the source gives the setting called name.
 		gives func(name string) bool
 	}
@@ -65,23 +33,23 @@ func newConfigurationReport(f *composite.File, key string, given givenSettings, 
 	var sources []reportSource
 	if len(given) > 0 {
 		sources = append(sources, reportSource{
-			group: settingGroup{Source: "flags"},
+			group: analysis.SettingGroup{Source: "flags"},
 			gives: given.has,
 		})
 	}
 	if f != nil {
 		sources = append(sources,
-			reportSource{group: settingGroup{Source: fmt.Sprintf("packages[%q]", key), File: f.Name}, gives: holds(f.Packages[key])},
-			reportSource{group: settingGroup{Source: "package_defaults", File: f.Name}, gives: holds(f.Defaults)},
+			reportSource{group: analysis.SettingGroup{Source: fmt.Sprintf("packages[%q]", key), File: f.Name}, gives: holds(f.Packages[key])},
+			reportSource{group: analysis.SettingGroup{Source: "package_defaults", File: f.Name}, gives: holds(f.Defaults)},
 		)
 	}
-	defaults := settingGroup{Source: "defaults"}
+	defaults := analysis.SettingGroup{Source: "defaults"}
 
 	// muxt generate --help lists flags by name, so the report does too.
 	settings := generateSettings(&config)
 	slices.SortFunc(settings, func(a, b setting) int { return cmp.Compare(a.name, b.name) })
 	for _, s := range settings {
-		line := reportLine{Key: composite.Key(s.name), Value: s.reportValue()}
+		line := analysis.ReportLine{Key: composite.Key(s.name), Value: s.reportValue()}
 		group := &defaults
 		for i := range sources {
 			if sources[i].gives(s.name) {
@@ -91,48 +59,18 @@ func newConfigurationReport(f *composite.File, key string, given givenSettings, 
 		}
 		group.Settings = append(group.Settings, line)
 	}
-	groups := []settingGroup{}
+	groups := []analysis.SettingGroup{}
 	for _, s := range sources {
 		groups = append(groups, s.group)
 	}
 	groups = append(groups, defaults)
-	var report configurationReport
+	var report analysis.ConfigurationReport
 	for _, group := range groups {
 		if len(group.Settings) > 0 {
 			report = append(report, group)
 		}
 	}
 	return report, nil
-}
-
-// WriteTo writes the section as text: one heading per source, a line per
-// setting written so it can be pasted into muxt.json, and a blank line after.
-// The file heading of a muxt.json's groups is written once, before the first of
-// them, and the groups and their settings are indented under it.
-func (r configurationReport) WriteTo(w io.Writer) (int64, error) {
-	var buf bytes.Buffer
-	buf.WriteString("Configuration:\n")
-	var file string
-	for _, group := range r {
-		indent := "  "
-		if group.File != "" {
-			if group.File != file {
-				fmt.Fprintf(&buf, "  %s:\n", group.File)
-				file = group.File
-			}
-			indent = "    "
-		}
-		fmt.Fprintf(&buf, "%s%s:\n", indent, group.Source)
-		for _, s := range group.Settings {
-			value, err := json.Marshal(s.Value)
-			if err != nil {
-				return 0, fmt.Errorf("writing %s: %w", s.Key, err)
-			}
-			fmt.Fprintf(&buf, "%s  %q: %s\n", indent, s.Key, value)
-		}
-	}
-	buf.WriteString("\n")
-	return io.Copy(w, &buf)
 }
 
 // routesListing is one templates variable's routes with the configuration the
@@ -148,7 +86,7 @@ func (r configurationReport) WriteTo(w io.Writer) (int64, error) {
 // one package writes the object alone.
 type routesListing struct {
 	*analysis.Routes
-	Configuration      configurationReport
+	Configuration      analysis.ConfigurationReport
 	Key                string `json:",omitzero"`
 	printConfiguration bool
 }
