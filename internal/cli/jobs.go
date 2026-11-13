@@ -42,9 +42,6 @@ type jobSpec struct {
 	// Fallback is the configuration the command's own flags and defaults give
 	// dir.
 	Fallback func(dir string) (generate.RoutesFileConfiguration, error)
-	// statFirst gives a path that is not a directory the Fallback job before
-	// anything reads a muxt.json, so the runner can say what is wrong with it.
-	statFirst bool
 }
 
 // packageJob is one package directory and what to run a command with. Key is
@@ -83,14 +80,14 @@ func (s selection) EntryFile(job packageJob) *composite.File {
 // directory the Fallback decides. It validates every job's directory and entry
 // before returning any. flags may be nil when nothing was given.
 func selectJobs(spec jobSpec, dir string, flags *pflag.FlagSet, getEnv func(string) string) (selection, error) {
-	if spec.statFirst {
-		if info, err := os.Stat(dir); err != nil || !info.IsDir() {
-			return fallbackSelection(spec, dir, nil, nil)
-		}
-	}
 	var given []string
 	if flags != nil {
 		given = givenSettingFlags(flags, spec.Settings)
+	}
+	// A path that is not a directory is read from no muxt.json: the runner
+	// says what is wrong with it, which no entry's message can.
+	if info, err := os.Stat(dir); err != nil || !info.IsDir() {
+		return fallbackSelection(spec, dir, nil, given)
 	}
 	lookup, err := lookupMuxtJSONEntry(dir)
 	if err != nil {

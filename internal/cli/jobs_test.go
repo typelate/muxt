@@ -26,7 +26,7 @@ func TestSelectJobs(t *testing.T) {
 	settings := []string{"use-receiver-type"}
 	writes := jobSpec{Name: "generate", Settings: settings, Scope: eachEntry, RequireEntry: true}
 	lists := jobSpec{Name: "muxt", Settings: settings, Scope: eachEntry}
-	reads := jobSpec{Name: "check", Settings: settings, Scope: itsEntry, statFirst: true}
+	reads := jobSpec{Name: "check", Settings: settings, Scope: itsEntry}
 
 	for _, tc := range []struct {
 		name     string
@@ -40,9 +40,9 @@ func TestSelectJobs(t *testing.T) {
 		wantFile  bool
 		wantErr   func(error) bool
 	}{
-		{name: "row 1 a directory that is not one reads nothing", spec: reads, muxtJSON: fieldkitEntries, dir: "missing", wantKeys: []string{""}},
-		{name: "row 1 does not apply to a command that writes", spec: writes, muxtJSON: fieldkitEntries, dir: "missing", wantErr: asError[*composite.MissingEntryError]},
-		{name: "row 1 does not apply to a listing", spec: lists, muxtJSON: fieldkitEntries, dir: "missing", wantKeys: []string{""}, wantFile: true},
+		{name: "row 1 a directory that is not one reads nothing, whatever the muxt.json lists", spec: reads, muxtJSON: fieldkitEntries, dir: "missing", wantKeys: []string{""}},
+		{name: "row 1 applies to a command that writes", spec: writes, muxtJSON: fieldkitEntries, dir: "missing", wantKeys: []string{""}},
+		{name: "row 1 applies to a listing", spec: lists, muxtJSON: fieldkitEntries, dir: "missing", wantKeys: []string{""}},
 
 		{name: "row 2 generate without a muxt.json", spec: writes, dir: "contacts", wantKeys: []string{""}},
 		{name: "row 2 listing without a muxt.json", spec: lists, dir: ".", wantKeys: []string{""}},

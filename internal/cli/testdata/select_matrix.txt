@@ -247,9 +247,9 @@ error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defi
 == stale entry, contacts: mutations test-template-mutations --dry-run
 mutations dir="contacts" templates=[templates]
 == listed directory that does not exist: generate generate -v
-error: $BASE/muxt.json: packages["example.com/fieldkit/ghost"]: directory $BASE/ghost does not exist
+generate key="" file="" dir="ghost" receiver="" receiver-package="" templates=[templates] output="template_routes.go" htmx=false logger=false verbose=true
 == listed directory that does not exist: muxt 
-error: $BASE/muxt.json: packages["example.com/fieldkit/ghost"]: directory $BASE/ghost does not exist
+routes key="" file="" dir="ghost" receiver="" receiver-package="" templates=[templates] htmx=false verbose=false report=[defaults@]
 == listed directory that does not exist: check check
 check dir="ghost" templates=[templates] allow-unused=false
 == listed directory that does not exist: calls list-template-calls
@@ -262,9 +262,9 @@ error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defi
 == listed directory that does not exist: mutations test-template-mutations --dry-run
 mutations dir="ghost" templates=[templates]
 == listed directory that does not exist, flags: generate generate -v --use-receiver-type=Server
-error: configure generate with fields in $BASE/muxt.json instead of flags
+generate key="" file="" dir="ghost" receiver="Server" receiver-package="" templates=[templates] output="template_routes.go" htmx=false logger=false verbose=true
 == listed directory that does not exist, flags: muxt --use-templates-variable=templates
-error: configure muxt with fields in $BASE/muxt.json instead of flags
+routes key="" file="" dir="ghost" receiver="" receiver-package="" templates=[templates] htmx=false verbose=false report=[flags@ defaults@]
 == listed directory that does not exist, flags: check check --use-templates-variable=pages
 check dir="ghost" templates=[pages] allow-unused=false
 == listed directory that does not exist, flags: calls list-template-calls --use-templates-variable=pages
@@ -326,7 +326,7 @@ error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defi
 == -C extra: mutations test-template-mutations --dry-run
 mutations dir="extra" templates=[templates]
 == -C directory that does not exist, below the file: generate generate -v
-error: $BASE/muxt.json: no packages entry "example.com/fieldkit/typo"; add one to generate this directory
+generate key="" file="" dir="typo" receiver="" receiver-package="" templates=[templates] output="template_routes.go" htmx=false logger=false verbose=true
 == -C directory that does not exist, below the file: muxt 
 routes key="" file="" dir="typo" receiver="" receiver-package="" templates=[templates] htmx=false verbose=false report=[defaults@]
 == -C directory that does not exist, below the file: check check

@@ -50,9 +50,8 @@ The method stub it prints is a placeholder to rewrite: its result type is any, i
 				body = generate.DocumentBody
 			}
 			spec := jobSpec{
-				Name:      generateCommandName + " def",
-				Scope:     itsEntry,
-				statFirst: true,
+				Name:  generateCommandName + " def",
+				Scope: itsEntry,
 				// The receiver type flag is the only setting def reads from the
 				// command line, and what it gives an unconfigured package.
 				Fallback: func(dir string) (generate.RoutesFileConfiguration, error) {

@@ -466,3 +466,45 @@ func testExploreModule(t *testing.T, base string, args []string) {
 		"tasks":    "muxt -C " + filepath.Join(base, "tasks") + " generate",
 	}, got, "generate command of each package: an entry configures its directory, valid or not")
 }
+
+// TestGenerateNamesMissingDirectory states that generate and bare muxt, run
+// in a directory that does not exist below a muxt.json, fail with what the
+// file system says, whether the file lists the directory, lacks it or a
+// setting flag was given. Nothing is loaded: the loader fails the test.
+func TestGenerateNamesMissingDirectory(t *testing.T) {
+	const listed = `{"packages": {"example.com/fieldkit/ghost": {"use_receiver_type": "Server"}}}`
+	for _, tt := range []struct {
+		name    string
+		muxJSON string
+		args    []string
+		command string
+	}{
+		{name: "generate, unlisted", muxJSON: fieldkitEntries, args: []string{"generate"}, command: "generate"},
+		{name: "generate, listed", muxJSON: listed, args: []string{"generate"}, command: "generate"},
+		{name: "generate, flag", muxJSON: fieldkitEntries, args: []string{"generate", "--use-receiver-type=Server"}, command: "generate"},
+		{name: "generate, listed, flag", muxJSON: listed, args: []string{"generate", "--use-receiver-type=Server"}, command: "generate"},
+		{name: "muxt, listed, flag", muxJSON: listed, args: []string{"--use-receiver-type=Server"}, command: "muxt"},
+		{name: "muxt, unlisted", muxJSON: fieldkitEntries, command: "muxt"},
+		{name: "muxt, listed", muxJSON: listed, command: "muxt"},
+		{name: "muxt, flag", muxJSON: fieldkitEntries, args: []string{"--use-receiver-type=Server"}, command: "muxt"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			base := newFieldkit(t, tt.muxJSON)
+			dir := filepath.Join(base, "ghost")
+			loader := func(string, []string, []string) (*load.Loaded, error) {
+				t.Error("a missing directory was loaded")
+				return &load.Loaded{}, nil
+			}
+
+			err := commands(dir, tt.args, func(string) string { return "" }, func() (string, bool) { return "v1.2.3", true }, strings.NewReader(""), new(bytes.Buffer), new(bytes.Buffer), runners{
+				generate: generateRunner(loader),
+				routes:   routesRunner(loader),
+			})
+
+			want := tt.command + ": package directory: stat " + dir + ": no such file or directory"
+			if assert.Error(t, err, "muxt %s in a missing directory", strings.Join(tt.args, " ")) {
+				assert.Equal(t, want, err.Error(), "muxt %s", strings.Join(tt.args, " "))
+			}
+		})
+	}
+}

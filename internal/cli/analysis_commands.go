@@ -62,10 +62,9 @@ func checkCommand(workingDirectory *string, getEnv func(string) string, run func
 // named.
 func templatesSpec(name string, templatesVariables []string, getEnv func(string) string) jobSpec {
 	return jobSpec{
-		Name:      name,
-		Settings:  templatesSettingFlags(),
-		Scope:     itsEntry,
-		statFirst: true,
+		Name:     name,
+		Settings: templatesSettingFlags(),
+		Scope:    itsEntry,
 		Fallback: func(dir string) (generate.RoutesFileConfiguration, error) {
 			config, err := defaultConfiguration(dir, getEnv)
 			if err != nil {
