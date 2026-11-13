@@ -36,6 +36,8 @@ The package directory defaults to the working directory and is resolved like `-C
 - `-mod` and `-modfile`: the [coverage pre-pass](#how-the-pre-pass-works), an extra unmutated run that records which template blocks the tests execute, sets both.
 - A `-coverpkg` that would cover `html/template` ([why](#template-coverage)).
 
+With no flags it reads the directory's [`muxt.json`](../muxt-json.md) entry. In a directory an entry configures, `--use-templates-variable` is rejected.
+
 Bound each mutant's run with `go test`'s own `-timeout`, for example `-- -timeout=2m`.
 
 ```bash

@@ -12,7 +12,7 @@ import (
 // testTemplateMutationsCommand varies each dynamic and control flow
 // action in the project's templates and reports the variations the tests
 // let through.
-func testTemplateMutationsCommand(workingDirectory *string, run func(*cobra.Command, string, mutation.Configuration) error) *cobra.Command {
+func testTemplateMutationsCommand(workingDirectory *string, getEnv func(string) string, run func(*cobra.Command, string, mutation.Configuration) error) *cobra.Command {
 	var (
 		config                 mutation.Configuration
 		templatePattern        string
@@ -74,6 +74,15 @@ working tree is never written to.`,
 			if err != nil {
 				return err
 			}
+			// A mutation run takes minutes and acts on one package, so it
+			// reads the directory's entry alone, whatever the file lists.
+			spec := templatesSpec(testTemplateMutationsName, config.TemplatesVariables, getEnv)
+			spec.Scope = itsEntry
+			sel, err := selectJobs(spec, dir, cmd.Flags(), getEnv)
+			if err != nil {
+				return err
+			}
+			config.TemplatesVariables = sel.Jobs[0].Config.TemplatesVariables
 			// go test runs its default, ./..., from the package directory.
 			config.Packages = []string{}
 			if err := mutation.CheckGoTestArgs(config.GoTestArgs); err != nil {

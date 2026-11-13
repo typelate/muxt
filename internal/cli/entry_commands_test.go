@@ -13,6 +13,7 @@ import (
 
 	"github.com/typelate/muxt/internal/analysis"
 	"github.com/typelate/muxt/internal/composite"
+	"github.com/typelate/muxt/internal/mutation"
 )
 
 // templatesVariablesOf runs commandLine in wd with runners that record the
@@ -177,4 +178,47 @@ func TestEntryNonConfigurationFlagsAllowedWhereMuxtJSONConfigures(t *testing.T) 
 			assert.Equal(t, []string{"pages"}, got, "templates variables")
 		})
 	}
+}
+
+// mutationsTemplatesVariables runs commandLine in wd with a mutations runner
+// that records the templates variables it is run with.
+func mutationsTemplatesVariables(wd, commandLine string) (got []string, ran bool, err error) {
+	err = commands(wd, strings.Fields(commandLine), func(string) string { return "" }, func() (string, bool) { return "v1.2.3", true }, strings.NewReader(""), io.Discard, io.Discard, runners{
+		mutations: func(_ *cobra.Command, _ string, c mutation.Configuration) error {
+			got, ran = c.TemplatesVariables, true
+			return nil
+		},
+	})
+	return got, ran, err
+}
+
+// TestMutationsReadsMuxtJSONEntry states that muxt test-template-mutations
+// with no flags in a directory a muxt.json entry configures mutates the
+// templates variable that entry names.
+func TestMutationsReadsMuxtJSONEntry(t *testing.T) {
+	dir := moduleDir(t)
+	writeMuxtJSON(t, dir, `{"packages": {"example.com/m": {"use_templates_variable": ["pages"]}}}`)
+
+	got, _, err := mutationsTemplatesVariables(dir, "test-template-mutations --dry-run")
+
+	require.NoError(t, err, "muxt test-template-mutations")
+	assert.Equal(t, []string{"pages"}, got, "templates variables")
+}
+
+// TestMutationsRejectsFlagsForConfiguredDirectory states that
+// test-template-mutations given a setting flag in a directory a muxt.json
+// entry configures fails with the error generate returns, and nothing runs.
+func TestMutationsRejectsFlagsForConfiguredDirectory(t *testing.T) {
+	parent := moduleDir(t)
+	workspace := filepath.Join(parent, "workspace")
+	require.NoError(t, os.Mkdir(workspace, 0o755))
+	writeMuxtJSON(t, parent, `{"packages": {"example.com/m/workspace": {}}}`)
+
+	_, ran, err := mutationsTemplatesVariables(workspace, "test-template-mutations --use-templates-variable=x")
+
+	var configured *composite.ConfiguredDirectoryError
+	require.ErrorAs(t, err, &configured, "error %v", err)
+	assert.Equal(t, []string{"use-templates-variable"}, configured.Flags, "flags")
+	assert.Equal(t, "configure test-template-mutations with fields in "+filepath.Join(parent, composite.FileName)+" instead of flags", err.Error(), "message")
+	assert.False(t, ran, "the command ran")
 }

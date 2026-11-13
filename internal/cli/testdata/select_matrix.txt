@@ -112,7 +112,7 @@ callers dir="inventory" templates=[catalogTemplates]
 load root="inventory" dirs=["inventory"] patterns=["example.com/fieldkit/types"]
 error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: no Go package found at $BASE/inventory
 == entries, inventory: mutations test-template-mutations --dry-run
-mutations dir="inventory" templates=[templates]
+mutations dir="inventory" templates=[catalogTemplates]
 == entries, tasks: generate generate -v
 generate key="example.com/fieldkit/tasks" file="muxt.json" dir="tasks" receiver="Server" receiver-package="example.com/fieldkit/types" templates=[templates] output="tasks_routes.go" htmx=true logger=true verbose=true
 == entries, tasks: muxt 
@@ -156,7 +156,7 @@ error: configure list-template-callers with fields in $BASE/muxt.json instead of
 == setting flags, contacts has an entry: def generate def GET /things/{id} GetThing(ctx, id) --use-receiver-type=Server
 error: configure generate def with fields in $BASE/muxt.json instead of flags
 == setting flags, contacts has an entry: mutations test-template-mutations --dry-run --use-templates-variable=templates
-mutations dir="contacts" templates=[templates]
+error: configure test-template-mutations with fields in $BASE/muxt.json instead of flags
 == setting flags, entry names no receiver: generate generate -v --use-receiver-type=Server --use-templates-variable=templates
 error: configure generate with fields in $BASE/muxt.json instead of flags
 == setting flags, entry names no receiver: muxt --use-receiver-type=Server --use-templates-variable=templates
@@ -171,7 +171,7 @@ error: configure list-template-callers with fields in $BASE/muxt.json instead of
 load root="contacts" dirs=["contacts"] patterns=[""]
 error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: no Go package found at $BASE/contacts
 == setting flags, entry names no receiver: mutations test-template-mutations --dry-run --use-templates-variable=templates
-mutations dir="contacts" templates=[templates]
+error: configure test-template-mutations with fields in $BASE/muxt.json instead of flags
 == setting flags, file directory is not an entry: generate generate -v --use-receiver-type=Server
 generate key="" file="" dir="." receiver="Server" receiver-package="" templates=[templates] output="template_routes.go" htmx=false logger=false verbose=true
 == setting flags, file directory is not an entry: muxt --use-templates-variable=templates
@@ -331,7 +331,7 @@ callers dir="inventory" templates=[catalogTemplates]
 load root="inventory" dirs=["inventory"] patterns=["example.com/fieldkit/types"]
 error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: no Go package found at $BASE/inventory
 == -C inventory: mutations test-template-mutations --dry-run
-mutations dir="inventory" templates=[templates]
+mutations dir="inventory" templates=[catalogTemplates]
 == -C extra: generate generate -v
 error: $BASE/muxt.json: no packages entry "example.com/fieldkit/extra"; add one to generate this directory
 == -C extra: muxt 
@@ -405,11 +405,11 @@ check dir="typo" templates=[templates] allow-unused=false
 == .: check ./main.go
 check dir="main.go" templates=[templates] allow-unused=false
 == .: test-template-mutations --dry-run inventory
-mutations dir="inventory" templates=[templates]
+mutations dir="inventory" templates=[catalogTemplates]
 == .: test-template-mutations --dry-run extra
 mutations dir="extra" templates=[templates]
 == .: test-template-mutations --dry-run inventory --use-templates-variable=catalogTemplates
-mutations dir="inventory" templates=[catalogTemplates]
+error: configure test-template-mutations with fields in $BASE/muxt.json instead of flags
 == .: check inventory --use-templates-variable=catalogTemplates
 error: configure check with fields in $BASE/muxt.json instead of flags
 == .: check ./...

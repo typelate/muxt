@@ -150,7 +150,7 @@ The documentation for this version is in the binary:
 		listTemplateCallsCommand(workingDirectory, getEnv, run.calls),
 		exploreModuleCommand(workingDirectory),
 		generateFakeServerCommand(workingDirectory),
-		testTemplateMutationsCommand(workingDirectory, run.mutations),
+		testTemplateMutationsCommand(workingDirectory, getEnv, run.mutations),
 		documentationCommand(version),
 	)
 	describe(rootCmd)
