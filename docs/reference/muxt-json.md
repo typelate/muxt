@@ -13,6 +13,8 @@
 
 - `packages` keys are import paths of packages at or below the file's directory.
 - Entry keys are the `generate` flag names without `--`, dashes written `_`: [flags](cli.md#flags). `verbose` is not a key.
+- A boolean flag is a JSON boolean, a string flag a JSON string, `use_templates_variable` a list of strings, and `output_multipart_max_memory` a string such as `"64MB"`.
+- `muxt generate package` rewrites the file in one sorted form, tab-indented; a hand-written order and spacing do not survive it.
 - A setting resolves from the entry, then `package_defaults`, then the flag default.
 
 | Command | Reads |
@@ -20,6 +22,9 @@
 | `muxt generate`, no flags | every entry in the file's directory, dependencies first; the directory's entry elsewhere |
 | `muxt check`, `list-template-calls`, `list-template-callers` | `use_templates_variable` |
 | `muxt` | all of it, shown by source under `Configuration:` |
+| `muxt explore-module`, `generate-fake-server` | the directory's entry |
+
+`muxt fmt` and `muxt test-template-mutations` do not read the file.
 
 Only a flagless `muxt generate` needs an entry. In a directory with none, the other commands use their own flags and defaults.
 

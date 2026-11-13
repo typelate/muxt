@@ -48,7 +48,7 @@ var templates = template.Must(template.Must(template.New("").
 - A later definition of a name replaces an earlier one; bare `muxt` lists these under `Overrides:` ([cli](cli.md)). A shared file replacing the package's own definition is an error: parse the shared FS first.
 - Share functions by exporting them and naming each in a `FuncMap` literal. `Funcs(fragments.Funcs)` is an error that says so.
 - A variable that is unexported, not an `embed.FS`, or from another module is an error naming the rule.
-- [`muxt check`](commands/check.md) does not report a shared template as unused. Mutation testing does not mutate shared files.
+- Shared templates are outside both the [unused check](commands/check.md) and mutation testing in every package, so nothing reports a shared template that no package uses. A shared route template with no generated handler is still reported.
 
 ## Multiple Template Variables
 

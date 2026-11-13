@@ -18,7 +18,7 @@ internal/hypertext/
     └── dashboard.gohtml  child: allowed
 ```
 
-An `internal/templates/` directory beside `internal/hypertext/` cannot be embedded from it.
+An `internal/templates/` directory beside `internal/hypertext/` cannot be embedded from it; [share its fragments](../how-to/shared-template-fragments.md) instead.
 
 ## Globs are per depth
 
