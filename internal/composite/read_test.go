@@ -146,7 +146,22 @@ func TestFindReadsNullAsAbsent(t *testing.T) {
 	require.True(t, found, "found")
 	entry, ok := f.Resolve("example.com/m")
 	require.True(t, ok, "entry")
-	require.NotNil(t, entry.OutputHTMX, "output_htmx of the resolved entry")
-	assert.True(t, *entry.OutputHTMX, "output_htmx of the resolved entry")
-	assert.Nil(t, entry.UseReceiverType, "use_receiver_type of the resolved entry")
+	assert.JSONEq(t, "true", string(entry["output_htmx"]), "output_htmx of the resolved entry")
+	assert.NotContains(t, entry, "use_receiver_type", "the resolved entry")
+}
+
+// TestResolveKeepsAnEntryListWhole states that a list an entry holds replaces
+// the default's list, and that an empty one still does.
+func TestResolveKeepsAnEntryListWhole(t *testing.T) {
+	dir := writeFile(t, `{"package_defaults": {"use_templates": ["a", "b"], "output_htmx": true}, "packages": {"example.com/m": {"use_templates": []}}}`)
+	keys := composite.Keys{Kinds: map[string]composite.Kind{"use_templates": composite.KindList, "output_htmx": composite.KindBool}}
+
+	f, _, err := composite.Find(dir, keys)
+
+	require.NoError(t, err, "Find")
+	entry, ok := f.Resolve("example.com/m")
+	require.True(t, ok, "entry")
+	assert.JSONEq(t, "[]", string(entry["use_templates"]), "use_templates of the resolved entry")
+	assert.JSONEq(t, "true", string(entry["output_htmx"]), "output_htmx of the resolved entry")
+	assert.JSONEq(t, `["a", "b"]`, string(f.Defaults["use_templates"]), "the defaults are not changed")
 }

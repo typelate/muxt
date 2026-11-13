@@ -10,6 +10,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -76,19 +77,36 @@ func scaffoldPackage(out io.Writer, wd, name string, flags *pflag.FlagSet, confi
 	if err := fixTemplateVariables(&config.TemplatesVariables, deprecatedTemplatesVar); err != nil {
 		return err
 	}
-	entry, err := entryFromFlags(flags, *config, deprecatedTemplatesVar != "")
+	settings := generateSettings(config)
+	given := givenFlags(flags, settings)
+	if deprecatedTemplatesVar == "" {
+		// An empty --templates-variable gave nothing the entry could record.
+		withoutDeprecatedTemplatesVariable(given)
+	}
+	entry, err := encode(settings, given)
 	if err != nil {
 		return err
 	}
-	receiver := "T"
-	if f.Defaults.UseReceiverType != nil {
-		receiver = *f.Defaults.UseReceiverType
+	// The receiver type is scaffold policy, not generate's default (""): a
+	// new package declares T unless package_defaults names another type.
+	receiverKey := composite.Key(useReceiverType)
+	receiver, defaultReceiver := "T", ""
+	rawDefault, hasDefault := f.Defaults[receiverKey]
+	if hasDefault {
+		if err := json.Unmarshal(rawDefault, &defaultReceiver); err != nil {
+			return fmt.Errorf("reading package_defaults %s: %w", receiverKey, err)
+		}
+		receiver = defaultReceiver
 	}
 	if flags.Changed(useReceiverType) {
 		receiver = config.ReceiverType
 	}
-	if f.Defaults.UseReceiverType == nil || *f.Defaults.UseReceiverType != receiver {
-		entry.UseReceiverType = &receiver
+	if !hasDefault || defaultReceiver != receiver {
+		value, err := json.Marshal(receiver)
+		if err != nil {
+			return fmt.Errorf("encoding %s: %w", receiverKey, err)
+		}
+		entry[receiverKey] = value
 	}
 	candidate := &composite.File{Dir: f.Dir, Name: f.Name, Defaults: f.Defaults, Packages: maps.Clone(f.Packages)}
 	if candidate.Packages == nil {
@@ -96,7 +114,8 @@ func scaffoldPackage(out io.Writer, wd, name string, flags *pflag.FlagSet, confi
 	}
 	candidate.Packages[key] = entry
 	resolved, _ := candidate.Resolve(key)
-	if _, err := entryConfiguration(resolved, dir, getEnv, version); err != nil {
+	resolvedConfig, err := entryConfiguration(resolved, fromCommandLine, generateEnv{Dir: dir, GetEnv: getEnv, Version: version})
+	if err != nil {
 		return &composite.InvalidEntryError{Path: f.Name, Where: fmt.Sprintf("packages[%q]", key), Err: err}
 	}
 	if err := os.Mkdir(dir, 0o755); err != nil {
@@ -104,11 +123,7 @@ func scaffoldPackage(out io.Writer, wd, name string, flags *pflag.FlagSet, confi
 	}
 	// The entry names the variable the next generate looks for, so the file
 	// declares the first one the resolved entry names.
-	var templatesVariable string
-	if len(resolved.UseTemplatesVariable) > 0 {
-		templatesVariable = resolved.UseTemplatesVariable[0]
-	}
-	filename, src, err := generate.PackageFile(generate.PackageFileSpec{Name: name, ReceiverType: receiver, TemplatesVariable: templatesVariable})
+	filename, src, err := generate.PackageFile(generate.PackageFileSpec{Name: name, ReceiverType: receiver, TemplatesVariable: resolvedConfig.TemplatesVariables[0]})
 	if err != nil {
 		return err
 	}
@@ -144,26 +159,15 @@ func scaffoldPackage(out io.Writer, wd, name string, flags *pflag.FlagSet, confi
 	return err
 }
 
-// entryFromFlags returns the entry that records each generate flag given, under
-// its muxt.json key, with the value the flag holds. usesTemplatesVariable is
-// true when the deprecated templates variable flag was given instead.
-func entryFromFlags(flags *pflag.FlagSet, config generate.RoutesFileConfiguration, usesTemplatesVariable bool) (composite.Entry, error) {
-	values := map[string]any{}
-	for _, field := range entryFields() {
-		given := flags.Changed(field.Name) || (field.Name == useTemplatesVariable && usesTemplatesVariable)
-		if given {
-			values[composite.Key(field.Name)] = field.Value(config)
-		}
+// withoutDeprecatedTemplatesVariable removes --templates-variable from what g
+// says gave the templates variable.
+func withoutDeprecatedTemplatesVariable(g givenSettings) {
+	spellings := slices.DeleteFunc(g[useTemplatesVariable], func(s string) bool { return s == deprecatedTemplatesVariable })
+	if len(spellings) == 0 {
+		delete(g, useTemplatesVariable)
+		return
 	}
-	data, err := json.Marshal(values)
-	if err != nil {
-		return composite.Entry{}, fmt.Errorf("encoding generate flags: %w", err)
-	}
-	var entry composite.Entry
-	if err := json.Unmarshal(data, &entry); err != nil {
-		return composite.Entry{}, fmt.Errorf("reading generate flags: %w", err)
-	}
-	return entry, nil
+	g[useTemplatesVariable] = spellings
 }
 
 // generateConfigCommand is muxt generate config: it writes the empty muxt.json

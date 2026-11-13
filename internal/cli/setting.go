@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"encoding/json"
 	"fmt"
 	"maps"
 	"math"
@@ -100,6 +101,10 @@ type setting struct {
 	// derive writes the Derived value, nil when the setting has none.
 	derive      func()
 	reportValue func() any
+	// decode sets the field from the JSON value of the setting's key.
+	decode func(value json.RawMessage) error
+	// encode returns the JSON value that records the field in a muxt.json.
+	encode func() (json.RawMessage, error)
 }
 
 // deprecatedUsage is the usage of a deprecated spelling: it says what to write
@@ -141,6 +146,8 @@ func stringSetting(p *string, s spec[string]) setting {
 		},
 		empty:       func() bool { return *p == "" },
 		reportValue: func() any { return *p },
+		decode:      func(value json.RawMessage) error { return json.Unmarshal(value, p) },
+		encode:      func() (json.RawMessage, error) { return json.Marshal(*p) },
 	}
 	if s.Derived != nil {
 		set.derive = func() { *p = s.Derived() }
@@ -174,6 +181,8 @@ func boolSetting(p *bool, s spec[bool]) setting {
 		},
 		empty:       func() bool { return false },
 		reportValue: func() any { return *p },
+		decode:      func(value json.RawMessage) error { return json.Unmarshal(value, p) },
+		encode:      func() (json.RawMessage, error) { return json.Marshal(*p) },
 	}
 	if s.Derived != nil {
 		set.derive = func() { *p = s.Derived() }
@@ -209,6 +218,17 @@ func stringsSetting(p *[]string, s spec[[]string]) setting {
 		},
 		empty:       func() bool { return slices.Contains(*p, "") },
 		reportValue: func() any { return *p },
+		decode: func(value json.RawMessage) error {
+			// A list of its own, so the setting never aliases what it was
+			// given or what an earlier decode left.
+			var list []string
+			if err := json.Unmarshal(value, &list); err != nil {
+				return err
+			}
+			*p = list
+			return nil
+		},
+		encode: func() (json.RawMessage, error) { return json.Marshal(*p) },
 	}
 	if s.Derived != nil {
 		set.derive = func() { *p = s.Derived() }
@@ -242,6 +262,18 @@ func bytesSetting(p *int64, s spec[int64]) setting {
 		},
 		empty:       func() bool { return false },
 		reportValue: func() any { return byteSize{p: p}.String() },
+		decode: func(value json.RawMessage) error {
+			// The flag's own parser turns "64MB" into bytes, so the entry
+			// and the command line accept the same values.
+			var text string
+			if err := json.Unmarshal(value, &text); err != nil {
+				return err
+			}
+			return byteSize{p: p}.Set(text)
+		},
+		// The flag prints the size the run uses, 32 MiB when none was set,
+		// in a form its parser reads back.
+		encode: func() (json.RawMessage, error) { return json.Marshal(byteSize{p: p}.String()) },
 	}
 	if s.Derived != nil {
 		set.derive = func() { *p = s.Derived() }
@@ -376,4 +408,54 @@ func args(settings []setting) []string {
 		out = append(out, s.arg()...)
 	}
 	return out
+}
+
+// givenKeys returns the settings an entry gives: each setting whose key the
+// entry holds, by its own name, the same as a command line that typed the
+// current flag. composite drops a null at read, so a key present is given.
+func givenKeys(e composite.Entry, settings []setting) givenSettings {
+	given := givenSettings{}
+	for _, s := range settings {
+		if _, ok := e[composite.Key(s.name)]; ok {
+			given[s.name] = []string{s.name}
+		}
+	}
+	return given
+}
+
+// decode sets the field of each setting whose key e holds. A value the
+// setting's parser rejects is a *composite.ValueError naming the key.
+func decode(settings []setting, e composite.Entry) error {
+	for _, s := range settings {
+		key := composite.Key(s.name)
+		value, ok := e[key]
+		if !ok {
+			continue
+		}
+		if err := s.decode(value); err != nil {
+			return &composite.ValueError{Key: key, Err: err}
+		}
+	}
+	return nil
+}
+
+// encode returns the entry that records each setting g gives, under its key,
+// with the value the field holds. A setting given by a deprecated spelling is
+// not recorded, except the templates variable by --templates-variable, which
+// the command line has always recorded.
+func encode(settings []setting, g givenSettings) (composite.Entry, error) {
+	e := composite.Entry{}
+	for _, s := range settings {
+		recorded := slices.Contains(g[s.name], s.name) ||
+			(s.name == useTemplatesVariable && slices.Contains(g[s.name], deprecatedTemplatesVariable))
+		if !recorded {
+			continue
+		}
+		value, err := s.encode()
+		if err != nil {
+			return nil, fmt.Errorf("encoding %s: %w", composite.Key(s.name), err)
+		}
+		e[composite.Key(s.name)] = value
+	}
+	return e, nil
 }

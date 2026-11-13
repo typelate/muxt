@@ -309,3 +309,16 @@ func (k Kind) description() string {
 		return "a JSON string"
 	}
 }
+
+// ValueError reports a value of a muxt.json key that its setting's parser
+// rejects, such as a byte size that is not one. Key is the muxt.json key and
+// Err is the parser's error.
+type ValueError struct {
+	Key string
+	Err error
+}
+
+// Error returns the key and the parser's error on one line.
+func (e *ValueError) Error() string { return e.Key + ": " + e.Err.Error() }
+
+func (e *ValueError) Unwrap() error { return e.Err }

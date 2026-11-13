@@ -52,13 +52,14 @@ func newConfigurationReport(f *composite.File, key string, given givenSettings, 
 	// most one of the first two is present.
 	type reportSource struct {
 		group settingGroup
-		gives func(entryField) (bool, error)
+		// gives reports whether the source gives the setting called name.
+		gives func(name string) bool
 	}
-	// Apply writes into a scratch configuration; only whether the entry gave
-	// the key matters here.
-	givenBy := func(entry composite.Entry) func(entryField) (bool, error) {
-		return func(field entryField) (bool, error) {
-			return field.Apply(new(generate.RoutesFileConfiguration), entry)
+	// A key an entry holds is a setting it gives; composite dropped nulls.
+	holds := func(entry composite.Entry) func(string) bool {
+		return func(name string) bool {
+			_, ok := entry[composite.Key(name)]
+			return ok
 		}
 	}
 	var sources []reportSource
@@ -67,34 +68,30 @@ func newConfigurationReport(f *composite.File, key string, given givenSettings, 
 			group: settingGroup{Source: "flags"},
 			// The current name only, until the report files a deprecated
 			// spelling under the setting it spells.
-			gives: func(field entryField) (bool, error) { return slices.Contains(given[field.Name], field.Name), nil },
+			gives: func(name string) bool { return slices.Contains(given[name], name) },
 		})
 	}
 	if f != nil {
 		sources = append(sources,
-			reportSource{group: settingGroup{Source: fmt.Sprintf("packages[%q]", key), File: f.Name}, gives: givenBy(f.Packages[key])},
-			reportSource{group: settingGroup{Source: "package_defaults", File: f.Name}, gives: givenBy(f.Defaults)},
+			reportSource{group: settingGroup{Source: fmt.Sprintf("packages[%q]", key), File: f.Name}, gives: holds(f.Packages[key])},
+			reportSource{group: settingGroup{Source: "package_defaults", File: f.Name}, gives: holds(f.Defaults)},
 		)
 	}
 	defaults := settingGroup{Source: "defaults"}
 
 	// muxt generate --help lists flags by name, so the report does too.
-	fields := entryFields()
-	slices.SortFunc(fields, func(a, b entryField) int { return cmp.Compare(a.Name, b.Name) })
-	for _, field := range fields {
-		s := reportLine{Key: composite.Key(field.Name), Value: field.Value(config)}
+	settings := generateSettings(&config)
+	slices.SortFunc(settings, func(a, b setting) int { return cmp.Compare(a.name, b.name) })
+	for _, s := range settings {
+		line := reportLine{Key: composite.Key(s.name), Value: s.reportValue()}
 		group := &defaults
 		for i := range sources {
-			given, err := sources[i].gives(field)
-			if err != nil {
-				return nil, fmt.Errorf("%s: %w", sources[i].group.Source, err)
-			}
-			if given {
+			if sources[i].gives(s.name) {
 				group = &sources[i].group
 				break
 			}
 		}
-		group.Settings = append(group.Settings, s)
+		group.Settings = append(group.Settings, line)
 	}
 	groups := []settingGroup{}
 	for _, s := range sources {

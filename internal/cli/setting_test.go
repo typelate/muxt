@@ -1,11 +1,15 @@
 package cli
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/typelate/muxt/internal/composite"
+	"github.com/typelate/muxt/internal/generate"
 )
 
 // toy is a configuration of one field of each kind a setting binds.
@@ -208,4 +212,129 @@ func TestReceiverSettings(t *testing.T) {
 	assert.Equal(t, "T", typeName, "type")
 	assert.Equal(t, "p", pkg, "package")
 	assert.Equal(t, []string{"--use-receiver-type=T", "--use-receiver-type-package=p"}, args([]setting{typ, pk}), "args")
+}
+
+// toyEntry is an entry holding the given keys, each value as JSON text.
+func toyEntry(values map[string]string) composite.Entry {
+	e := composite.Entry{}
+	for key, value := range values {
+		e[key] = json.RawMessage(value)
+	}
+	return e
+}
+
+func TestDecodeSetsEachFieldTheEntryHolds(t *testing.T) {
+	var c toy
+	settings := toySettings(&c)
+	setDefaults(settings)
+
+	err := decode(settings, toyEntry(map[string]string{
+		"use_templates_variable": `["a", "b"]`,
+		"name":                   `"Mount"`,
+		"loud":                   `true`,
+		"quiet":                  `false`,
+		"limit":                  `"64MB"`,
+	}))
+
+	require.NoError(t, err, "decode")
+	assert.Equal(t, toy{Name: "Mount", Loud: true, Vars: []string{"a", "b"}, Limit: 64_000_000}, c, "configuration")
+}
+
+func TestDecodeLeavesWhatTheEntryLeavesOut(t *testing.T) {
+	var c toy
+	settings := toySettings(&c)
+	setDefaults(settings)
+
+	require.NoError(t, decode(settings, composite.Entry{}), "decode")
+
+	assert.Equal(t, toy{Name: "Routes", Quiet: true, Vars: []string{"templates"}}, c, "configuration")
+}
+
+func TestDecodeNamesTheKeyOfAValueItsParserRejects(t *testing.T) {
+	var c toy
+	settings := toySettings(&c)
+	setDefaults(settings)
+
+	err := decode(settings, toyEntry(map[string]string{"limit": `"0"`}))
+
+	var valueErr *composite.ValueError
+	require.ErrorAs(t, err, &valueErr, "decode error %v", err)
+	assert.Equal(t, `limit: multipart max memory must be positive, got "0"`, err.Error(), "message")
+}
+
+func TestGivenKeysIsEachKeyTheEntryHolds(t *testing.T) {
+	var c toy
+	settings := toySettings(&c)
+
+	given := givenKeys(toyEntry(map[string]string{"use_templates_variable": `[]`, "quiet": `false`}), settings)
+
+	assert.Equal(t, givenSettings{useTemplatesVariable: {useTemplatesVariable}, "quiet": {"quiet"}}, given, "given")
+}
+
+// TestAnEntryReadFromAFileGivesNothingForNull states that a null value is a
+// setting not given, because composite drops it when it reads the file.
+func TestAnEntryReadFromAFileGivesNothingForNull(t *testing.T) {
+	dir := moduleDir(t)
+	writeMuxtJSON(t, dir, `{"packages": {"example.com/m": {"output_htmx": null, "output_file": "x.go"}}}`)
+	f, found, err := composite.Find(dir, muxtJSONKeys())
+	require.NoError(t, err, "Find")
+	require.True(t, found, "found")
+	entry, ok := f.Resolve("example.com/m")
+	require.True(t, ok, "entry")
+
+	given := givenKeys(entry, generateSettings(new(generate.RoutesFileConfiguration)))
+
+	assert.Equal(t, givenSettings{outputFile: {outputFile}}, given, "given")
+}
+
+func TestEncodeRecordsTheSettingsGivenByCurrentName(t *testing.T) {
+	_, fs, settings := parsedToy(t, "--name=Mount", "--loud", "--limit=64MB")
+
+	e, err := encode(settings, givenFlags(fs, settings))
+
+	require.NoError(t, err, "encode")
+	got := map[string]string{}
+	for key, value := range e {
+		got[key] = string(value)
+	}
+	assert.Equal(t, map[string]string{"name": `"Mount"`, "loud": `true`, "limit": `"61 MiB"`}, got, "recorded entry; a size is recorded as the flag prints it")
+}
+
+func TestEncodeLeavesOutADeprecatedSpelling(t *testing.T) {
+	_, fs, settings := parsedToy(t, "--old-name=Other")
+
+	e, err := encode(settings, givenFlags(fs, settings))
+
+	require.NoError(t, err, "encode")
+	assert.Empty(t, e, "recorded entry")
+}
+
+func TestEncodeRecordsTheHandTemplatesVariable(t *testing.T) {
+	var c toy
+	settings := toySettings(&c)
+	fs := pflag.NewFlagSet("toy", pflag.ContinueOnError)
+	registerWithDeprecated(fs, settings)
+	var hand string
+	addDeprecatedTemplatesVariable(fs, &hand)
+	require.NoError(t, fs.Parse([]string{"--templates-variable=x"}), "parse")
+	c.Vars = []string{hand}
+
+	e, err := encode(settings, givenFlags(fs, settings))
+
+	require.NoError(t, err, "encode")
+	assert.JSONEq(t, `["x"]`, string(e["use_templates_variable"]), "use_templates_variable")
+}
+
+func TestEncodeThenDecodeReadsBackTheGivenSettings(t *testing.T) {
+	c, fs, settings := parsedToy(t, "--use-templates-variable=a,b", "--name=Mount", "--quiet=false")
+	e, err := encode(settings, givenFlags(fs, settings))
+	require.NoError(t, err, "encode")
+
+	var back toy
+	backSettings := toySettings(&back)
+	setDefaults(backSettings)
+	require.NoError(t, decode(backSettings, e), "decode")
+
+	assert.Equal(t, *c, back, "configuration read back")
+	assert.Equal(t, givenKeys(e, backSettings), givenFlags(fs, settings), "given by key and by flag")
 }

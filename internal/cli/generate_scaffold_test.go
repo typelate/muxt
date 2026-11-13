@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -138,10 +139,9 @@ func TestGeneratePackageRecordsGivenFlags(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, json.Unmarshal(data, &got))
 	entry := got.Packages[importPath("workspace")]
-	require.NotNil(t, entry.OutputHTMX, "output_htmx of packages[workspace]")
-	assert.True(t, *entry.OutputHTMX, "output_htmx of packages[workspace]")
-	assert.Nil(t, entry.OutputDatastar, "output_datastar of packages[workspace]")
-	assert.Nil(t, entry.OutputFile, "output_file of packages[workspace]")
+	assert.JSONEq(t, "true", string(entry["output_htmx"]), "output_htmx of packages[workspace]")
+	assert.NotContains(t, entry, "output_datastar", "packages[workspace]")
+	assert.NotContains(t, entry, "output_file", "packages[workspace]")
 }
 
 // TestGeneratePackageRejectsInvalidEntryAndWritesNothing states that a merged
@@ -193,12 +193,12 @@ func TestGeneratePackageDeclaresReceiverType(t *testing.T) {
 			data, err := os.ReadFile(filepath.Join(root, "muxt.json"))
 			require.NoError(t, err)
 			require.NoError(t, json.Unmarshal(data, &got))
-			recorded := got.Packages[importPath("workspace")].UseReceiverType
+			recorded, ok := got.Packages[importPath("workspace")]["use_receiver_type"]
 			if tt.wantRecorded == "" {
-				assert.Nil(t, recorded, "use_receiver_type of packages[workspace]")
+				assert.False(t, ok, "use_receiver_type of packages[workspace]")
 			} else {
-				require.NotNil(t, recorded, "use_receiver_type of packages[workspace]")
-				assert.Equal(t, tt.wantRecorded, *recorded, "use_receiver_type of packages[workspace]")
+				require.True(t, ok, "use_receiver_type of packages[workspace]")
+				assert.JSONEq(t, strconv.Quote(tt.wantRecorded), string(recorded), "use_receiver_type of packages[workspace]")
 			}
 		})
 	}

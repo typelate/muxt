@@ -13,7 +13,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"reflect"
 	"slices"
 	"strings"
 )
@@ -37,25 +36,21 @@ type File struct {
 	Name string `json:"-"`
 	// Defaults holds the keys every entry takes unless the entry sets them
 	// itself. It is a separate object so one shared value is written once.
-	Defaults Entry            `json:"package_defaults,omitzero"`
+	Defaults Entry            `json:"package_defaults,omitempty"`
 	Packages map[string]Entry `json:"packages"`
 }
 
-// Resolve returns the entry for key with Defaults applied. A field the entry
-// leaves unset takes the default; a field the entry sets, even to false or an
-// empty list, is kept. found is false when f has no entry under key.
+// Resolve returns the entry for key with Defaults applied. A key the entry
+// leaves out takes the default; a key the entry holds, even set to false or an
+// empty list, is kept whole. found is false when f has no entry under key.
 func (f *File) Resolve(key string) (e Entry, found bool) {
-	e, found = f.Packages[key]
+	own, found := f.Packages[key]
 	if !found {
 		return Entry{}, false
 	}
-	entry := reflect.ValueOf(&e).Elem()
-	defaults := reflect.ValueOf(f.Defaults)
-	for i := range entry.NumField() {
-		if entry.Field(i).IsZero() {
-			entry.Field(i).Set(defaults.Field(i))
-		}
-	}
+	e = Entry{}
+	maps.Copy(e, f.Defaults)
+	maps.Copy(e, own)
 	return e, true
 }
 
@@ -146,11 +141,15 @@ func (f *File) Save() error {
 	if f.Packages == nil {
 		f.Packages = map[string]Entry{}
 	}
+	out, err := f.normalized()
+	if err != nil {
+		return fmt.Errorf("encoding %s: %w", f.Name, err)
+	}
 	var buf bytes.Buffer
 	enc := json.NewEncoder(&buf)
 	enc.SetEscapeHTML(false)
 	enc.SetIndent("", "\t")
-	if err := enc.Encode(f); err != nil {
+	if err := enc.Encode(out); err != nil {
 		return fmt.Errorf("encoding %s: %w", f.Name, err)
 	}
 	tmp, err := os.CreateTemp(f.Dir, FileName+".*")
@@ -173,6 +172,103 @@ func (f *File) Save() error {
 		return fmt.Errorf("writing %s: %w", f.Name, err)
 	}
 	return nil
+}
+
+// savedFile is what Save writes. package_defaults is omitzero, not omitempty,
+// so defaults that held only empty lists are still written as {}: the entry
+// struct the values were once typed as was not zero then.
+type savedFile struct {
+	Defaults Entry            `json:"package_defaults,omitzero"`
+	Packages map[string]Entry `json:"packages"`
+}
+
+// normalized is f with each value spelled the way Save has always written it:
+// re-encoded without HTML escaping, and an empty list left out, so an entry
+// that spelled one starts inheriting the default again. The values were typed
+// once, as an entry struct's fields, and this keeps what a rewrite writes the
+// same until a later change writes each value as the file spelled it.
+func (f *File) normalized() (*savedFile, error) {
+	out := &savedFile{Packages: make(map[string]Entry, len(f.Packages))}
+	if len(f.Defaults) > 0 {
+		defaults, err := normalizedEntry(f.Defaults)
+		if err != nil {
+			return nil, fmt.Errorf("package_defaults: %w", err)
+		}
+		out.Defaults = defaults
+	}
+	var err error
+	for key, e := range f.Packages {
+		if out.Packages[key], err = normalizedEntry(e); err != nil {
+			return nil, fmt.Errorf("packages[%q]: %w", key, err)
+		}
+	}
+	return out, nil
+}
+
+// normalizedEntry is normalized for one entry. It is never nil, so an empty
+// entry is written as {}.
+func normalizedEntry(e Entry) (Entry, error) {
+	out := Entry{}
+	for key, value := range e {
+		v, keep, err := normalizedValue(value)
+		if err != nil {
+			return nil, fmt.Errorf("key %q: %w", key, err)
+		}
+		if keep {
+			out[key] = v
+		}
+	}
+	return out, nil
+}
+
+// normalizedValue re-encodes a string, a boolean or a list of strings, the
+// three JSON types an entry holds. keep is false for null and an empty list.
+func normalizedValue(value json.RawMessage) (v json.RawMessage, keep bool, err error) {
+	if isNull(value) {
+		return nil, false, nil
+	}
+	var s string
+	if json.Unmarshal(value, &s) == nil {
+		v, err = encodeWithoutEscaping(s)
+		return v, err == nil, err
+	}
+	var b bool
+	if json.Unmarshal(value, &b) == nil {
+		v, err = encodeWithoutEscaping(b)
+		return v, err == nil, err
+	}
+	var list []string
+	if json.Unmarshal(value, &list) == nil {
+		if len(list) == 0 {
+			return nil, false, nil
+		}
+		v, err = encodeWithoutEscaping(list)
+		return v, err == nil, err
+	}
+	return value, true, nil
+}
+
+// encodeWithoutEscaping is json.Marshal with HTML escaping off, as Save
+// writes the file.
+func encodeWithoutEscaping[T any](v T) (json.RawMessage, error) {
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(v); err != nil {
+		return nil, fmt.Errorf("encoding value: %w", err)
+	}
+	return bytes.TrimSpace(buf.Bytes()), nil
+}
+
+// isNull reports whether value is the JSON null.
+func isNull(value json.RawMessage) bool {
+	return bytes.Equal(bytes.TrimSpace(value), []byte("null"))
+}
+
+// dropNulls removes each key whose value is null, so a key that is present is
+// a setting given.
+func dropNulls(e Entry) {
+	maps.DeleteFunc(e, func(_ string, value json.RawMessage) bool { return isNull(value) })
 }
 
 // KeyFor returns the import path of dir, the key its Packages entry uses: the
@@ -201,58 +297,14 @@ func (f *File) DirOf(key string) string {
 	return filepath.Join(f.moduleDir, filepath.FromSlash(rel))
 }
 
-// Entry holds the generate flags of one package directory. JSON keys are the
-// flag names without "--", with each "-" written as "_": underscores keep a
-// key a single identifier-like word, and checkKeys rejects the dashed form so
-// a file has one spelling per key. A nil field is absent from the file, so the
-// flag's default applies. Fields follow the order `muxt generate --help` lists
-// flags; verbose is not configuration and has no field.
-type Entry struct {
-	// InputStaticAssetsDirectory is --input-static-assets-directory.
-	InputStaticAssetsDirectory *string `json:"input_static_assets_directory,omitempty"`
-	// OutputDatastar is --output-datastar.
-	OutputDatastar *bool `json:"output_datastar,omitempty"`
-	// OutputExportedDefaultIdentifiers is --output-exported-default-identifiers.
-	OutputExportedDefaultIdentifiers *bool `json:"output_exported_default_identifiers,omitempty"`
-	// OutputFile is --output-file.
-	OutputFile *string `json:"output_file,omitempty"`
-	// OutputHTMX is --output-htmx.
-	OutputHTMX *bool `json:"output_htmx,omitempty"`
-	// OutputMultipartMaxMemory is --output-multipart-max-memory, in the form the flag accepts, such as "64MB".
-	OutputMultipartMaxMemory *string `json:"output_multipart_max_memory,omitempty"`
-	// OutputMultipleFiles is --output-multiple-files.
-	OutputMultipleFiles *bool `json:"output_multiple_files,omitempty"`
-	// OutputMuxtVersion is --output-muxt-version.
-	OutputMuxtVersion *bool `json:"output_muxt_version,omitempty"`
-	// OutputReceiverInterface is --output-receiver-interface.
-	OutputReceiverInterface *string `json:"output_receiver_interface,omitempty"`
-	// OutputRoutesFunc is --output-routes-func.
-	OutputRoutesFunc *string `json:"output_routes_func,omitempty"`
-	// OutputRoutesFuncWithLoggerParam is --output-routes-func-with-logger-param.
-	OutputRoutesFuncWithLoggerParam *bool `json:"output_routes_func_with_logger_param,omitempty"`
-	// OutputRoutesFuncWithMiddlewareParam is --output-routes-func-with-middleware-param.
-	OutputRoutesFuncWithMiddlewareParam *bool `json:"output_routes_func_with_middleware_param,omitempty"`
-	// OutputRoutesFuncWithPathPrefixParam is --output-routes-func-with-path-prefix-param.
-	OutputRoutesFuncWithPathPrefixParam *bool `json:"output_routes_func_with_path_prefix_param,omitempty"`
-	// OutputSSETemplateDataType is --output-sse-template-data-type.
-	OutputSSETemplateDataType *string `json:"output_sse_template_data_type,omitempty"`
-	// OutputStaticAssetsPath is --output-static-assets-path.
-	OutputStaticAssetsPath *string `json:"output_static_assets_path,omitempty"`
-	// OutputTemplateDataType is --output-template-data-type.
-	OutputTemplateDataType *string `json:"output_template_data_type,omitempty"`
-	// OutputTemplateRouteBuilderType is --output-template-route-builder-type.
-	OutputTemplateRouteBuilderType *string `json:"output_template_route_builder_type,omitempty"`
-	// OutputTemplateRoutePathsType is --output-template-route-paths-type.
-	OutputTemplateRoutePathsType *string `json:"output_template_route_paths_type,omitempty"`
-	// OutputTemplateRouteType is --output-template-route-type.
-	OutputTemplateRouteType *string `json:"output_template_route_type,omitempty"`
-	// UseReceiverType is --use-receiver-type.
-	UseReceiverType *string `json:"use_receiver_type,omitempty"`
-	// UseReceiverTypePackage is --use-receiver-type-package.
-	UseReceiverTypePackage *string `json:"use_receiver_type_package,omitempty"`
-	// UseTemplatesVariable is --use-templates-variable.
-	UseTemplatesVariable []string `json:"use_templates_variable,omitempty"`
-}
+// Entry is one muxt.json object as the file holds it: each key a setting
+// given, its value as written. Keys are the flag names without "--", with
+// each "-" written as "_" (see Key); checkKeys rejects the dashed form so a
+// file has one spelling per key. A key that is not there leaves the setting
+// to its default, and read drops null values, so null means the same. composite
+// does not know what a value means: the command that owns the settings
+// decodes it.
+type Entry map[string]json.RawMessage
 
 // read reads the muxt.json at path, an absolute path its errors name the file
 // by. A missing file is an error that matches fs.ErrNotExist.
@@ -281,6 +333,14 @@ func read(path string, keys Keys) (*File, error) {
 	var f File
 	if err := json.Unmarshal(data, &f); err != nil {
 		return nil, fmt.Errorf("parsing %s: %w", path, err)
+	}
+	dropNulls(f.Defaults)
+	for key, e := range f.Packages {
+		if e == nil {
+			e = Entry{}
+			f.Packages[key] = e
+		}
+		dropNulls(e)
 	}
 	f.Dir = filepath.Dir(path)
 	f.Name = path
@@ -530,7 +590,7 @@ func checkEntryKinds(path, where string, entry map[string]json.RawMessage, keys 
 	for _, key := range slices.Sorted(maps.Keys(entry)) {
 		want, known := keys.Kinds[key]
 		value := entry[key]
-		if !known || bytes.Equal(bytes.TrimSpace(value), []byte("null")) {
+		if !known || isNull(value) {
 			continue
 		}
 		var err error

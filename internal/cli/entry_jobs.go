@@ -91,5 +91,23 @@ func noVersion() (string, bool) { return "", false }
 // package with no muxt.json entry, for a command that reads a package and sets
 // only the few fields it has flags for.
 func defaultConfiguration(dir string, getEnv func(string) string) (generate.RoutesFileConfiguration, error) {
-	return entryConfiguration(composite.Entry{}, dir, getEnv, noVersion)
+	return entryConfiguration(composite.Entry{}, fromCommandLine, generateEnv{Dir: dir, GetEnv: getEnv, Version: noVersion})
+}
+
+// entryConfiguration maps the muxt.json entry for a directory onto the
+// settings' defaults, then runs finalizeGenerate, so an entry meets the rules
+// a command line meets. from says how a rule error names a setting.
+func entryConfiguration(e composite.Entry, from settingSource, env generateEnv) (generate.RoutesFileConfiguration, error) {
+	var config generate.RoutesFileConfiguration
+	settings := generateSettings(&config)
+	setDefaults(settings)
+	if err := decode(settings, e); err != nil {
+		return generate.RoutesFileConfiguration{}, err
+	}
+	// The entry meets the command-line rules, and their text, until a file's
+	// rule errors name the key instead.
+	if err := finalizeGenerate(&config, givenKeys(e, settings), from, env); err != nil {
+		return generate.RoutesFileConfiguration{}, err
+	}
+	return config, nil
 }
