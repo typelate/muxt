@@ -21,7 +21,7 @@
 |---|---|
 | `muxt generate`, no flags | every entry in the file's directory, dependencies first; the directory's entry elsewhere |
 | `muxt check`, `list-template-calls`, `list-template-callers`, no flags | `use_templates_variable` of every entry in the file's directory, dependencies first; of the directory's entry elsewhere |
-| `muxt test-template-mutations`, no flags | `use_templates_variable` of the directory's entry |
+| `muxt test-template-mutations`, no flags | `use_templates_variable` of the directory's entry; in the file's directory with no entry for it, an error naming the package directories |
 | `muxt` | all of it, shown by source under `Configuration:` |
 | `muxt generate def` | the directory's entry |
 | `muxt explore-module`, `generate-fake-server` | only whether each package has an entry; settings come from the generated files' headers |

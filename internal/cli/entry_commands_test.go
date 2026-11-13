@@ -222,3 +222,25 @@ func TestMutationsRejectsFlagsForConfiguredDirectory(t *testing.T) {
 	assert.Equal(t, "configure test-template-mutations with fields in "+filepath.Join(parent, composite.FileName)+" instead of flags", err.Error(), "message")
 	assert.False(t, ran, "the command ran")
 }
+
+// TestMutationsInMuxtJSONDirectoryNamesPackages states that
+// test-template-mutations with no flags in the directory of a muxt.json that
+// is not itself an entry fails naming the package directories, and runs
+// nothing: a mutation run takes minutes, and the file's directory holds no
+// package to mutate.
+func TestMutationsInMuxtJSONDirectoryNamesPackages(t *testing.T) {
+	dir := moduleDir(t)
+	writeMuxtJSON(t, dir, `{"packages": {"example.com/m/tasks": {}, "example.com/m/contacts": {}}}`)
+
+	_, ran, err := mutationsTemplatesVariables(dir, "test-template-mutations --dry-run")
+
+	var several *composite.SeveralPackagesError
+	require.ErrorAs(t, err, &several, "error %v", err)
+	assert.Equal(t, []string{"contacts", "tasks"}, several.Dirs, "directories in key order")
+	assert.Equal(t, filepath.Join(dir, composite.FileName)+": test-template-mutations tests one package; pass one of: contacts tasks", err.Error(), "message")
+	assert.False(t, ran, "the command ran")
+
+	_, ran, err = mutationsTemplatesVariables(dir, "test-template-mutations --dry-run --use-templates-variable=pages")
+	require.NoError(t, err, "with a flag the directory is the package")
+	assert.True(t, ran, "the command ran with a flag")
+}

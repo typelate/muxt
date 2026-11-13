@@ -28,6 +28,7 @@ func TestSelectJobs(t *testing.T) {
 	writes := jobSpec{Name: "generate", Settings: settings, Scope: eachEntry, RequireEntry: true}
 	lists := jobSpec{Name: "muxt", Settings: settings, Scope: eachEntry}
 	reads := jobSpec{Name: "check", Settings: settings, Scope: itsEntry}
+	one := jobSpec{Name: "test-template-mutations", Settings: settings, Scope: itsEntryOnly}
 
 	for _, tc := range []struct {
 		name     string
@@ -68,6 +69,11 @@ func TestSelectJobs(t *testing.T) {
 		{name: "row 6 check validates only its own entry", spec: reads, muxtJSON: fieldkitStale, dir: ".", wantKeys: []string{""}, wantFile: true},
 		{name: "row 6 check with an entry for the file's directory ignores a stale one", spec: reads, muxtJSON: staleWithRoot, dir: ".", wantKeys: []string{root}, wantFile: true},
 		{name: "row 6 generate validates every entry", spec: writes, muxtJSON: fieldkitStale, dir: ".", wantErr: asError[*composite.MissingDirectoryError]},
+
+		{name: "row 6 a command of one package without an entry for the file's directory", spec: one, muxtJSON: fieldkitEntries, dir: ".", wantErr: asError[*composite.SeveralPackagesError]},
+		{name: "row 6 a command of one package with an entry for the file's directory", spec: one, muxtJSON: fieldkitWithRoot, dir: ".", wantKeys: []string{root}, wantFile: true},
+		{name: "row 5 a command of one package with no packages", spec: one, muxtJSON: fieldkitEmpty, dir: ".", wantKeys: []string{""}, wantFile: true},
+		{name: "row 4 a command of one package with a flag", spec: one, muxtJSON: fieldkitEntries, dir: ".", flag: true, wantKeys: []string{""}, wantGiven: []string{"use-receiver-type"}, wantFile: true},
 
 		{name: "row 7 generate", spec: writes, muxtJSON: fieldkitEntries, dir: "inventory", wantKeys: []string{inventory}, wantFile: true},
 		{name: "row 7 listing", spec: lists, muxtJSON: fieldkitEntries, dir: "inventory", wantKeys: []string{inventory}, wantFile: true},

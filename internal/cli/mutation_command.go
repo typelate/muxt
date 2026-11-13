@@ -77,7 +77,7 @@ working tree is never written to.`,
 			// A mutation run takes minutes and acts on one package, so it
 			// reads the directory's entry alone, whatever the file lists.
 			spec := templatesSpec(testTemplateMutationsName, config.TemplatesVariables, getEnv)
-			spec.Scope = itsEntry
+			spec.Scope = itsEntryOnly
 			sel, err := selectJobs(spec, dir, cmd.Flags(), getEnv)
 			if err != nil {
 				return err

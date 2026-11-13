@@ -52,7 +52,7 @@ callers dir="tasks" templates=[templates]
 load root="." dirs=["."] patterns=[""]
 error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: no Go package found at $BASE
 == entries, file directory: mutations test-template-mutations --dry-run
-mutations dir="." templates=[templates]
+error: $BASE/muxt.json: test-template-mutations tests one package; pass one of: contacts inventory tasks
 == entries and root entry, file directory: generate generate -v
 generate key="example.com/fieldkit" file="muxt.json" dir="." receiver="Server" receiver-package="" templates=[templates] output="template_routes.go" htmx=true logger=false verbose=true
 generate key="example.com/fieldkit/contacts" file="muxt.json" dir="contacts" receiver="Server" receiver-package="" templates=[templates] output="template_routes.go" htmx=true logger=false verbose=true
@@ -246,7 +246,7 @@ error: $BASE/muxt.json: packages["example.com/fieldkit/ghost"]: directory $BASE/
 load root="." dirs=["."] patterns=[""]
 error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: no Go package found at $BASE
 == stale entry, file directory: mutations test-template-mutations --dry-run
-mutations dir="." templates=[templates]
+error: $BASE/muxt.json: test-template-mutations tests one package; pass one of: contacts ghost
 == stale entry, contacts: generate generate -v
 generate key="example.com/fieldkit/contacts" file="muxt.json" dir="contacts" receiver="Server" receiver-package="" templates=[templates] output="template_routes.go" htmx=false logger=false verbose=true
 == stale entry, contacts: muxt 
@@ -316,7 +316,7 @@ callers dir="tasks" templates=[templates]
 load root="." dirs=["."] patterns=[""]
 error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: no Go package found at $BASE
 == -C module: mutations test-template-mutations --dry-run
-mutations dir="." templates=[templates]
+error: $BASE/muxt.json: test-template-mutations tests one package; pass one of: contacts inventory tasks
 == -C inventory: generate generate -v
 generate key="example.com/fieldkit/inventory" file="muxt.json" dir="inventory" receiver="Catalog" receiver-package="example.com/fieldkit/types" templates=[catalogTemplates] output="template_routes.go" htmx=true logger=false verbose=true
 == -C inventory: muxt 

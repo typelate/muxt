@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/spf13/pflag"
 
@@ -18,6 +19,10 @@ const (
 	eachEntry scope = iota + 1
 	// itsEntry is the directory's entry, else the spec's Fallback.
 	itsEntry
+	// itsEntryOnly is itsEntry, except that in the muxt.json's own directory
+	// without an entry it is an error when the file lists packages: the
+	// command tests one, and the directory is not one of them.
+	itsEntryOnly
 )
 
 // jobSpec is what a command tells selectJobs about itself, so one function
@@ -123,10 +128,13 @@ func selectJobs(spec jobSpec, dir string, flags *pflag.FlagSet, getEnv func(stri
 			return fallbackSelection(spec, dir, f, nil)
 		}
 		keys = f.Keys()
-		if spec.Scope == itsEntry {
+		if spec.Scope == itsEntry || spec.Scope == itsEntryOnly {
 			// Only the directory's own entry is read, so another entry's
 			// mistake cannot fail a command that acts on one package.
 			if !lookup.HasEntry {
+				if spec.Scope == itsEntryOnly {
+					return selection{}, severalPackages(spec, f)
+				}
 				return fallbackSelection(spec, dir, f, nil)
 			}
 			keys = []string{lookup.Key}
@@ -151,6 +159,20 @@ func selectJobs(spec jobSpec, dir string, flags *pflag.FlagSet, getEnv func(stri
 		jobs = append(jobs, packageJob{File: f.Name, Key: key, Dir: entryDir, Config: config})
 	}
 	return selection{File: f, Jobs: jobs}, nil
+}
+
+// severalPackages names the directories of f's entries, relative to f, for a
+// command that tests one package.
+func severalPackages(spec jobSpec, f *composite.File) error {
+	var dirs []string
+	for _, key := range f.Keys() {
+		rel, err := filepath.Rel(f.Dir, f.DirOf(key))
+		if err != nil {
+			return fmt.Errorf("muxt.json entry %s: %w", key, err)
+		}
+		dirs = append(dirs, filepath.ToSlash(rel))
+	}
+	return &composite.SeveralPackagesError{Path: f.Name, Command: spec.Name, Dirs: dirs}
 }
 
 // fallbackSelection is the one job the command's own flags and defaults give

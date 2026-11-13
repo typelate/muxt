@@ -1,6 +1,9 @@
 package composite
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // ExistsError reports a file or directory a command would create that is
 // already there, so the command wrote nothing. Path is the name the message
@@ -265,4 +268,19 @@ type KeyCaseError struct {
 // Error returns the path, the key, and the spelling on disk on one line.
 func (e *KeyCaseError) Error() string {
 	return fmt.Sprintf("%s: packages key %q is spelled %q on disk; write that", e.Path, e.Key, e.OnDisk)
+}
+
+// SeveralPackagesError reports a command that tests one package, run with no
+// flags in the directory of a muxt.json that lists packages but not that
+// directory: the file's directory holds no package to act on, and guessing one
+// would fail late. Path is the file's absolute path and Dirs the entries'
+// directories relative to it, in key order.
+type SeveralPackagesError struct {
+	Path, Command string
+	Dirs          []string
+}
+
+// Error returns the file, the command and the directories to pass, on one line.
+func (e *SeveralPackagesError) Error() string {
+	return fmt.Sprintf("%s: %s tests one package; pass one of: %s", e.Path, e.Command, strings.Join(e.Dirs, " "))
 }
