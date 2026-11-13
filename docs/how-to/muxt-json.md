@@ -27,7 +27,7 @@ muxt generate config
 wrote muxt.json
 ```
 
-The file starts as `{"packages": {}}`. The command refuses to overwrite one: `/home/me/app/muxt.json already exists; nothing was written`.
+The file starts as `{"packages": {}}`. The command refuses to overwrite one: `/home/me/app/muxt.json already configures this directory; add a package with: muxt generate package NAME`.
 
 ## 2. Write an entry for each package
 

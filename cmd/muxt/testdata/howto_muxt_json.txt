@@ -2,6 +2,11 @@
 # muxt generate def, then muxt generate from the muxt.json directory.
 
 muxt generate config
+
+# A second run refuses and names the file.
+! muxt generate config
+cmpenv stderr want-config-again.txt
+
 muxt generate package workspace
 stdout 'wrote muxt.json: packages\["example.com/m/workspace"\]'
 
@@ -28,6 +33,8 @@ exec go test ./...
 module example.com/m
 
 go 1.22
+-- want-config-again.txt --
+Error: $WORK/muxt.json already configures this directory; add a package with: muxt generate package NAME
 -- workspace_test.txt --
 package workspace
 
