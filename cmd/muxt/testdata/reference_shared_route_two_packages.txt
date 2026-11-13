@@ -1,0 +1,145 @@
+# Two packages that parse a shared file holding a route register it on one mux.
+# Without a path prefix the second registration panics; with a prefix per
+# package each serves its own copy of the route.
+
+muxt generate
+! stdout .
+! stderr .
+
+# Same pattern, no prefix: http.ServeMux panics.
+! exec go test ./plain
+stdout 'conflicts with pattern "GET /help"'
+
+# Each package under its own prefix serves its own copy.
+exec go test ./prefixed
+
+-- go.mod --
+module example.com/m
+
+go 1.22
+-- muxt.json --
+{
+	"package_defaults": {
+		"use_receiver_type": "Server"
+	},
+	"packages": {
+		"example.com/m/a": {},
+		"example.com/m/b": {},
+		"example.com/m/c": {"output_routes_func_with_path_prefix_param": true},
+		"example.com/m/d": {"output_routes_func_with_path_prefix_param": true}
+	}
+}
+-- fragments/fragments.go --
+package fragments
+
+import "embed"
+
+//go:embed help.gohtml
+var TemplateSource embed.FS
+-- fragments/help.gohtml --
+{{define "GET /help Help()"}}<p>{{.Result}}</p>{{end}}
+-- a/a.go --
+package a
+
+import (
+	"html/template"
+
+	"example.com/m/fragments"
+)
+
+var templates = template.Must(template.New("").
+	ParseFS(fragments.TemplateSource, "*.gohtml"))
+
+type Server struct{}
+
+func (Server) Help() string { return "a" }
+-- b/b.go --
+package b
+
+import (
+	"html/template"
+
+	"example.com/m/fragments"
+)
+
+var templates = template.Must(template.New("").
+	ParseFS(fragments.TemplateSource, "*.gohtml"))
+
+type Server struct{}
+
+func (Server) Help() string { return "b" }
+-- c/c.go --
+package c
+
+import (
+	"html/template"
+
+	"example.com/m/fragments"
+)
+
+var templates = template.Must(template.New("").
+	ParseFS(fragments.TemplateSource, "*.gohtml"))
+
+type Server struct{}
+
+func (Server) Help() string { return "c" }
+-- d/d.go --
+package d
+
+import (
+	"html/template"
+
+	"example.com/m/fragments"
+)
+
+var templates = template.Must(template.New("").
+	ParseFS(fragments.TemplateSource, "*.gohtml"))
+
+type Server struct{}
+
+func (Server) Help() string { return "d" }
+-- plain/plain_test.go --
+package plain
+
+import (
+	"net/http"
+	"testing"
+
+	"example.com/m/a"
+	"example.com/m/b"
+)
+
+func TestTwoPackagesOnOneMux(t *testing.T) {
+	mux := http.NewServeMux()
+	a.TemplateRoutes(mux, a.Server{})
+	b.TemplateRoutes(mux, b.Server{})
+}
+-- prefixed/prefixed_test.go --
+package prefixed
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+
+	"example.com/m/c"
+	"example.com/m/d"
+)
+
+func TestEachPrefixServesItsOwnCopy(t *testing.T) {
+	mux := http.NewServeMux()
+	c.TemplateRoutes(mux, c.Server{}, "/c")
+	d.TemplateRoutes(mux, d.Server{}, "/d")
+
+	for path, want := range map[string]string{"/c/help": "<p>c</p>", "/d/help": "<p>d</p>"} {
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+		if got := rec.Result().StatusCode; got != http.StatusOK {
+			t.Errorf("GET %s status = %d, want %d", path, got, http.StatusOK)
+		}
+		if body := rec.Body.String(); !strings.Contains(body, want) {
+			t.Errorf("GET %s body = %q, want it to contain %q", path, body, want)
+		}
+	}
+}

@@ -59,10 +59,11 @@ You are splitting a hypertext package into sub-packages, and they should keep on
 
 ## If a shared file holds a route
 
-A route template in `fragments` becomes a route of every package that parses it. Two such packages on one mux panic when the routes are registered:
+A route template in `fragments` becomes a route of every package that parses it. Two such packages on one mux panic when the routes are registered, unless each is mounted under its own prefix (`output_routes_func_with_path_prefix_param`), which gives each package its own copy ([reference_shared_route_two_packages.txt](../../cmd/muxt/testdata/reference_shared_route_two_packages.txt)). Without a prefix:
 
 ```text
-panic: pattern "GET /about" (registered at .../billing/template_routes.go:30) conflicts with pattern "GET /about" (registered at .../workspace/template_routes.go:30)
+panic: pattern "GET /help" (registered at /home/me/app/billing/template_routes.go:29) conflicts with pattern "GET /help" (registered at /home/me/app/workspace/template_routes.go:29):
+	GET /help matches the same requests as GET /help [recovered, repanicked]
 ```
 
 Keep routes in each package's own files, or give each package its own mux.
