@@ -22,7 +22,8 @@
 | `muxt generate`, no flags | every entry in the file's directory, dependencies first; the directory's entry elsewhere |
 | `muxt check`, `list-template-calls`, `list-template-callers` | `use_templates_variable` |
 | `muxt` | all of it, shown by source under `Configuration:` |
-| `muxt explore-module`, `generate-fake-server` | the directory's entry |
+| `muxt generate def` | the directory's entry |
+| `muxt explore-module`, `generate-fake-server` | only whether each package has an entry; settings come from the generated files' headers |
 
 `muxt fmt` and `muxt test-template-mutations` do not read the file.
 

@@ -78,7 +78,7 @@ Delete the `//go:generate` line from `workspace`. In the root package, where `mu
 
 The package load is the expensive part of `muxt generate`; one run generates every entry and pays for it once.
 
-If the directory holding `muxt.json` and `go.mod` has no Go package, put the one directive in any entry's package: `//go:generate muxt -C .. generate` in `contacts` generated every entry when run by `go generate ./...`.
+If the directory holding `muxt.json` and `go.mod` has no Go package, put the one directive in any package, with `-C` naming the directory that holds `muxt.json`: `//go:generate muxt -C .. generate` in `workspace`.
 
 ## 5. Generate
 
