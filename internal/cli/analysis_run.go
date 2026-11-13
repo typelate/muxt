@@ -13,14 +13,12 @@ import (
 )
 
 // namedFailure is err for a run over several jobs, naming the job it came
-// from. A diagnostic printed with cobra silenced would otherwise end the run
-// with no word of whose it was, so cobra's own line is turned back on to
-// carry the key.
-func namedFailure(cmd *cobra.Command, job packageJob, several bool, err error) error {
+// from. A caller that wraps must also turn cobra's own error line back on if a
+// diagnostic silenced it, or the run ends with no word of whose failure it was.
+func namedFailure(job packageJob, several bool, err error) error {
 	if !several {
 		return err
 	}
-	cmd.SilenceErrors = false
 	return fmt.Errorf("%s: %w", job.Key, err)
 }
 
@@ -34,14 +32,19 @@ func checkRunner(loadPackages packageLoader) func(*cobra.Command, []packageJob, 
 				config.TemplatesVariables = job.Config.TemplatesVariables
 				pkg, err := l.Package(job.Dir, config.TemplatesVariables)
 				if err != nil {
-					return false, namedFailure(cmd, job, several, checkFailure(cmd, err))
+					err = checkFailure(cmd, err)
+					if several {
+						cmd.SilenceErrors = false
+					}
+					return false, namedFailure(job, several, err)
 				}
 				result, err := analysis.Check(config, logger, pkg)
 				if err != nil {
 					// Check logged each diagnostic; its error is only their count, and
 					// cobra repeating it after them would bury the last diagnostic.
-					cmd.SilenceErrors = true
-					return false, namedFailure(cmd, job, several, err)
+					// With several jobs the line carries the job's key, so it stays on.
+					cmd.SilenceErrors = !several
+					return false, namedFailure(job, several, err)
 				}
 				summary := plural(result.Checked, "template")
 				if result.NonLiteral > 0 {
@@ -103,7 +106,10 @@ func runListing(cmd *cobra.Command, loadPackages packageLoader, jobs []packageJo
 			}
 			pkg, err := l.Package(job.Dir, job.Config.TemplatesVariables)
 			if err != nil {
-				return false, namedFailure(cmd, job, several, err)
+				if several {
+					cmd.SilenceErrors = false
+				}
+				return false, namedFailure(job, several, err)
 			}
 			var key string
 			if several {
@@ -111,7 +117,10 @@ func runListing(cmd *cobra.Command, loadPackages packageLoader, jobs []packageJo
 			}
 			result, err := list(pkg, key)
 			if err != nil {
-				return false, namedFailure(cmd, job, several, err)
+				if several {
+					cmd.SilenceErrors = false
+				}
+				return false, namedFailure(job, several, err)
 			}
 			if asJSON && several {
 				collected = append(collected, result)
