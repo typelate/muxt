@@ -2,6 +2,7 @@ package cli
 
 import (
 	"errors"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -129,6 +130,30 @@ func TestSelectJobsCopiesVerboseOntoEveryJob(t *testing.T) {
 	for _, job := range sel.Jobs {
 		assert.True(t, job.Config.Verbose, "job %q Verbose", job.Key)
 	}
+}
+
+// TestSelectJobsRejectsTwoKeysForOneDirectory states that two packages keys
+// whose directories are the same directory, one reached through a symbolic
+// link, fail with the file, both keys and the directory, since the second
+// entry's settings would otherwise win without a word.
+func TestSelectJobsRejectsTwoKeysForOneDirectory(t *testing.T) {
+	base := newFieldkit(t, `{"packages": {"example.com/fieldkit/contacts": {}, "example.com/fieldkit/people": {}}}`)
+	if err := os.Symlink("contacts", filepath.Join(base, "people")); err != nil {
+		t.Skipf("no symbolic links here: %v", err)
+	}
+	spec := jobSpec{Name: "generate", Scope: eachEntry}
+
+	_, err := selectJobs(spec, base, nil, func(string) string { return "" })
+
+	var same *composite.SameDirectoryError
+	require.ErrorAs(t, err, &same, "error %v", err)
+	realBase, evalErr := filepath.EvalSymlinks(base)
+	require.NoError(t, evalErr)
+	assert.Equal(t, "example.com/fieldkit/people", same.Key, "key")
+	assert.Equal(t, "example.com/fieldkit/contacts", same.Other, "other key")
+	assert.Equal(t, filepath.Join(realBase, "contacts"), same.Dir, "directory")
+	want := filepath.Join(base, composite.FileName) + `: packages["example.com/fieldkit/people"] is the same directory as packages["example.com/fieldkit/contacts"], ` + filepath.Join(realBase, "contacts") + `; keep one`
+	assert.Equal(t, want, err.Error(), "message")
 }
 
 // asError reports whether err is, or wraps, an E.

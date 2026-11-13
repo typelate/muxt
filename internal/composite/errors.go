@@ -167,6 +167,19 @@ func (e *OutsideDirectoryError) Error() string {
 	return fmt.Sprintf("%s: packages[%q]: directory %s resolves outside the file's directory", e.Path, e.Key, e.Dir)
 }
 
+// SameDirectoryError reports two packages keys whose directories are one
+// directory once symbolic links are followed. Both would be generated, and
+// the later entry's settings would win. Key is the later key, Other the
+// earlier, and Dir the directory they share with its links followed.
+type SameDirectoryError struct {
+	Path, Key, Other, Dir string
+}
+
+// Error returns the path, both keys and the directory on one line.
+func (e *SameDirectoryError) Error() string {
+	return fmt.Sprintf("%s: packages[%q] is the same directory as packages[%q], %s; keep one", e.Path, e.Key, e.Other, e.Dir)
+}
+
 // InvalidEntryError reports a muxt.json entry whose values a generate flag
 // rejects, such as two frontends set at once. Err is the flag's own error, so
 // the message matches the one the command line gives. Where names the entry.

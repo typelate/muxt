@@ -146,11 +146,17 @@ func selectJobs(spec jobSpec, dir string, flags *pflag.FlagSet, getEnv func(stri
 		version = noVersion
 	}
 	var jobs []packageJob
+	keyOf := map[string]string{} // a real directory to the first key that reached it
 	for _, key := range keys {
 		entryDir := f.DirOf(key)
-		if err := requireEntryDirectory(f, key, entryDir); err != nil {
+		realDir, err := requireEntryDirectory(f, key, entryDir)
+		if err != nil {
 			return selection{}, err
 		}
+		if other, repeated := keyOf[realDir]; repeated {
+			return selection{}, &composite.SameDirectoryError{Path: f.Name, Key: key, Other: other, Dir: realDir}
+		}
+		keyOf[realDir] = key
 		entry, _ := f.Resolve(key)
 		config, err := entryConfiguration(entry, fromMuxtJSON, generateEnv{Dir: entryDir, GetEnv: getEnv, Version: version})
 		if err != nil {

@@ -11,7 +11,7 @@
 }
 ```
 
-- `packages` keys are import paths of packages at or below the file's directory.
+- `packages` keys are import paths of packages at or below the file's directory. Two keys that reach one directory, such as through a symbolic link, are an error to a command that reads every entry (the table below).
 - Entry keys are the `generate` flag names without `--`, dashes written `_`: [flags](cli.md#flags). `verbose` is not a key.
 - A boolean flag is a JSON boolean, a string flag a JSON string, `use_templates_variable` a list of strings, and `output_multipart_max_memory` a string such as `"64MB"`.
 - `muxt generate package` rewrites the file in one sorted form, tab-indented; a hand-written order and spacing do not survive it.

@@ -45,42 +45,45 @@ func lookupMuxtJSONEntry(wd string) (entryLookup, error) {
 // requireEntryDirectory returns a *composite.MissingDirectoryError unless dir,
 // the directory of key in f, is a directory, and a
 // *composite.OutsideDirectoryError when it is one that a symbolic link resolves
-// outside f's directory. The errors name dir by its absolute path.
-func requireEntryDirectory(f *composite.File, key, dir string) error {
+// outside f's directory. The errors name dir by its absolute path. It returns
+// dir with its symbolic links followed, so a caller can tell two keys apart
+// by the directory they reach.
+func requireEntryDirectory(f *composite.File, key, dir string) (realDir string, err error) {
 	info, statErr := os.Stat(dir)
 	if statErr != nil && !errors.Is(statErr, fs.ErrNotExist) {
-		return fmt.Errorf("muxt.json entry %q: %w", key, statErr)
+		return "", fmt.Errorf("muxt.json entry %q: %w", key, statErr)
 	}
 	if statErr != nil || !info.IsDir() {
-		return &composite.MissingDirectoryError{Path: f.Name, Key: key, Dir: dir, IsFile: statErr == nil}
+		return "", &composite.MissingDirectoryError{Path: f.Name, Key: key, Dir: dir, IsFile: statErr == nil}
 	}
-	inside, err := resolvesInside(f.Dir, dir)
+	realDir, inside, err := resolvesInside(f.Dir, dir)
 	if err != nil {
-		return fmt.Errorf("muxt.json entry %q: %w", key, err)
+		return "", fmt.Errorf("muxt.json entry %q: %w", key, err)
 	}
 	if !inside {
-		return &composite.OutsideDirectoryError{Path: f.Name, Key: key, Dir: dir}
+		return "", &composite.OutsideDirectoryError{Path: f.Name, Key: key, Dir: dir}
 	}
-	return nil
+	return realDir, nil
 }
 
-// resolvesInside reports whether dir, with its symbolic links followed, is
-// base or below it, with base's links followed too. Both sides resolve because
-// the temporary directory of a test may itself sit behind a link.
-func resolvesInside(base, dir string) (bool, error) {
+// resolvesInside returns dir with its symbolic links followed, and reports
+// whether that is base or below it, with base's links followed too. Both sides
+// resolve because the temporary directory of a test may itself sit behind a
+// link.
+func resolvesInside(base, dir string) (realDir string, inside bool, err error) {
 	realBase, err := filepath.EvalSymlinks(base)
 	if err != nil {
-		return false, fmt.Errorf("resolving %s: %w", base, err)
+		return "", false, fmt.Errorf("resolving %s: %w", base, err)
 	}
-	realDir, err := filepath.EvalSymlinks(dir)
+	realDir, err = filepath.EvalSymlinks(dir)
 	if err != nil {
-		return false, fmt.Errorf("resolving %s: %w", dir, err)
+		return "", false, fmt.Errorf("resolving %s: %w", dir, err)
 	}
 	rel, err := filepath.Rel(realBase, realDir)
 	if err != nil {
-		return false, fmt.Errorf("directory %s from %s: %w", realDir, realBase, err)
+		return "", false, fmt.Errorf("directory %s from %s: %w", realDir, realBase, err)
 	}
-	return filepath.IsLocal(rel), nil
+	return realDir, filepath.IsLocal(rel), nil
 }
 
 // noVersion is the version func of a command that writes no header, so it has
