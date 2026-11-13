@@ -588,11 +588,6 @@ func TestRoutesListsOverriddenSharedNames(t *testing.T) {
 			name: "own file after the shared files",
 			want: "Overrides:\n  - footer\n      replaced: %[1]s/fragments/footer.gohtml:1:1\n      kept:     %[1]s/workspace/page.gohtml:2:1\n\nTemplate Routes:",
 		},
-		{
-			name:       "shared files after the own file",
-			sharedLast: true,
-			want:       "Overrides:\n  - footer\n      replaced: %[1]s/workspace/page.gohtml:2:1\n      kept:     %[1]s/fragments/footer.gohtml:1:1\n\nTemplate Routes:",
-		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			dir := resolvedDir(t, overriddenFooter(t, tt.sharedLast))
@@ -629,6 +624,37 @@ func TestRoutesListsOverriddenSharedNames(t *testing.T) {
 		require.NoError(t, err, "muxt: %s", output)
 		assert.NotContains(t, output, "Overrides", "muxt output")
 	})
+}
+
+// TestSharedFileReplacingOwnTemplateFailsEveryCommand states that a shared file
+// parsed after the package's own files, defining a name the package's own file
+// defined, fails loading the templates variable in every command, with the own
+// definition first and both sites by absolute path, and that generate writes
+// nothing.
+func TestSharedFileReplacingOwnTemplateFailsEveryCommand(t *testing.T) {
+	if testing.Short() {
+		t.Skip("loads packages with the go command")
+	}
+	dir := resolvedDir(t, overriddenFooter(t, true))
+	workspace := filepath.Join(dir, "workspace")
+	want := fmt.Sprintf("%[1]s/workspace/page.gohtml:2:1: template \"footer\" is replaced by %[1]s/fragments/footer.gohtml:1:1; parse the shared embed.FS before this package's own files", filepath.ToSlash(dir))
+	before, err := os.ReadDir(workspace)
+	require.NoError(t, err, "read workspace")
+
+	for _, args := range [][]string{
+		{"generate", "--use-receiver-type=T"},
+		{"check"},
+		nil,
+	} {
+		output, err := runMuxt(t, workspace, args...)
+
+		require.Error(t, err, "muxt %v: %s", args, output)
+		assert.Contains(t, output+err.Error(), want, "muxt %v output", args)
+	}
+
+	after, err := os.ReadDir(workspace)
+	require.NoError(t, err, "read workspace")
+	assert.Equal(t, len(before), len(after), "files in workspace")
 }
 
 // TestCheckNamesSharedFileByAbsolutePath states that an error in a shared

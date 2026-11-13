@@ -2,6 +2,7 @@ package check
 
 import (
 	"cmp"
+	"fmt"
 	"go/ast"
 	"go/token"
 	"os"
@@ -117,7 +118,13 @@ func newDefinitionSet(ordered []Definition) definitionSet {
 // shared, own, own it is the shared file, and for own, shared it is the own
 // file. When every dropped definition is in Kept's package, as with two
 // files of one shared package, it is the one Kept displaced.
-func overridesIn(ordered []Definition) []muxtsource.Override {
+//
+// A shared definition that ends the chain after the analyzed package's own
+// definition of the name was dropped is an error, *SharedReplacesOwnError:
+// the template a reader sees in the package's own file must be the one that
+// renders. The first such name in the order it was first overridden is
+// reported.
+func overridesIn(ordered []Definition) ([]muxtsource.Override, error) {
 	type chain struct {
 		held       Definition
 		dropped    []Definition
@@ -145,6 +152,17 @@ func overridesIn(ordered []Definition) []muxtsource.Override {
 	overrides := make([]muxtsource.Override, 0, len(names))
 	for _, name := range names {
 		c := chains[name]
+		if c.held.Package != "" {
+			for i := len(c.dropped) - 1; i >= 0; i-- {
+				if c.dropped[i].Package == "" {
+					return nil, &SharedReplacesOwnError{
+						Name:   name,
+						Own:    muxtsource.Site{Position: c.dropped[i].Define.Position},
+						Shared: muxtsource.Site{Package: c.held.Package, Position: c.held.Define.Position},
+					}
+				}
+			}
+		}
 		replaced := c.dropped[len(c.dropped)-1]
 		for i := len(c.dropped) - 1; i >= 0; i-- {
 			if c.dropped[i].Package != c.held.Package {
@@ -158,7 +176,25 @@ func overridesIn(ordered []Definition) []muxtsource.Override {
 			Kept:     muxtsource.Site{Package: c.held.Package, Position: c.held.Define.Position},
 		})
 	}
-	return overrides
+	return overrides, nil
+}
+
+// SharedReplacesOwnError reports a template of the analyzed package's own
+// files that a shared file, parsed after it, replaces. html/template lets a
+// later definition win, so the template a reader sees in the package's own
+// file would not be the one that renders.
+type SharedReplacesOwnError struct {
+	// Name is the template's name.
+	Name string
+
+	// Own is the package's own definition that is replaced, Shared the
+	// definition in another package's file that replaces it.
+	Own, Shared muxtsource.Site
+}
+
+func (e *SharedReplacesOwnError) Error() string {
+	return fmt.Sprintf("%s: template %q is replaced by %s; parse the shared embed.FS before this package's own files",
+		e.Own.Position, e.Name, e.Shared.Position)
 }
 
 func (s definitionSet) FindDefinition(name string) (Definition, bool) {

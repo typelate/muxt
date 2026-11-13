@@ -1,6 +1,7 @@
 package check
 
 import (
+	"errors"
 	"go/token"
 	"strings"
 	"testing"
@@ -148,7 +149,6 @@ func TestOverridesIn(t *testing.T) {
 		want  []string
 	}{
 		{chain: []string{"s.gohtml", "a.gohtml"}, want: []string{"s.gohtml->a.gohtml"}},
-		{chain: []string{"a.gohtml", "s.gohtml"}, want: []string{"a.gohtml->s.gohtml"}},
 		{chain: []string{"a.gohtml", "b.gohtml"}, want: nil},
 		{chain: []string{"s.gohtml", "a.gohtml", "b.gohtml"}, want: []string{"s.gohtml->b.gohtml"}},
 		{chain: []string{"s1.gohtml", "s2.gohtml", "a.gohtml"}, want: []string{"s2.gohtml->a.gohtml"}},
@@ -168,7 +168,11 @@ func TestOverridesIn(t *testing.T) {
 			}
 
 			var got []string
-			for _, o := range overridesIn(ordered) {
+			overrides, err := overridesIn(ordered)
+			if err != nil {
+				t.Fatalf("overridesIn(%q) error = %v, want none", tt.chain, err)
+			}
+			for _, o := range overrides {
 				got = append(got, o.Replaced.Position.Filename+"->"+o.Kept.Position.Filename)
 			}
 
@@ -177,4 +181,75 @@ func TestOverridesIn(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestOverridesInRejectsSharedReplacingOwn(t *testing.T) {
+	// A file named s*.gohtml is in the shared package. The error names the
+	// own definition replaced and the shared one that replaced it.
+	for _, tt := range []struct {
+		chain []string
+		own   string
+		kept  string
+	}{
+		{chain: []string{"a.gohtml", "s.gohtml"}, own: "a.gohtml", kept: "s.gohtml"},
+		{chain: []string{"s1.gohtml", "a.gohtml", "s2.gohtml"}, own: "a.gohtml", kept: "s2.gohtml"},
+		{chain: []string{"a.gohtml", "b.gohtml", "s.gohtml"}, own: "b.gohtml", kept: "s.gohtml"},
+	} {
+		t.Run(strings.Join(tt.chain, ","), func(t *testing.T) {
+			tree := defineTree(t, "body")
+			ordered := make([]Definition, 0, len(tt.chain))
+			for i, file := range tt.chain {
+				def := definitionOnLine(i+1, tree)
+				def.Define.Filename = file
+				if strings.HasPrefix(file, "s") {
+					def.Package = "example.com/m/fragments"
+				}
+				ordered = append(ordered, def)
+			}
+
+			_, err := overridesIn(ordered)
+
+			got, ok := errors.AsType[*SharedReplacesOwnError](err)
+			if !ok {
+				t.Fatalf("overridesIn(%q) error = %v, want *SharedReplacesOwnError", tt.chain, err)
+			}
+			if got.Name != "a" || got.Own.Position.Filename != tt.own || got.Shared.Position.Filename != tt.kept {
+				t.Errorf("overridesIn(%q) error = %+v, want name %q, own %q, shared %q", tt.chain, got, "a", tt.own, tt.kept)
+			}
+		})
+	}
+
+	t.Run("an empty shared definition replaces nothing", func(t *testing.T) {
+		own := definitionOnLine(1, defineTree(t, "body"))
+		own.Define.Filename = "a.gohtml"
+		shared := definitionOnLine(2, defineTree(t, ""))
+		shared.Define.Filename = "s.gohtml"
+		shared.Package = "example.com/m/fragments"
+
+		if _, err := overridesIn([]Definition{own, shared}); err != nil {
+			t.Errorf("overridesIn(own, empty shared) error = %v, want none", err)
+		}
+	})
+
+	t.Run("the first name in parse order is reported", func(t *testing.T) {
+		tree := defineTree(t, "body")
+		var ordered []Definition
+		for i, name := range []string{"x", "y", "y", "x"} {
+			def := definitionOnLine(i+1, tree)
+			def.Name = name
+			def.Define.Filename = "a.gohtml"
+			if i >= 2 {
+				def.Define.Filename = "s.gohtml"
+				def.Package = "example.com/m/fragments"
+			}
+			ordered = append(ordered, def)
+		}
+
+		_, err := overridesIn(ordered)
+
+		got, ok := errors.AsType[*SharedReplacesOwnError](err)
+		if !ok || got.Name != "y" {
+			t.Errorf("overridesIn error = %v, want *SharedReplacesOwnError for %q", err, "y")
+		}
+	})
 }

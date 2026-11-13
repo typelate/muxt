@@ -93,8 +93,12 @@ func LoadTemplates(pkg *packages.Package, templatesVariable string, imports map[
 	}
 
 	ordered := definitionsFor(pkg.Fset, meta.Sources)
+	overrides, err := overridesIn(ordered)
+	if err != nil {
+		return nil, err
+	}
 	result := &Templates{
-		overrides:   overridesIn(ordered),
+		overrides:   overrides,
 		pkg:         pkg,
 		variable:    variable,
 		templates:   ts,

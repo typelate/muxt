@@ -69,13 +69,19 @@ Keep routes in each package's own files, or give each package its own mux.
 
 ## Replace a shared template in one package
 
-Define the same name in the package's own file. The later definition wins, as in `html/template`. Bare `muxt` in that package lists it:
+Define the same name in the package's own file, and parse the shared FS first. The later definition wins, as in `html/template`. Bare `muxt` in that package lists it:
 
 ```text
 Overrides:
   - layout
       replaced: /home/me/app/fragments/layout.gohtml:1:1
       kept:     /home/me/app/workspace/over.gohtml:1:1
+```
+
+Parsing the shared FS after the package's own files, so a shared file replaces the package's own template, is an error in every command:
+
+```text
+/home/me/app/workspace/over.gohtml:1:1: template "layout" is replaced by /home/me/app/fragments/layout.gohtml:1:1; parse the shared embed.FS before this package's own files
 ```
 
 `muxt check` never reports a shared template as unused.
