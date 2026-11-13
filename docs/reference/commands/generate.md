@@ -32,7 +32,7 @@ Steps: [move generate flags into muxt.json](../../how-to/muxt-json.md).
 
 ### generate package
 
-`generate package NAME` writes `NAME/NAME.go` (the `go:embed`, the templates variable under its configured name, and the receiver type), an empty `NAME/NAME.gohtml`, and the entry in `muxt.json`. The entry records `use_receiver_type` unless `package_defaults` supplies one.
+`generate package NAME` writes `NAME/NAME.go` (the `go:embed`, the templates variable under its configured name, and the receiver type), an empty `NAME/NAME.gohtml`, and the entry in `muxt.json`. The entry records `use_receiver_type` unless `package_defaults` supplies one. `NAME` is one Go identifier that is not `main` and does not start with `_`, which the go command ignores in a file name.
 
 ## Files
 

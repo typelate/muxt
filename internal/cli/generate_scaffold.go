@@ -51,6 +51,11 @@ func scaffoldPackage(out io.Writer, wd, name string, flags *pflag.FlagSet, confi
 		// A package main with no func main breaks go build ./..., and a
 		// route package is imported, which package main cannot be.
 		return &composite.PackageNameError{Name: name, Reason: "is the main package; a route package is a library package the main package imports"}
+	case strings.HasPrefix(name, "_"):
+		// The scaffold names its file after the package, and the go command
+		// skips a file whose name starts with _, so the package would have
+		// no Go files and break the next generate for the whole module.
+		return &composite.PackageNameError{Name: name, Reason: "starts with _, and the go command ignores a file whose name starts with _"}
 	case !token.IsIdentifier(name):
 		return &composite.PackageNameError{Name: name, Reason: "must be a Go identifier"}
 	}

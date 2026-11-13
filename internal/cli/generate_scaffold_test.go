@@ -298,6 +298,7 @@ func TestGeneratePackageRejectsBadNames(t *testing.T) {
 	}{
 		{name: "a-b", want: `package name "a-b" must be a Go identifier`, dir: "a-b"},
 		{name: "main", want: `package name "main" is the main package; a route package is a library package the main package imports`, dir: "main"},
+		{name: "_hidden", want: `package name "_hidden" starts with _, and the go command ignores a file whose name starts with _`, dir: "_hidden"},
 		{name: "a/b", want: `package name "a/b" must be one directory name, created in the working directory`, dir: "a"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
