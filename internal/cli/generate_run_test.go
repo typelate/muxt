@@ -260,3 +260,58 @@ func TestGenerateChecksEveryPackageLoadedBeforeWriting(t *testing.T) {
 	assert.Equal(t, want, err.Error(), "message")
 	assert.NoFileExists(t, filepath.Join(dir, "a", "template_routes.go"), "an earlier entry's routes file")
 }
+
+// notedModule writes a module with muxt.json entries for packages a and b,
+// each with receiver type S and a route calling Missing, a method S lacks.
+func notedModule(t *testing.T, keys ...string) string {
+	t.Helper()
+	dir := t.TempDir()
+	writeTestFile(t, dir, "go.mod", "module example.com/m\n\ngo 1.24\n")
+	var entries []string
+	for _, key := range keys {
+		require.NoError(t, os.MkdirAll(filepath.Join(dir, key), 0o755))
+		writeTestFile(t, dir, key+"/package.go", fmt.Sprintf(`package %s
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var source embed.FS
+
+var templates = template.Must(template.ParseFS(source, "*.gohtml"))
+
+type S struct{}
+`, key))
+		writeTestFile(t, dir, key+"/page.gohtml", `{{define "GET /{id} Missing(ctx, id)"}}<p>{{.}}</p>{{end}}`)
+		entries = append(entries, fmt.Sprintf(`"example.com/m/%s": {"use_receiver_type": "S"}`, key))
+	}
+	writeTestFile(t, dir, composite.FileName, `{"packages": {`+strings.Join(entries, ",")+`}}`)
+	return dir
+}
+
+// TestGenerateNotesNameTheirEntry states that when a run covers several
+// entries, each note a job prints starts with that entry's key, and a run over
+// one entry prints its notes bare.
+func TestGenerateNotesNameTheirEntry(t *testing.T) {
+	if testing.Short() {
+		t.Skip("loads packages with the go command")
+	}
+	dir := notedModule(t, "a", "b")
+
+	stdout, _, err := generateWithLoader(t, dir)
+
+	require.NoError(t, err, "generate")
+	for _, key := range []string{"example.com/m/a", "example.com/m/b"} {
+		assert.Contains(t, stdout, key+": note: S does not define Missing(", "notes of %s", key)
+	}
+	for line := range strings.Lines(stdout) {
+		assert.True(t, strings.HasPrefix(line, "example.com/m/a: ") || strings.HasPrefix(line, "example.com/m/b: "), "line without a key: %q", line)
+	}
+
+	stdout, _, err = generateWithLoader(t, filepath.Join(dir, "a"))
+
+	require.NoError(t, err, "generate in a")
+	assert.True(t, strings.HasPrefix(stdout, "note: S does not define Missing("), "stdout of a run over one entry:\n%s", stdout)
+}
