@@ -804,6 +804,7 @@ func TestCommandLineRejections(t *testing.T) {
 		{name: "an empty routes function", args: "generate --output-routes-func=", wantErr: "--output-routes-func value must not be empty"},
 		{name: "an empty routes function with unexported defaults", args: "generate --output-exported-default-identifiers=false --output-routes-func=", wantErr: "--output-routes-func value must not be empty"},
 		{name: "an empty routes function through a deprecated flag", args: "generate --routes-func=", wantErr: "--routes-func value must not be empty"},
+		{name: "an empty deprecated routes function before an empty template data type", args: "generate --routes-func= --output-template-data-type=", wantErr: "--output-template-data-type value must not be empty"},
 		{name: "an empty receiver interface", args: "generate --output-receiver-interface=", wantErr: "--output-receiver-interface value must not be empty"},
 		{name: "an empty template data type", args: "generate --output-template-data-type=", wantErr: "--output-template-data-type value must not be empty"},
 		{name: "an empty sse template data type", args: "generate --output-sse-template-data-type=", wantErr: "--output-sse-template-data-type value must not be empty"},

@@ -1,0 +1,291 @@
+muxt generate package
+
+flags:
+--find-receiver-type
+  shorthand: ""
+  type: string
+  default: ""
+  hidden: true
+  deprecated: "use --use-receiver-type instead"
+  usage: "DEPRECATED: use --use-receiver-type instead. The type name for a named type to use for looking up method signatures. If not set, all methods added to the receiver interface will have inferred signatures with argument types based on the argument identifier names. The inferred method signatures always return a single result of type any. Accepted by muxt and muxt generate; muxt check resolves receivers from the generated routes file."
+--find-receiver-type-package
+  shorthand: ""
+  type: string
+  default: ""
+  hidden: true
+  deprecated: "use --use-receiver-type-package instead"
+  usage: "DEPRECATED: use --use-receiver-type-package instead. The package path to use when looking for use-receiver-type. If not set, the package in the current directory is used."
+--find-templates-variable
+  shorthand: ""
+  type: stringArray
+  default: "[templates]"
+  hidden: true
+  deprecated: "use --use-templates-variable instead"
+  usage: "DEPRECATED: use --use-templates-variable instead. the name of the global variable with type *\"html/template\".Template in the working directory package."
+--input-static-assets-directory
+  shorthand: ""
+  type: string
+  default: ""
+  hidden: false
+  deprecated: ""
+  usage: "A directory inside the templates package, relative to it, whose files generate embeds and serves under --output-static-assets-path. Requires --output-static-assets-path."
+--logger
+  shorthand: ""
+  type: bool
+  default: "false"
+  hidden: true
+  deprecated: "use --output-routes-func-with-logger-param instead"
+  usage: "DEPRECATED: use --output-routes-func-with-logger-param instead. Adds a *slog.Logger parameter to the generated routes function and uses it to log ExecuteTemplate errors and debug information in handlers."
+--output-datastar
+  shorthand: ""
+  type: bool
+  default: "false"
+  hidden: false
+  deprecated: ""
+  usage: "Frames Server-Sent Events with the Datastar patch protocol: SSETemplateData gains the patch option setters and WriteTo emits datastar-patch-elements events. Mutually exclusive with --output-htmx."
+--output-exported-default-identifiers
+  shorthand: ""
+  type: bool
+  default: "true"
+  hidden: false
+  deprecated: ""
+  usage: "When false, default generated identifiers (functions, types, interfaces) use lowercase/private names. Does not affect explicit --output-* flag values. Defaults to true."
+--output-file
+  shorthand: ""
+  type: string
+  default: "template_routes.go"
+  hidden: false
+  deprecated: ""
+  usage: "The generated file name containing the routes function and receiver interface. A file name in the working directory, without whitespace."
+--output-htmx
+  shorthand: ""
+  type: bool
+  default: "false"
+  hidden: false
+  deprecated: ""
+  usage: "Adds HTMX helper methods to TemplateData for setting response headers (HX-Location, HX-Redirect, etc.) and reading request headers (HX-Request, HX-Boosted, etc.)."
+--output-htmx-helpers
+  shorthand: ""
+  type: bool
+  default: "false"
+  hidden: true
+  deprecated: "use --output-htmx instead"
+  usage: "DEPRECATED: use --output-htmx instead. Adds HTMX helper methods to TemplateData for setting response headers (HX-Location, HX-Redirect, etc.) and reading request headers (HX-Request, HX-Boosted, etc.)."
+--output-multipart-max-memory
+  shorthand: ""
+  type: bytes
+  default: "32 MiB"
+  hidden: false
+  deprecated: ""
+  usage: "Maximum memory used by request.ParseMultipartForm in generated handlers. Accepts a human-readable byte size (e.g. 32MB, 64MiB, 1GB)."
+--output-multiple-files
+  shorthand: ""
+  type: bool
+  default: "false"
+  hidden: false
+  deprecated: ""
+  usage: "Split generated routes into separate files per template source file. By default, all routes are written to a single file."
+--output-muxt-version
+  shorthand: ""
+  type: bool
+  default: "true"
+  hidden: false
+  deprecated: ""
+  usage: "When false, the muxt version is left out of generated files: the \"// muxt version:\" header comment is omitted and no MuxtVersion method is added to TemplateData. Defaults to true."
+--output-receiver-interface
+  shorthand: ""
+  type: string
+  default: "RoutesReceiver"
+  hidden: false
+  deprecated: ""
+  usage: "The interface name in the generated output file listing the methods used by handler routes in the routes function."
+--output-routes-func
+  shorthand: ""
+  type: string
+  default: "TemplateRoutes"
+  hidden: false
+  deprecated: ""
+  usage: "The function name for the package registering handler functions on an *\"net/http\".ServeMux.\nThis function also receives an argument with a type matching the name given by output-receiver-interface."
+--output-routes-func-with-logger-param
+  shorthand: ""
+  type: bool
+  default: "false"
+  hidden: false
+  deprecated: ""
+  usage: "Adds a *slog.Logger parameter to the generated routes function and uses it to log ExecuteTemplate errors and debug information in handlers."
+--output-routes-func-with-middleware-param
+  shorthand: ""
+  type: bool
+  default: "false"
+  hidden: false
+  deprecated: ""
+  usage: "Adds a middleware parameter with type func(next http.Handler) http.Handler to the generated routes function and wraps every registered handler with it. Passing nil registers handlers unwrapped."
+--output-routes-func-with-path-prefix-param
+  shorthand: ""
+  type: bool
+  default: "false"
+  hidden: false
+  deprecated: ""
+  usage: "Adds a pathsPrefix string parameter to the generated routes function and uses it in each path generator method."
+--output-sse-template-data-type
+  shorthand: ""
+  type: string
+  default: "SSETemplateData"
+  hidden: false
+  deprecated: ""
+  usage: "The type name for the template data passed to Server-Sent Events route templates."
+--output-static-assets-path
+  shorthand: ""
+  type: string
+  default: ""
+  hidden: false
+  deprecated: ""
+  usage: "The URL path the files of --input-static-assets-directory are served under with GET, such as /static (a trailing / is added). Adds a TemplateRoutePaths method returning it. Requires --input-static-assets-directory."
+--output-template-data-type
+  shorthand: ""
+  type: string
+  default: "TemplateData"
+  hidden: false
+  deprecated: ""
+  usage: "The type name for the template data passed to root route templates."
+--output-template-route-builder-type
+  shorthand: ""
+  type: string
+  default: "TemplateRouteBuilder"
+  hidden: false
+  deprecated: ""
+  usage: "The type name for the type TemplateData.Route returns, whose methods return the route type. When not set, it is the route type name with Builder appended."
+--output-template-route-paths-type
+  shorthand: ""
+  type: string
+  default: "TemplateRoutePaths"
+  hidden: false
+  deprecated: ""
+  usage: "The type name for the type with path constructor helper methods."
+--output-template-route-type
+  shorthand: ""
+  type: string
+  default: "TemplateRoute"
+  hidden: false
+  deprecated: ""
+  usage: "The type name for the type the route builder's methods return. When not set, it is TemplateRoute, or the route paths type name with Route appended when output-template-route-paths-type names another type."
+--path-prefix
+  shorthand: ""
+  type: bool
+  default: "false"
+  hidden: true
+  deprecated: "use --output-routes-func-with-path-prefix-param instead"
+  usage: "DEPRECATED: use --output-routes-func-with-path-prefix-param instead. Adds a pathsPrefix string parameter to the generated routes function and uses it in each path generator method."
+--receiver-interface
+  shorthand: ""
+  type: string
+  default: "RoutesReceiver"
+  hidden: true
+  deprecated: "use --output-receiver-interface instead"
+  usage: "DEPRECATED: use --output-receiver-interface instead. The interface name in the generated output file listing the methods used by handler routes in the routes function."
+--receiver-type
+  shorthand: ""
+  type: string
+  default: ""
+  hidden: true
+  deprecated: "use --use-receiver-type instead"
+  usage: "DEPRECATED: use --use-receiver-type instead. The type name for a named type to use for looking up method signatures. If not set, all methods added to the receiver interface will have inferred signatures with argument types based on the argument identifier names. The inferred method signatures always return a single result of type any. Accepted by muxt and muxt generate; muxt check resolves receivers from the generated routes file."
+--receiver-type-package
+  shorthand: ""
+  type: string
+  default: ""
+  hidden: true
+  deprecated: "use --use-receiver-type-package instead"
+  usage: "DEPRECATED: use --use-receiver-type-package instead. The package path to use when looking for use-receiver-type. If not set, the package in the current directory is used."
+--routes-func
+  shorthand: ""
+  type: string
+  default: "TemplateRoutes"
+  hidden: true
+  deprecated: "use --output-routes-func instead"
+  usage: "DEPRECATED: use --output-routes-func instead. The function name for the package registering handler functions on an *\"net/http\".ServeMux.\nThis function also receives an argument with a type matching the name given by output-receiver-interface."
+--template-data-type
+  shorthand: ""
+  type: string
+  default: "TemplateData"
+  hidden: true
+  deprecated: "use --output-template-data-type instead"
+  usage: "DEPRECATED: use --output-template-data-type instead. The type name for the template data passed to root route templates."
+--template-route-paths-type
+  shorthand: ""
+  type: string
+  default: "TemplateRoutePaths"
+  hidden: true
+  deprecated: "use --output-template-route-paths-type instead"
+  usage: "DEPRECATED: use --output-template-route-paths-type instead. The type name for the type with path constructor helper methods."
+--templates-variable
+  shorthand: ""
+  type: string
+  default: ""
+  hidden: true
+  deprecated: "use --use-templates-variable instead"
+  usage: "DEPRECATED: use --use-templates-variable instead. the name of the global variable with type *\"html/template\".Template in the working directory package."
+--use-receiver-type
+  shorthand: ""
+  type: string
+  default: ""
+  hidden: false
+  deprecated: ""
+  usage: "The type name for a named type to use for looking up method signatures. If not set, all methods added to the receiver interface will have inferred signatures with argument types based on the argument identifier names. The inferred method signatures always return a single result of type any. Accepted by muxt and muxt generate; muxt check resolves receivers from the generated routes file."
+--use-receiver-type-package
+  shorthand: ""
+  type: string
+  default: ""
+  hidden: false
+  deprecated: ""
+  usage: "The package path to use when looking for use-receiver-type. If not set, the package in the current directory is used."
+--use-templates-variable
+  shorthand: ""
+  type: stringSlice
+  default: "[templates]"
+  hidden: false
+  deprecated: ""
+  usage: "the name of the global variable with type *\"html/template\".Template in the working directory package."
+--verbose
+  shorthand: "v"
+  type: bool
+  default: "false"
+  hidden: false
+  deprecated: ""
+  usage: "verbose log output"
+
+--help:
+Create a package directory and its muxt.json entry
+
+Usage:
+  muxt generate package NAME [flags]
+
+Flags:
+  -h, --help                                        help for package
+      --input-static-assets-directory string        A directory inside the templates package, relative to it, whose files generate embeds and serves under --output-static-assets-path. Requires --output-static-assets-path.
+      --output-datastar                             Frames Server-Sent Events with the Datastar patch protocol: SSETemplateData gains the patch option setters and WriteTo emits datastar-patch-elements events. Mutually exclusive with --output-htmx.
+      --output-exported-default-identifiers         When false, default generated identifiers (functions, types, interfaces) use lowercase/private names. Does not affect explicit --output-* flag values. Defaults to true. (default true)
+      --output-file string                          The generated file name containing the routes function and receiver interface. A file name in the working directory, without whitespace. (default "template_routes.go")
+      --output-htmx                                 Adds HTMX helper methods to TemplateData for setting response headers (HX-Location, HX-Redirect, etc.) and reading request headers (HX-Request, HX-Boosted, etc.).
+      --output-multipart-max-memory bytes           Maximum memory used by request.ParseMultipartForm in generated handlers. Accepts a human-readable byte size (e.g. 32MB, 64MiB, 1GB). (default 32 MiB)
+      --output-multiple-files                       Split generated routes into separate files per template source file. By default, all routes are written to a single file.
+      --output-muxt-version                         When false, the muxt version is left out of generated files: the "// muxt version:" header comment is omitted and no MuxtVersion method is added to TemplateData. Defaults to true. (default true)
+      --output-receiver-interface string            The interface name in the generated output file listing the methods used by handler routes in the routes function. (default "RoutesReceiver")
+      --output-routes-func string                   The function name for the package registering handler functions on an *"net/http".ServeMux.
+                                                    This function also receives an argument with a type matching the name given by output-receiver-interface. (default "TemplateRoutes")
+      --output-routes-func-with-logger-param        Adds a *slog.Logger parameter to the generated routes function and uses it to log ExecuteTemplate errors and debug information in handlers.
+      --output-routes-func-with-middleware-param    Adds a middleware parameter with type func(next http.Handler) http.Handler to the generated routes function and wraps every registered handler with it. Passing nil registers handlers unwrapped.
+      --output-routes-func-with-path-prefix-param   Adds a pathsPrefix string parameter to the generated routes function and uses it in each path generator method.
+      --output-sse-template-data-type string        The type name for the template data passed to Server-Sent Events route templates. (default "SSETemplateData")
+      --output-static-assets-path string            The URL path the files of --input-static-assets-directory are served under with GET, such as /static (a trailing / is added). Adds a TemplateRoutePaths method returning it. Requires --input-static-assets-directory.
+      --output-template-data-type string            The type name for the template data passed to root route templates. (default "TemplateData")
+      --output-template-route-builder-type string   The type name for the type TemplateData.Route returns, whose methods return the route type. When not set, it is the route type name with Builder appended. (default "TemplateRouteBuilder")
+      --output-template-route-paths-type string     The type name for the type with path constructor helper methods. (default "TemplateRoutePaths")
+      --output-template-route-type string           The type name for the type the route builder's methods return. When not set, it is TemplateRoute, or the route paths type name with Route appended when output-template-route-paths-type names another type. (default "TemplateRoute")
+      --use-receiver-type string                    The type name for a named type to use for looking up method signatures. If not set, all methods added to the receiver interface will have inferred signatures with argument types based on the argument identifier names. The inferred method signatures always return a single result of type any. Accepted by muxt and muxt generate; muxt check resolves receivers from the generated routes file.
+      --use-receiver-type-package string            The package path to use when looking for use-receiver-type. If not set, the package in the current directory is used.
+      --use-templates-variable strings              the name of the global variable with type *"html/template".Template in the working directory package. (default [templates])
+  -v, --verbose                                     verbose log output
+
+Global Flags:
+  -C, --change-directory string   change the working directory

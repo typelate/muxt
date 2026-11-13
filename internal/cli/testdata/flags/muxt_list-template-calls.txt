@@ -1,0 +1,59 @@
+muxt list-template-calls
+
+flags:
+--format
+  shorthand: ""
+  type: string
+  default: "text"
+  hidden: false
+  deprecated: ""
+  usage: "output format (text or json)"
+--match
+  shorthand: ""
+  type: stringArray
+  default: "[]"
+  hidden: false
+  deprecated: ""
+  usage: "filter by template name (can specify multiple regular expressions)"
+--templates-variable
+  shorthand: ""
+  type: string
+  default: ""
+  hidden: true
+  deprecated: "use --use-templates-variable instead"
+  usage: "DEPRECATED: use --use-templates-variable instead. the name of the global variable with type *\"html/template\".Template in the working directory package."
+--use-templates-variable
+  shorthand: ""
+  type: stringSlice
+  default: "[templates]"
+  hidden: false
+  deprecated: ""
+  usage: "the name of the global variable with type *\"html/template\".Template in the working directory package."
+--verbose
+  shorthand: "v"
+  type: bool
+  default: "false"
+  hidden: false
+  deprecated: ""
+  usage: "verbose log output"
+
+--help:
+Lists, for each template, the `{{template}}` actions it makes.
+
+Full reference: muxt documentation docs/reference/commands/list-template-calls.md
+
+Usage:
+  muxt list-template-calls [package-dir] [flags]
+
+Aliases:
+  list-template-calls, calls
+
+Flags:
+      --format string                    output format (text or json) (default "text")
+  -h, --help                             help for list-template-calls
+      --match stringArray                filter by template name (can specify multiple regular expressions)
+      --use-templates-variable strings   the name of the global variable with type *"html/template".Template in the working directory package. (default [templates])
+  -v, --verbose                          verbose log output
+
+Global Flags:
+  -C, --change-directory string   change the working directory

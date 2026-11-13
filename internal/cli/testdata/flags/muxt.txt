@@ -1,0 +1,106 @@
+muxt
+
+flags:
+--change-directory
+  shorthand: "C"
+  type: string
+  default: ""
+  hidden: false
+  deprecated: ""
+  usage: "change the working directory"
+--format
+  shorthand: ""
+  type: string
+  default: "text"
+  hidden: false
+  deprecated: ""
+  usage: "output format (text or json)"
+--templates-variable
+  shorthand: ""
+  type: string
+  default: ""
+  hidden: true
+  deprecated: "use --use-templates-variable instead"
+  usage: "DEPRECATED: use --use-templates-variable instead. the name of the global variable with type *\"html/template\".Template in the working directory package."
+--use-receiver-type
+  shorthand: ""
+  type: string
+  default: ""
+  hidden: false
+  deprecated: ""
+  usage: "The type name for a named type to use for looking up method signatures. If not set, all methods added to the receiver interface will have inferred signatures with argument types based on the argument identifier names. The inferred method signatures always return a single result of type any. Accepted by muxt and muxt generate; muxt check resolves receivers from the generated routes file."
+--use-receiver-type-package
+  shorthand: ""
+  type: string
+  default: ""
+  hidden: false
+  deprecated: ""
+  usage: "The package path to use when looking for use-receiver-type. If not set, the package in the current directory is used."
+--use-templates-variable
+  shorthand: ""
+  type: stringSlice
+  default: "[templates]"
+  hidden: false
+  deprecated: ""
+  usage: "the name of the global variable with type *\"html/template\".Template in the working directory package."
+--verbose
+  shorthand: "v"
+  type: bool
+  default: "false"
+  hidden: false
+  deprecated: ""
+  usage: "verbose log output"
+--version
+  shorthand: ""
+  type: bool
+  default: "false"
+  hidden: false
+  deprecated: ""
+  usage: "print the version, as the version command does"
+
+--help:
+muxt generates net/http handlers from Go HTML templates. A template whose name is a route, such as "GET /articles/{id} Article(ctx, id)", becomes a handler that calls Article on your receiver and renders the template with the result.
+
+With no command, muxt lists the routes of the package in the working directory.
+
+The usual order:
+  muxt generate                  write template_routes.go from the templates
+  muxt check                     type-check each template against its data
+  muxt fmt -w .                  re-indent the templates in place
+  muxt test-template-mutations   find template behavior no test checks
+
+The documentation for this version is in the binary:
+  muxt documentation                            list every page and example file
+  muxt documentation docs/README.md             where to start
+  muxt documentation docs/reference/cli.md      print a page
+  muxt documentation --query "status code"      search every page
+
+Usage:
+  muxt [command] [flags]
+  muxt [command]
+
+Available Commands:
+  check                   Check templates for errors
+  completion              Generate the autocompletion script for the specified shell
+  documentation           Print muxt's documentation by path (no path lists every file)
+  explore-module          Explore all muxt packages in the module
+  fmt                     Format Go HTML templates
+  generate                Generate HTTP routes from templates
+  generate-fake-server    Generate a fake server main.go for exploring routes (unstable -- do not depend on the fake interface)
+  help                    Help about any command
+  list-template-callers   List template callers
+  list-template-calls     List template calls
+  test-template-mutations Vary template actions and report the ones no test catches
+  version                 Print the version number
+
+Flags:
+  -C, --change-directory string            change the working directory
+      --format string                      output format (text or json) (default "text")
+  -h, --help                               help for muxt
+      --use-receiver-type string           The type name for a named type to use for looking up method signatures. If not set, all methods added to the receiver interface will have inferred signatures with argument types based on the argument identifier names. The inferred method signatures always return a single result of type any. Accepted by muxt and muxt generate; muxt check resolves receivers from the generated routes file.
+      --use-receiver-type-package string   The package path to use when looking for use-receiver-type. If not set, the package in the current directory is used.
+      --use-templates-variable strings     the name of the global variable with type *"html/template".Template in the working directory package. (default [templates])
+  -v, --verbose                            verbose log output
+      --version                            print the version, as the version command does
+
+Use "muxt [command] --help" for more information about a command.

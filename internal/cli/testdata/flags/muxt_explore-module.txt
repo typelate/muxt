@@ -1,0 +1,36 @@
+muxt explore-module
+
+flags:
+--format
+  shorthand: ""
+  type: string
+  default: "text"
+  hidden: false
+  deprecated: ""
+  usage: "output format (text or json)"
+--verbose
+  shorthand: "v"
+  type: bool
+  default: "false"
+  hidden: false
+  deprecated: ""
+  usage: "verbose log output"
+
+--help:
+Lists every package in the module with a generated routes file: its generation flags, the muxt commands to run against it, and the external URLs its templates reference.
+
+Full reference: muxt documentation docs/reference/commands/explore-module.md
+
+Usage:
+  muxt explore-module [flags]
+
+Aliases:
+  explore-module, explore
+
+Flags:
+      --format string   output format (text or json) (default "text")
+  -h, --help            help for explore-module
+  -v, --verbose         verbose log output
+
+Global Flags:
+  -C, --change-directory string   change the working directory

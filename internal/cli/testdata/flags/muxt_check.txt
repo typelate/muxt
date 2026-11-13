@@ -1,0 +1,58 @@
+muxt check
+
+flags:
+--allow-unused
+  shorthand: ""
+  type: bool
+  default: "false"
+  hidden: false
+  deprecated: ""
+  usage: "list templates nothing executes without failing; for templates rendered outside muxt"
+--receiver-type
+  shorthand: ""
+  type: string
+  default: ""
+  hidden: true
+  deprecated: "muxt check reads the receiver type from the generated routes file and ignores this flag"
+  usage: "DEPRECATED and ignored: muxt check reads the receiver type from the generated routes file."
+--templates-variable
+  shorthand: ""
+  type: string
+  default: ""
+  hidden: true
+  deprecated: "use --use-templates-variable instead"
+  usage: "DEPRECATED: use --use-templates-variable instead. the name of the global variable with type *\"html/template\".Template in the working directory package."
+--use-templates-variable
+  shorthand: ""
+  type: stringSlice
+  default: "[templates]"
+  hidden: false
+  deprecated: ""
+  usage: "the name of the global variable with type *\"html/template\".Template in the working directory package."
+--verbose
+  shorthand: "v"
+  type: bool
+  default: "false"
+  hidden: false
+  deprecated: ""
+  usage: "verbose log output"
+
+--help:
+Type-checks each template against the data type at its `ExecuteTemplate` call site and reports templates nothing renders.
+
+Full reference: muxt documentation docs/reference/commands/check.md
+
+Usage:
+  muxt check [package-dir] [flags]
+
+Aliases:
+  check, c
+
+Flags:
+      --allow-unused                     list templates nothing executes without failing; for templates rendered outside muxt
+  -h, --help                             help for check
+      --use-templates-variable strings   the name of the global variable with type *"html/template".Template in the working directory package. (default [templates])
+  -v, --verbose                          verbose log output
+
+Global Flags:
+  -C, --change-directory string   change the working directory

@@ -1,0 +1,25 @@
+Configuration:
+  defaults:
+    "input_static_assets_directory": ""
+    "output_datastar": false
+    "output_exported_default_identifiers": true
+    "output_file": "template_routes.go"
+    "output_htmx": false
+    "output_multipart_max_memory": "32 MiB"
+    "output_multiple_files": false
+    "output_muxt_version": true
+    "output_receiver_interface": "RoutesReceiver"
+    "output_routes_func": "TemplateRoutes"
+    "output_routes_func_with_logger_param": false
+    "output_routes_func_with_middleware_param": false
+    "output_routes_func_with_path_prefix_param": false
+    "output_sse_template_data_type": "SSETemplateData"
+    "output_static_assets_path": ""
+    "output_template_data_type": "TemplateData"
+    "output_template_route_builder_type": "TemplateRouteBuilder"
+    "output_template_route_paths_type": "TemplateRoutePaths"
+    "output_template_route_type": "TemplateRoute"
+    "use_receiver_type": ""
+    "use_receiver_type_package": ""
+    "use_templates_variable": ["x"]
+

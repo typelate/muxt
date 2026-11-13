@@ -1,0 +1,38 @@
+muxt generate-fake-server
+
+flags:
+--output
+  shorthand: "o"
+  type: string
+  default: ""
+  hidden: false
+  deprecated: ""
+  usage: "output directory (default: ./cmd/explore-goland)"
+--verbose
+  shorthand: "v"
+  type: bool
+  default: "false"
+  hidden: false
+  deprecated: ""
+  usage: "verbose log output"
+
+--help:
+Generate a main.go and internal/fake/receiver.go containing a counterfeiter fake
+and an httptest server for interactively exploring routes. The target package
+must be a library (not main).
+
+WARNING: The generated fake interface is unstable and should not be relied upon.
+This command is intended for exploratory use only.
+
+Full reference: muxt documentation docs/reference/commands/generate-fake-server.md
+
+Usage:
+  muxt generate-fake-server [package-dir] [flags]
+
+Flags:
+  -h, --help            help for generate-fake-server
+  -o, --output string   output directory (default: ./cmd/explore-goland)
+  -v, --verbose         verbose log output
+
+Global Flags:
+  -C, --change-directory string   change the working directory

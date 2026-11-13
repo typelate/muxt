@@ -1,0 +1,135 @@
+muxt test-template-mutations
+
+flags:
+--diff
+  shorthand: ""
+  type: string
+  default: ""
+  hidden: false
+  deprecated: ""
+  usage: "only mutate templates whose text, or the type of dot they are rendered with, changed since this git revision"
+--dry-run
+  shorthand: ""
+  type: bool
+  default: "false"
+  hidden: false
+  deprecated: ""
+  usage: "enumerate the mutants and report them without running any tests"
+--format
+  shorthand: ""
+  type: string
+  default: "text"
+  hidden: false
+  deprecated: ""
+  usage: "output format (text or json)"
+--include-test-callers
+  shorthand: ""
+  type: bool
+  default: "false"
+  hidden: false
+  deprecated: ""
+  usage: "also mutate templates reached only from ExecuteTemplate calls in _test.go files"
+--include-uncovered-nodes
+  shorthand: ""
+  type: bool
+  default: "false"
+  hidden: false
+  deprecated: ""
+  usage: "run mutants in template nodes no test reaches instead of skipping them"
+--max-cases
+  shorthand: ""
+  type: int
+  default: "8"
+  hidden: false
+  deprecated: ""
+  usage: "most operand combinations one action may contribute"
+--run
+  shorthand: ""
+  type: string
+  default: ""
+  hidden: false
+  deprecated: ""
+  usage: "only run tests matching this regular expression (passed to go test -run)"
+--seed
+  shorthand: ""
+  type: uint64
+  default: "0"
+  hidden: false
+  deprecated: ""
+  usage: "seed the values substituted for an action's operands (default: drawn and reported)"
+--template-pattern
+  shorthand: ""
+  type: string
+  default: ""
+  hidden: false
+  deprecated: ""
+  usage: "only mutate templates whose name matches this regular expression"
+--templates-variable
+  shorthand: ""
+  type: string
+  default: ""
+  hidden: true
+  deprecated: "use --use-templates-variable instead"
+  usage: "DEPRECATED: use --use-templates-variable instead. the name of the global variable with type *\"html/template\".Template in the working directory package."
+--use-templates-variable
+  shorthand: ""
+  type: stringSlice
+  default: "[templates]"
+  hidden: false
+  deprecated: ""
+  usage: "the name of the global variable with type *\"html/template\".Template in the working directory package."
+--verbose
+  shorthand: "v"
+  type: bool
+  default: "false"
+  hidden: false
+  deprecated: ""
+  usage: "report every mutant, not only the ones no test caught, and stream progress"
+--workers
+  shorthand: ""
+  type: int
+  default: "1"
+  hidden: false
+  deprecated: ""
+  usage: "how many mutants to run at once; the tests must tolerate running beside themselves; a kill is repeated alone, and one that does not repeat is reported flaky"
+
+--help:
+Vary each dynamic and control flow action in the project's templates, one
+at a time, and re-run the tests against each variation.
+
+A variation the tests still pass through is a miss: nothing the suite
+asserts on depends on what that action does. A variation that makes a
+test fail is caught, which is the outcome to want.
+
+The tests run once unmutated first. If that baseline fails, nothing is
+mutated, because every later failure would be indistinguishable from the
+one already there.
+
+Variations are delivered through the go command's -overlay flag, so the
+working tree is never written to.
+
+Full reference: muxt documentation docs/reference/commands/test-template-mutations.md
+
+Usage:
+  muxt test-template-mutations [package-dir] [-- go test flags] [flags]
+
+Aliases:
+  test-template-mutations, mut, m
+
+Flags:
+      --diff string                      only mutate templates whose text, or the type of dot they are rendered with, changed since this git revision
+      --dry-run                          enumerate the mutants and report them without running any tests
+      --format string                    output format (text or json) (default "text")
+  -h, --help                             help for test-template-mutations
+      --include-test-callers             also mutate templates reached only from ExecuteTemplate calls in _test.go files
+      --include-uncovered-nodes          run mutants in template nodes no test reaches instead of skipping them
+      --max-cases int                    most operand combinations one action may contribute (default 8)
+      --run string                       only run tests matching this regular expression (passed to go test -run)
+      --seed uint                        seed the values substituted for an action's operands (default: drawn and reported)
+      --template-pattern string          only mutate templates whose name matches this regular expression
+      --use-templates-variable strings   the name of the global variable with type *"html/template".Template in the working directory package. (default [templates])
+  -v, --verbose                          report every mutant, not only the ones no test caught, and stream progress
+      --workers int                      how many mutants to run at once; the tests must tolerate running beside themselves; a kill is repeated alone, and one that does not repeat is reported flaky (default 1)
+
+Global Flags:
+  -C, --change-directory string   change the working directory

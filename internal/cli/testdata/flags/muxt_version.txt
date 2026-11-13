@@ -1,0 +1,28 @@
+muxt version
+
+flags:
+--verbose
+  shorthand: "v"
+  type: bool
+  default: "false"
+  hidden: false
+  deprecated: ""
+  usage: "verbose output"
+
+--help:
+Prints the binary's module version: `(devel)` under `go run`, the VCS pseudo-version after `go build` or `go install` from a checkout.
+
+Full reference: muxt documentation docs/reference/commands/version.md
+
+Usage:
+  muxt version [flags]
+
+Aliases:
+  version, v
+
+Flags:
+  -h, --help      help for version
+  -v, --verbose   verbose output
+
+Global Flags:
+  -C, --change-directory string   change the working directory

@@ -1,0 +1,28 @@
+muxt documentation
+
+flags:
+--query
+  shorthand: "q"
+  type: string
+  default: ""
+  hidden: false
+  deprecated: ""
+  usage: "print the lines that hold this text, as path:line: text"
+
+--help:
+Prints the documentation pages and example apps embedded in the binary, by path, so the docs for the version you run are readable without the muxt source or a network.
+
+Full reference: muxt documentation docs/reference/commands/documentation.md
+
+Usage:
+  muxt documentation [path] [flags]
+
+Aliases:
+  documentation, docs, d
+
+Flags:
+  -h, --help           help for documentation
+  -q, --query string   print the lines that hold this text, as path:line: text
+
+Global Flags:
+  -C, --change-directory string   change the working directory

@@ -1,0 +1,52 @@
+muxt generate def
+
+flags:
+--output-document
+  shorthand: ""
+  type: bool
+  default: "false"
+  hidden: false
+  deprecated: ""
+  usage: "make the template a full HTML document"
+--output-file
+  shorthand: ""
+  type: string
+  default: ""
+  hidden: false
+  deprecated: ""
+  usage: "the .gohtml file in the working directory to add the template to"
+--output-fragment
+  shorthand: ""
+  type: bool
+  default: "false"
+  hidden: false
+  deprecated: ""
+  usage: "make the template an empty fragment (the default)"
+--use-receiver-type
+  shorthand: ""
+  type: string
+  default: ""
+  hidden: false
+  deprecated: ""
+  usage: "the receiver type to print a method stub for, when no muxt.json entry names it"
+
+--help:
+Add a route template to a template file.
+
+The method stub it prints is a placeholder to rewrite: its result type is any, its body returns nil, and its receiver form follows what muxt infers. Imports are not added. Without --output-file it prints a txtar archive and writes nothing.
+
+Usage:
+  muxt generate def NAME [flags]
+
+Aliases:
+  def, definition
+
+Flags:
+  -h, --help                       help for def
+      --output-document            make the template a full HTML document
+      --output-file string         the .gohtml file in the working directory to add the template to
+      --output-fragment            make the template an empty fragment (the default)
+      --use-receiver-type string   the receiver type to print a method stub for, when no muxt.json entry names it
+
+Global Flags:
+  -C, --change-directory string   change the working directory

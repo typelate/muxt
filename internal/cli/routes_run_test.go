@@ -236,33 +236,20 @@ func TestRoutesConfigurationDefaults(t *testing.T) {
 
 	text := reportOf(t, dir, "")
 
-	const want = `Configuration:
-  defaults:
-    "input_static_assets_directory": ""
-    "output_datastar": false
-    "output_exported_default_identifiers": true
-    "output_file": "template_routes.go"
-    "output_htmx": false
-    "output_multipart_max_memory": "32 MiB"
-    "output_multiple_files": false
-    "output_muxt_version": true
-    "output_receiver_interface": "RoutesReceiver"
-    "output_routes_func": "TemplateRoutes"
-    "output_routes_func_with_logger_param": false
-    "output_routes_func_with_middleware_param": false
-    "output_routes_func_with_path_prefix_param": false
-    "output_sse_template_data_type": "SSETemplateData"
-    "output_static_assets_path": ""
-    "output_template_data_type": "TemplateData"
-    "output_template_route_builder_type": "TemplateRouteBuilder"
-    "output_template_route_paths_type": "TemplateRoutePaths"
-    "output_template_route_type": "TemplateRoute"
-    "use_receiver_type": ""
-    "use_receiver_type_package": ""
-    "use_templates_variable": ["templates"]
+	checkGolden(t, filepath.Join("testdata", "report", "defaults.txt"), text)
+}
 
-`
-	assert.Equal(t, want, text, "section")
+// TestRoutesConfigurationDeprecatedTemplatesVariable states where the report
+// files a templates variable given by its deprecated spelling with no muxt.json:
+// under defaults, with the value given, since only a setting's current name
+// counts as given.
+func TestRoutesConfigurationDeprecatedTemplatesVariable(t *testing.T) {
+	dir := moduleDir(t)
+	writeTestFile(t, dir, "go.mod", "module example.com/m\n\ngo 1.24\n")
+
+	text := reportOf(t, dir, "--templates-variable x")
+
+	checkGolden(t, filepath.Join("testdata", "report", "templates_variable_deprecated.txt"), text)
 }
 
 // TestRoutesConfigurationGroupsPackageDefaults states that a setting that comes

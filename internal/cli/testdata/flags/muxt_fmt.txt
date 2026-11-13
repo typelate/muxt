@@ -1,0 +1,42 @@
+muxt fmt
+
+flags:
+--diff
+  shorthand: "d"
+  type: bool
+  default: "false"
+  hidden: false
+  deprecated: ""
+  usage: "print a unified diff instead of the formatted source"
+--list
+  shorthand: "l"
+  type: bool
+  default: "false"
+  hidden: false
+  deprecated: ""
+  usage: "list files whose formatting differs"
+--write
+  shorthand: "w"
+  type: bool
+  default: "false"
+  hidden: false
+  deprecated: ""
+  usage: "write the result to the source file instead of standard output"
+
+--help:
+Format Go HTML templates, as gofmt formats Go. With no paths, format
+standard input; directories are walked for *.gohtml files.
+
+Full reference: muxt documentation docs/reference/commands/fmt.md
+
+Usage:
+  muxt fmt [flags] [path ...]
+
+Flags:
+  -d, --diff    print a unified diff instead of the formatted source
+  -h, --help    help for fmt
+  -l, --list    list files whose formatting differs
+  -w, --write   write the result to the source file instead of standard output
+
+Global Flags:
+  -C, --change-directory string   change the working directory

@@ -1,0 +1,18 @@
+muxt generate config
+
+flags:
+
+--help:
+Write an empty muxt.json in the working directory
+
+Usage:
+  muxt generate config [flags]
+
+Aliases:
+  config, configuration
+
+Flags:
+  -h, --help   help for config
+
+Global Flags:
+  -C, --change-directory string   change the working directory
