@@ -72,6 +72,7 @@ func commands(wd string, args []string, getEnv func(string) string, version func
 		rootCommandConfig      analysis.DefinitionsConfiguration
 		deprecatedTemplatesVar string
 	)
+	settings := rootSettings(&rootCommandConfig)
 	rootCmd := &cobra.Command{
 		Use:   "muxt [command]",
 		Short: `Generate HTTP Endpoints from HTML Templates`,
@@ -115,7 +116,7 @@ The documentation for this version is in the binary:
 			if err := checkFormat(cmd); err != nil {
 				return err
 			}
-			sel, err := selectJobs(rootSpec(rootCommandConfig, getEnv), *workingDirectory, cmd.Flags(), getEnv)
+			sel, err := selectJobs(rootSpec(rootCommandConfig, settings, getEnv), *workingDirectory, cmd.Flags(), getEnv)
 			if err != nil {
 				return err
 			}
@@ -128,7 +129,7 @@ The documentation for this version is in the binary:
 	}
 	rootCmd.PersistentFlags().StringVarP(&changeDir, "change-directory", "C", "", "change the working directory")
 
-	register(rootCmd.Flags(), rootSettings(&rootCommandConfig))
+	register(rootCmd.Flags(), settings)
 	addDeprecatedTemplatesVariable(rootCmd.Flags(), &deprecatedTemplatesVar)
 	addVerboseFlagToFlagSet(rootCmd.Flags(), &rootCommandConfig.Verbose)
 	rootCmd.Flags().String("format", "text", "output format (text or json)")

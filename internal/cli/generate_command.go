@@ -62,7 +62,7 @@ func generateCommand(workingDirectory *string, getEnv func(string) string, versi
 func generateSpec(config *generate.RoutesFileConfiguration, flags *pflag.FlagSet, deprecatedTemplatesVar string, getEnv func(string) string, version func() (string, bool)) jobSpec {
 	return jobSpec{
 		Name:         generateCommandName,
-		Settings:     generateSettingFlags(),
+		Settings:     generateSettings(config),
 		Scope:        eachEntry,
 		RequireEntry: true,
 		Verbose:      config.Verbose,

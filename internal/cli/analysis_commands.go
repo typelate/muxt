@@ -18,6 +18,8 @@ func checkCommand(workingDirectory *string, getEnv func(string) string, run func
 		deprecatedTemplatesVar string
 	)
 
+	settings := templatesSettings(&config.TemplatesVariables)
+
 	cmd := &cobra.Command{
 		Use:     checkCommandName + " [package-dir]",
 		Aliases: []string{"c"},
@@ -34,7 +36,7 @@ func checkCommand(workingDirectory *string, getEnv func(string) string, run func
 			if err != nil {
 				return err
 			}
-			sel, err := selectJobs(templatesSpec(cmd.Name(), config.TemplatesVariables, getEnv), dir, cmd.Flags(), getEnv)
+			sel, err := selectJobs(templatesSpec(cmd.Name(), config.TemplatesVariables, settings, getEnv), dir, cmd.Flags(), getEnv)
 			if err != nil {
 				return err
 			}
@@ -43,7 +45,7 @@ func checkCommand(workingDirectory *string, getEnv func(string) string, run func
 		},
 	}
 
-	register(cmd.Flags(), templatesSettings(&config.TemplatesVariables))
+	register(cmd.Flags(), settings)
 	addDeprecatedTemplatesVariable(cmd.Flags(), &deprecatedTemplatesVar)
 	addVerboseFlagToFlagSet(cmd.Flags(), &config.Verbose)
 	cmd.Flags().BoolVar(&config.AllowUnused, "allow-unused", false, "list templates nothing executes without failing; for templates rendered outside muxt")
@@ -62,10 +64,10 @@ func checkCommand(workingDirectory *string, getEnv func(string) string, run func
 // In the directory of a muxt.json it reads every entry, as generate writes
 // them. Its Fallback is what an empty entry gives, with the variables the
 // flags named.
-func templatesSpec(name string, templatesVariables []string, getEnv func(string) string) jobSpec {
+func templatesSpec(name string, templatesVariables []string, settings []setting, getEnv func(string) string) jobSpec {
 	return jobSpec{
 		Name:     name,
-		Settings: templatesSettingFlags(),
+		Settings: settings,
 		Scope:    eachEntry,
 		Fallback: func(dir string) (generate.RoutesFileConfiguration, error) {
 			config, err := defaultConfiguration(dir, getEnv)
@@ -115,6 +117,8 @@ func listTemplateCallersCommand(wd *string, getEnv func(string) string, run func
 		patterns               []string
 	)
 
+	settings := templatesSettings(&config.TemplatesVariables)
+
 	cmd := &cobra.Command{
 		Use:     listTemplateCallersCommandName + " [package-dir]",
 		Aliases: []string{"callers"},
@@ -136,7 +140,7 @@ func listTemplateCallersCommand(wd *string, getEnv func(string) string, run func
 			if err != nil {
 				return err
 			}
-			sel, err := selectJobs(templatesSpec(cmd.Name(), config.TemplatesVariables, getEnv), dir, cmd.Flags(), getEnv)
+			sel, err := selectJobs(templatesSpec(cmd.Name(), config.TemplatesVariables, settings, getEnv), dir, cmd.Flags(), getEnv)
 			if err != nil {
 				return err
 			}
@@ -145,7 +149,7 @@ func listTemplateCallersCommand(wd *string, getEnv func(string) string, run func
 		},
 	}
 
-	register(cmd.Flags(), templatesSettings(&config.TemplatesVariables))
+	register(cmd.Flags(), settings)
 	addDeprecatedTemplatesVariable(cmd.Flags(), &deprecatedTemplatesVar)
 	addVerboseFlagToFlagSet(cmd.Flags(), new(bool)) // accepted for consistency with sibling commands; the listing has nothing more to say
 	cmd.Flags().StringArrayVar(&patterns, "match", nil, "filter by template name (can specify multiple regular expressions)")
@@ -160,6 +164,8 @@ func listTemplateCallsCommand(wd *string, getEnv func(string) string, run func(*
 		patterns               []string
 		deprecatedTemplatesVar string
 	)
+
+	settings := templatesSettings(&config.TemplatesVariables)
 
 	cmd := &cobra.Command{
 		Use:     listTemplateCallsCommandName + " [package-dir]",
@@ -182,7 +188,7 @@ func listTemplateCallsCommand(wd *string, getEnv func(string) string, run func(*
 			if err != nil {
 				return err
 			}
-			sel, err := selectJobs(templatesSpec(cmd.Name(), config.TemplatesVariables, getEnv), dir, cmd.Flags(), getEnv)
+			sel, err := selectJobs(templatesSpec(cmd.Name(), config.TemplatesVariables, settings, getEnv), dir, cmd.Flags(), getEnv)
 			if err != nil {
 				return err
 			}
@@ -191,7 +197,7 @@ func listTemplateCallsCommand(wd *string, getEnv func(string) string, run func(*
 		},
 	}
 
-	register(cmd.Flags(), templatesSettings(&config.TemplatesVariables))
+	register(cmd.Flags(), settings)
 	addDeprecatedTemplatesVariable(cmd.Flags(), &deprecatedTemplatesVar)
 	addVerboseFlagToFlagSet(cmd.Flags(), new(bool)) // accepted for consistency with sibling commands; the listing has nothing more to say
 	cmd.Flags().StringArrayVar(&patterns, "match", nil, "filter by template name (can specify multiple regular expressions)")

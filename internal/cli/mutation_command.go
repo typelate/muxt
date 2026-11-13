@@ -20,6 +20,8 @@ func testTemplateMutationsCommand(workingDirectory *string, getEnv func(string) 
 		deprecatedTemplatesVar string
 	)
 
+	settings := templatesSettings(&config.TemplatesVariables)
+
 	cmd := &cobra.Command{
 		Use:     testTemplateMutationsName + " [package-dir] [-- go test flags]",
 		Aliases: []string{"mut", "m"},
@@ -76,7 +78,7 @@ working tree is never written to.`,
 			}
 			// A mutation run takes minutes and acts on one package, so it
 			// reads the directory's entry alone, whatever the file lists.
-			spec := templatesSpec(testTemplateMutationsName, config.TemplatesVariables, getEnv)
+			spec := templatesSpec(testTemplateMutationsName, config.TemplatesVariables, settings, getEnv)
 			spec.Scope = itsEntryOnly
 			sel, err := selectJobs(spec, dir, cmd.Flags(), getEnv)
 			if err != nil {
@@ -93,7 +95,7 @@ working tree is never written to.`,
 		},
 	}
 
-	register(cmd.Flags(), templatesSettings(&config.TemplatesVariables))
+	register(cmd.Flags(), settings)
 	addDeprecatedTemplatesVariable(cmd.Flags(), &deprecatedTemplatesVar)
 	cmd.Flags().StringVar(&templatePattern, "template-pattern", "", "only mutate templates whose name matches this regular expression")
 	cmd.Flags().StringVar(&runPattern, "run", "", "only run tests matching this regular expression (passed to go test -run)")

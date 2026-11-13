@@ -30,10 +30,10 @@ const (
 type jobSpec struct {
 	// Name is the command in errors: "generate", "muxt", "check", ...
 	Name string
-	// Settings are the flag spellings that configure a package. A flag outside
-	// it, such as --verbose or --format, never decides between a muxt.json
-	// entry and the command line.
-	Settings []string
+	// Settings are what the command registers that configures a package. A
+	// flag that is not a spelling of one, such as --verbose or --format, never
+	// decides between a muxt.json entry and the command line.
+	Settings []setting
 	Scope    scope
 	// RequireEntry makes a flagless run without an entry for its directory an
 	// error, for the command that writes from the file.
@@ -52,13 +52,14 @@ type jobSpec struct {
 // packageJob is one package directory and what to run a command with. Key is
 // the packages key the configuration came from, and File the absolute path of
 // the muxt.json holding it; both are empty when flags gave the configuration.
-// Given is the setting flags that did, so a report can name them.
+// Given is the settings that did, by the spelling typed, so a report can name
+// them.
 type packageJob struct {
 	File   string
 	Key    string
 	Dir    string
 	Config generate.RoutesFileConfiguration
-	Given  []string
+	Given  givenSettings
 }
 
 // selection is what selectJobs chose.
@@ -85,9 +86,9 @@ func (s selection) EntryFile(job packageJob) *composite.File {
 // directory the Fallback decides. It validates every job's directory and entry
 // before returning any. flags may be nil when nothing was given.
 func selectJobs(spec jobSpec, dir string, flags *pflag.FlagSet, getEnv func(string) string) (selection, error) {
-	var given []string
+	var given givenSettings
 	if flags != nil {
-		given = givenSettingFlags(flags, spec.Settings)
+		given = givenFlags(flags, spec.Settings)
 	}
 	// A path that is not a directory is read from no muxt.json: the runner
 	// says what is wrong with it, which no entry's message can.
@@ -101,7 +102,7 @@ func selectJobs(spec jobSpec, dir string, flags *pflag.FlagSet, getEnv func(stri
 	f := lookup.File
 	if len(given) > 0 {
 		if lookup.HasEntry {
-			return selection{}, &composite.ConfiguredDirectoryError{Path: f.Name, Command: spec.Name, Flags: given}
+			return selection{}, &composite.ConfiguredDirectoryError{Path: f.Name, Command: spec.Name, Flags: given.spellings()}
 		}
 		return fallbackSelection(spec, dir, f, given)
 	}
@@ -177,7 +178,7 @@ func severalPackages(spec jobSpec, f *composite.File) error {
 
 // fallbackSelection is the one job the command's own flags and defaults give
 // dir. given is the setting flags that did.
-func fallbackSelection(spec jobSpec, dir string, f *composite.File, given []string) (selection, error) {
+func fallbackSelection(spec jobSpec, dir string, f *composite.File, given givenSettings) (selection, error) {
 	config, err := spec.Fallback(dir)
 	if err != nil {
 		return selection{}, err

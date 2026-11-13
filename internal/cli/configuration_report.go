@@ -45,7 +45,7 @@ type reportLine struct {
 
 // newConfigurationReport reports every setting of config, which the entry for
 // key in f produced, under the source that gave it. f is nil when no entry did.
-func newConfigurationReport(f *composite.File, key string, flagNames []string, config generate.RoutesFileConfiguration) (configurationReport, error) {
+func newConfigurationReport(f *composite.File, key string, given givenSettings, config generate.RoutesFileConfiguration) (configurationReport, error) {
 	// The sources in the order a setting looks for its value: the command
 	// line, the entry itself, then package_defaults. A setting none of them
 	// gives is a default. Flags and an entry never configure one run, so at
@@ -62,10 +62,12 @@ func newConfigurationReport(f *composite.File, key string, flagNames []string, c
 		}
 	}
 	var sources []reportSource
-	if len(flagNames) > 0 {
+	if len(given) > 0 {
 		sources = append(sources, reportSource{
 			group: settingGroup{Source: "flags"},
-			gives: func(field entryField) (bool, error) { return slices.Contains(flagNames, field.Name), nil },
+			// The current name only, until the report files a deprecated
+			// spelling under the setting it spells.
+			gives: func(field entryField) (bool, error) { return slices.Contains(given[field.Name], field.Name), nil },
 		})
 	}
 	if f != nil {

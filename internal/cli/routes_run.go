@@ -46,10 +46,10 @@ func (j routesJob) definitions() analysis.DefinitionsConfiguration {
 // rootSpec is the jobSpec of bare muxt. Only the three shared flags are read
 // from the command line, so the rest of its Fallback is what an empty entry
 // gives.
-func rootSpec(flagConfig analysis.DefinitionsConfiguration, getEnv func(string) string) jobSpec {
+func rootSpec(flagConfig analysis.DefinitionsConfiguration, settings []setting, getEnv func(string) string) jobSpec {
 	return jobSpec{
 		Name:     rootCommandName,
-		Settings: rootSettingFlags(),
+		Settings: settings,
 		Scope:    eachEntry,
 		Verbose:  flagConfig.Verbose,
 		Fallback: func(dir string) (generate.RoutesFileConfiguration, error) {

@@ -24,7 +24,7 @@ func TestSelectJobs(t *testing.T) {
 		root      = "example.com/fieldkit"
 	)
 	const staleWithRoot = `{"packages": {"example.com/fieldkit": {}, "example.com/fieldkit/ghost": {}}}`
-	settings := []string{"use-receiver-type"}
+	settings := []setting{receiverTypeSetting(new(string))}
 	writes := jobSpec{Name: "generate", Settings: settings, Scope: eachEntry, RequireEntry: true}
 	lists := jobSpec{Name: "muxt", Settings: settings, Scope: eachEntry}
 	reads := jobSpec{Name: "check", Settings: settings, Scope: itsEntry}
@@ -109,7 +109,7 @@ func TestSelectJobs(t *testing.T) {
 				assert.Equal(t, job.Key == "", sel.EntryFile(job) == nil, "EntryFile(%q) is nil only for a fallback job", job.Key)
 			}
 			assert.Equal(t, tc.wantKeys, keys, "job keys")
-			assert.Equal(t, tc.wantGiven, sel.Jobs[0].Given, "given flags")
+			assert.Equal(t, tc.wantGiven, sel.Jobs[0].Given.spellings(), "given flags")
 			assert.Equal(t, tc.wantFile, sel.File != nil, "muxt.json read")
 			if tc.wantKeys[0] == "" {
 				assert.Equal(t, "fallback", sel.Jobs[0].Config.ReceiverType, "fallback configuration")
