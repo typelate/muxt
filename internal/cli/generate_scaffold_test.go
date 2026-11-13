@@ -259,21 +259,35 @@ func TestGeneratePackageRefusesExistingDirectory(t *testing.T) {
 	assert.Equal(t, existing, string(got), "muxt.json is unchanged")
 }
 
-// TestGeneratePackageRejectsNameThatIsNotAnIdentifier states that a package
-// name with a path separator fails before anything is written.
-func TestGeneratePackageRejectsNameThatIsNotAnIdentifier(t *testing.T) {
-	root := moduleDir(t)
-	const existing = `{"packages": {}}`
-	require.NoError(t, os.WriteFile(filepath.Join(root, "muxt.json"), []byte(existing), 0o644))
+// TestGeneratePackageRejectsBadNames states that a package name that is not an
+// identifier, is main, or holds a path separator fails with a message saying
+// what NAME is, before anything is written.
+func TestGeneratePackageRejectsBadNames(t *testing.T) {
+	for _, tt := range []struct {
+		name, want string
+		dir        string
+	}{
+		{name: "a-b", want: `package name "a-b" must be a Go identifier`, dir: "a-b"},
+		{name: "main", want: `package name "main" is the main package; a route package is a library package the main package imports`, dir: "main"},
+		{name: "a/b", want: `package name "a/b" must be one directory name, created in the working directory`, dir: "a"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			root := moduleDir(t)
+			const existing = `{"packages": {}}`
+			require.NoError(t, os.WriteFile(filepath.Join(root, "muxt.json"), []byte(existing), 0o644))
 
-	_, err := runCommand(t, root, "generate package a/b")
+			_, err := runCommand(t, root, "generate package "+tt.name)
 
-	require.EqualError(t, err, `package name "a/b" must be a Go identifier`)
-	_, statErr := os.Stat(filepath.Join(root, "a"))
-	assert.ErrorIs(t, statErr, os.ErrNotExist, "no directory is created")
-	got, err := os.ReadFile(filepath.Join(root, "muxt.json"))
-	require.NoError(t, err)
-	assert.Equal(t, existing, string(got), "muxt.json is unchanged")
+			var nameErr *composite.PackageNameError
+			require.ErrorAs(t, err, &nameErr)
+			require.EqualError(t, err, tt.want)
+			_, statErr := os.Stat(filepath.Join(root, tt.dir))
+			assert.ErrorIs(t, statErr, os.ErrNotExist, "no directory is created")
+			got, err := os.ReadFile(filepath.Join(root, "muxt.json"))
+			require.NoError(t, err)
+			assert.Equal(t, existing, string(got), "muxt.json is unchanged")
+		})
+	}
 }
 
 // TestGeneratePackageNeedsMuxtJSON states that muxt generate package with no

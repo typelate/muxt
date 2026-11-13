@@ -194,3 +194,15 @@ type NoModuleError struct {
 func (e *NoModuleError) Error() string {
 	return fmt.Sprintf("%s: no go.mod found at or above the file; package keys are import paths", e.Path)
 }
+
+// PackageNameError reports a NAME that muxt generate package cannot make a
+// route package of. Reason finishes the sentence that starts with the name, and
+// says what NAME is or what to do instead.
+type PackageNameError struct {
+	Name, Reason string
+}
+
+// Error returns the name and the reason on one line.
+func (e *PackageNameError) Error() string {
+	return fmt.Sprintf("package name %q %s", e.Name, e.Reason)
+}

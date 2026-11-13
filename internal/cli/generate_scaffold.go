@@ -10,6 +10,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -42,8 +43,15 @@ func generatePackageCommand(workingDirectory *string, getEnv func(string) string
 // muxt.json above wd. Everything is checked before anything is written: the
 // merged entry must pass the validation generate applies to an entry.
 func scaffoldPackage(out io.Writer, wd, name string, flags *pflag.FlagSet, config *generate.RoutesFileConfiguration, deprecatedTemplatesVar string, getEnv func(string) string, version func() (string, bool)) error {
-	if !token.IsIdentifier(name) {
-		return fmt.Errorf("package name %q must be a Go identifier", name)
+	switch {
+	case strings.ContainsRune(name, '/') || strings.ContainsRune(name, filepath.Separator):
+		return &composite.PackageNameError{Name: name, Reason: "must be one directory name, created in the working directory"}
+	case name == "main":
+		// A package main with no func main breaks go build ./..., and a
+		// route package is imported, which package main cannot be.
+		return &composite.PackageNameError{Name: name, Reason: "is the main package; a route package is a library package the main package imports"}
+	case !token.IsIdentifier(name):
+		return &composite.PackageNameError{Name: name, Reason: "must be a Go identifier"}
 	}
 	f, found, err := composite.Find(wd, deprecatedMuxtJSONKeys())
 	if err != nil {
