@@ -599,14 +599,11 @@ func evaluateCallParseFilesArgs(scope Scope, call *ast.CallExpr) (paths []string
 	base := scope.Dir
 	var matches []string
 	if shared, ok := call.Args[0].(*ast.SelectorExpr); ok {
-		absolute, owner, err := sharedFiles(scope, shared)
+		owned, owner, err := sharedFiles(scope, shared)
 		if err != nil {
 			return nil, "", err
 		}
-		importPath, base = owner, scope.Imports[owner].Dir
-		if matches, err = RelativeFilePaths(base, absolute...); err != nil {
-			return nil, "", fmt.Errorf("calculating relative paths of files embedded by %s: %w", owner, err)
-		}
+		importPath, base, matches = owner, scope.Imports[owner].Dir, owned
 	} else {
 		var decls []*ast.GenDecl
 		for _, decl := range astgen.IterateGenDecl(files, token.VAR) {

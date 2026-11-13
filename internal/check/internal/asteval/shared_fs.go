@@ -8,10 +8,11 @@ import (
 	"github.com/typelate/muxt/internal/check/internal/astgen"
 )
 
-// sharedFiles resolves arg, a pkg.Var selector, to the absolute paths of the
-// files the other package's //go:embed on Var matched, the way embedFSFilePaths
-// does for the analyzed package's own variable. It returns the import path of
-// the package that owns them.
+// sharedFiles resolves arg, a pkg.Var selector, to the files the other
+// package's //go:embed on Var matched, the way embedFSFilePaths does for the
+// analyzed package's own variable. The paths are relative to the other
+// package's directory, which the scope's Imports holds under the import path
+// it also returns.
 //
 // Only a package of the analyzed package's module is read: its files are
 // part of the same build, so the embed patterns the muxt user wrote are the
@@ -52,7 +53,7 @@ func sharedFiles(scope Scope, arg *ast.SelectorExpr) (paths []string, importPath
 	if err != nil {
 		return nil, "", err
 	}
-	return joinFilePaths(other.Dir, matches...), importPath, nil
+	return matches, importPath, nil
 }
 
 // isEmbedFS reports whether t is the embed package's FS type.
