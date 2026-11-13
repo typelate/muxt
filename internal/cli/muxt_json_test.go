@@ -227,6 +227,12 @@ func TestGenerateRejectsDeprecatedMuxtJSONKey(t *testing.T) {
 			key:         "receiver_type",
 			replacement: "use_receiver_type",
 		},
+		{
+			name:        "templates variable",
+			file:        `{"packages": {"example.com/m": {"templates_variable": "views"}}}`,
+			key:         "templates_variable",
+			replacement: "use_templates_variable",
+		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			dir := moduleDir(t)

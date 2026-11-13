@@ -89,3 +89,31 @@ func exampleOf(t *testing.T, s setting) (arg string, value any) {
 		return arg, s.example
 	}
 }
+
+// TestMuxtJSONKeysMapEveryDeprecatedSpellingToItsCurrentKey states that a
+// muxt.json key spelled like a deprecated flag is refused naming the key to
+// write instead. --templates-variable is registered by hand, so no setting
+// lists it; dropping that line would degrade the message to an unknown key.
+func TestMuxtJSONKeysMapEveryDeprecatedSpellingToItsCurrentKey(t *testing.T) {
+	want := map[string]string{
+		composite.Key(deprecatedTemplatesVariable): composite.Key(useTemplatesVariable),
+	}
+	for _, s := range generateSettings(new(generate.RoutesFileConfiguration)) {
+		for _, spelling := range s.deprecated {
+			want[composite.Key(spelling)] = composite.Key(s.name)
+		}
+	}
+
+	got := muxtJSONKeys().Deprecated
+
+	for spelling, current := range want {
+		if got[spelling] != current {
+			t.Errorf("muxtJSONKeys().Deprecated[%q] = %q, want %q", spelling, got[spelling], current)
+		}
+	}
+	for spelling := range got {
+		if _, ok := want[spelling]; !ok {
+			t.Errorf("muxtJSONKeys().Deprecated has %q, which no setting deprecates", spelling)
+		}
+	}
+}
