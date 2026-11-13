@@ -108,7 +108,7 @@ func scaffoldDefinition(cmd *cobra.Command, wd, name, templateFile string, body 
 	var stub string
 	if loadPackages != nil {
 		var err error
-		if stub, err = inspectPackage(wd, name, config, loadPackages); err != nil {
+		if stub, err = inspectPackage(wd, name, templateFile, config, loadPackages); err != nil {
 			return err
 		}
 	}
@@ -133,12 +133,13 @@ func scaffoldDefinition(cmd *cobra.Command, wd, name, templateFile string, body 
 }
 
 // inspectPackage loads the package in wd and returns a
-// *generate.DuplicateDefinitionError when its templates already define name.
-// Otherwise it returns the stubs of the methods the route calls that the
+// *generate.DuplicateDefinitionError when its templates already define name,
+// and a *load.UnreadFileError when templateFile is one no templates variable
+// reads. Otherwise it returns the stubs of the methods the route calls that the
 // receiver type does not define, empty when no receiver type is configured. A
 // package it cannot load, or one with no templates variable, is an error too:
 // the check would otherwise pass for want of anything to check.
-func inspectPackage(wd, name string, config generate.RoutesFileConfiguration, loadPackages packageLoader) (string, error) {
+func inspectPackage(wd, name, templateFile string, config generate.RoutesFileConfiguration, loadPackages packageLoader) (string, error) {
 	cannotCheck := func(err error) error {
 		return fmt.Errorf("cannot check whether %q is already defined: %w", name, err)
 	}
@@ -159,6 +160,11 @@ func inspectPackage(wd, name string, config generate.RoutesFileConfiguration, lo
 			duplicate.File, duplicate.Line = relativeTo(wd, position.Filename), position.Line
 		}
 		return "", duplicate
+	}
+	if templateFile != "" {
+		if err := load.CheckFileRead(wd, pl, config.TemplatesVariables, templateFile); err != nil {
+			return "", err
+		}
 	}
 	if config.ReceiverType == "" {
 		return "", nil

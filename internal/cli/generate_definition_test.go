@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/typelate/muxt/internal/composite"
 	"github.com/typelate/muxt/internal/generate"
+	"github.com/typelate/muxt/internal/load"
 )
 
 // runCommandArgs runs a muxt command with args in dir, which a template name
@@ -409,4 +411,48 @@ func TestGenerateDefPrintsNoStubForDefinedMethod(t *testing.T) {
 	got, err := os.ReadFile(filepath.Join(dir, "index.gohtml"))
 	require.NoError(t, err)
 	assert.Equal(t, "{{define \"GET /foo/{id} Index(ctx, id)\"}}{{end}}\n", string(got), "index.gohtml")
+}
+
+// TestGenerateDefRefusesFileTheTemplatesVariableDoesNotRead states that
+// --output-file fails, naming the file by absolute path, the variable and the
+// patterns, and writes nothing, when the file matches no //go:embed pattern or
+// no ParseFS pattern of the templates variable, and that a file both match is
+// written.
+func TestGenerateDefRefusesFileTheTemplatesVariableDoesNotRead(t *testing.T) {
+	if testing.Short() {
+		t.Skip("loads packages with the go command")
+	}
+	module := func(t *testing.T, embed, parse string) string {
+		t.Helper()
+		dir := t.TempDir()
+		writeTestFile(t, dir, "go.mod", "module example.com/m\n\ngo 1.24\n")
+		writeTestFile(t, dir, "page.gohtml", `{{define "GET /page Page()"}}{{end}}`)
+		writeTestFile(t, dir, "m.go", "package m\n\nimport (\n\t\"embed\"\n\t\"html/template\"\n)\n\n//go:embed "+embed+"\nvar source embed.FS\n\nvar templates = template.Must(template.ParseFS(source, "+parse+"))\n\ntype T struct{}\n")
+		return dir
+	}
+	for _, tt := range []struct {
+		name, embed, parse, want string
+	}{
+		{name: "embed pattern misses", embed: "page.gohtml", parse: `"*.gohtml"`, want: `%s is not read by templates: its //go:embed patterns are "page.gohtml" and its ParseFS patterns are "*.gohtml"; name a file both match`},
+		{name: "ParseFS pattern misses", embed: "*.gohtml", parse: `"page.gohtml"`, want: `%s is not read by templates: its //go:embed patterns are "*.gohtml" and its ParseFS patterns are "page.gohtml"; name a file both match`},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := module(t, tt.embed, tt.parse)
+
+			_, _, err := runCommandArgs(dir, []string{"generate", "def", "GET /x X()", "--output-file=extra.gohtml"}, runners{load: loadFromGoCommand})
+
+			require.EqualError(t, err, fmt.Sprintf(tt.want, filepath.Join(dir, "extra.gohtml")))
+			_, ok := errors.AsType[*load.UnreadFileError](err)
+			assert.True(t, ok, "error is a *load.UnreadFileError")
+			assert.NoFileExists(t, filepath.Join(dir, "extra.gohtml"))
+		})
+	}
+	t.Run("both match", func(t *testing.T) {
+		dir := module(t, "*.gohtml", `"*.gohtml"`)
+
+		_, _, err := runCommandArgs(dir, []string{"generate", "def", "GET /x X()", "--output-file=extra.gohtml"}, runners{load: loadFromGoCommand})
+
+		require.NoError(t, err)
+		assert.FileExists(t, filepath.Join(dir, "extra.gohtml"))
+	})
 }
