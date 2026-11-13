@@ -141,25 +141,40 @@ func TestDefinitionSet(t *testing.T) {
 }
 
 func TestOverridesIn(t *testing.T) {
-	t.Run("a name the package defines twice after a shared file is listed once", func(t *testing.T) {
-		tree := defineTree(t, "body")
-		shared := definitionOnLine(1, tree)
-		shared.Package = "example.com/m/fragments"
-		a := definitionOnLine(2, tree)
-		a.Define.Filename = "a.gohtml"
-		b := definitionOnLine(3, tree)
-		b.Define.Filename = "b.gohtml"
+	// A file named s*.gohtml is in the shared package; any other file is
+	// the analyzed package's own. Each want entry reads replaced->kept.
+	for _, tt := range []struct {
+		chain []string
+		want  []string
+	}{
+		{chain: []string{"s.gohtml", "a.gohtml"}, want: []string{"s.gohtml->a.gohtml"}},
+		{chain: []string{"a.gohtml", "s.gohtml"}, want: []string{"a.gohtml->s.gohtml"}},
+		{chain: []string{"a.gohtml", "b.gohtml"}, want: nil},
+		{chain: []string{"s.gohtml", "a.gohtml", "b.gohtml"}, want: []string{"s.gohtml->b.gohtml"}},
+		{chain: []string{"s1.gohtml", "s2.gohtml", "a.gohtml"}, want: []string{"s2.gohtml->a.gohtml"}},
+		{chain: []string{"a.gohtml", "s.gohtml", "b.gohtml"}, want: []string{"s.gohtml->b.gohtml"}},
+		{chain: []string{"s.gohtml", "a.gohtml", "b.gohtml", "c.gohtml"}, want: []string{"s.gohtml->c.gohtml"}},
+	} {
+		t.Run(strings.Join(tt.chain, ","), func(t *testing.T) {
+			tree := defineTree(t, "body")
+			ordered := make([]Definition, 0, len(tt.chain))
+			for i, file := range tt.chain {
+				def := definitionOnLine(i+1, tree)
+				def.Define.Filename = file
+				if strings.HasPrefix(file, "s") {
+					def.Package = "example.com/m/fragments"
+				}
+				ordered = append(ordered, def)
+			}
 
-		got := overridesIn([]Definition{shared, a, b})
+			var got []string
+			for _, o := range overridesIn(ordered) {
+				got = append(got, o.Replaced.Position.Filename+"->"+o.Kept.Position.Filename)
+			}
 
-		if len(got) != 1 {
-			t.Fatalf("overridesIn(shared, a, b) = %d overrides, want 1: %+v", len(got), got)
-		}
-		if got[0].Replaced.Package != "example.com/m/fragments" {
-			t.Errorf("Replaced.Package = %q, want %q", got[0].Replaced.Package, "example.com/m/fragments")
-		}
-		if got[0].Kept.Position.Filename != "b.gohtml" {
-			t.Errorf("Kept.Position.Filename = %q, want %q", got[0].Kept.Position.Filename, "b.gohtml")
-		}
-	})
+			if strings.Join(got, " ") != strings.Join(tt.want, " ") {
+				t.Errorf("overridesIn(%q) = %q, want %q", tt.chain, got, tt.want)
+			}
+		})
+	}
 }

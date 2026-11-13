@@ -104,34 +104,59 @@ func newDefinitionSet(ordered []Definition) definitionSet {
 	return set
 }
 
-// overridesIn reports, in parse order, each definition of a name that replaced
-// an earlier one when either was written in another package's files. It
-// applies the rule newDefinitionSet does, so Kept is the definition the set
-// holds: a definition with an empty body leaves the earlier one in place and
-// replaces nothing. Two definitions both in the analyzed package are not an
-// override: the package wrote both. When the package then defines a name
-// again after an override, that override's Kept moves to the later
-// definition, so each name is listed once and Kept is what renders.
+// overridesIn reports, once per name and in the order each name was first
+// overridden, the names a definition in another package's files took part
+// in replacing. It applies the rule newDefinitionSet does, so Kept is the
+// definition the set holds at the end of the chain: a definition with an
+// empty body leaves the earlier one in place and replaces nothing. A chain
+// in which every displacement is between the analyzed package's own files is
+// not an override: the package wrote them all.
+//
+// Replaced is the last dropped definition from a package other than Kept's,
+// because that is the one a reader expected to render and did not: for
+// shared, own, own it is the shared file, and for own, shared it is the own
+// file. When every dropped definition is in Kept's package, as with two
+// files of one shared package, it is the one Kept displaced.
 func overridesIn(ordered []Definition) []muxtsource.Override {
-	var overrides []muxtsource.Override
-	kept := make(map[string]Definition, len(ordered))
-	listed := make(map[string]int, len(ordered))
+	type chain struct {
+		held       Definition
+		dropped    []Definition
+		overridden bool
+	}
+	chains := make(map[string]*chain, len(ordered))
+	var names []string
 	for _, def := range ordered {
-		prev, ok := kept[def.Name]
-		if ok && !displaces(prev, def) {
+		c, ok := chains[def.Name]
+		if !ok {
+			chains[def.Name] = &chain{held: def}
 			continue
 		}
-		if i, isListed := listed[def.Name]; ok && isListed && prev.Package == "" && def.Package == "" {
-			overrides[i].Kept = muxtsource.Site{Package: def.Package, Position: def.Define.Position}
-		} else if ok && (prev.Package != "" || def.Package != "") {
-			listed[def.Name] = len(overrides)
-			overrides = append(overrides, muxtsource.Override{
-				Name:     def.Name,
-				Replaced: muxtsource.Site{Package: prev.Package, Position: prev.Define.Position},
-				Kept:     muxtsource.Site{Package: def.Package, Position: def.Define.Position},
-			})
+		if !displaces(c.held, def) {
+			continue
 		}
-		kept[def.Name] = def
+		crossesPackages := c.held.Package != "" || def.Package != ""
+		if crossesPackages && !c.overridden {
+			c.overridden = true
+			names = append(names, def.Name)
+		}
+		c.dropped = append(c.dropped, c.held)
+		c.held = def
+	}
+	overrides := make([]muxtsource.Override, 0, len(names))
+	for _, name := range names {
+		c := chains[name]
+		replaced := c.dropped[len(c.dropped)-1]
+		for i := len(c.dropped) - 1; i >= 0; i-- {
+			if c.dropped[i].Package != c.held.Package {
+				replaced = c.dropped[i]
+				break
+			}
+		}
+		overrides = append(overrides, muxtsource.Override{
+			Name:     name,
+			Replaced: muxtsource.Site{Package: replaced.Package, Position: replaced.Define.Position},
+			Kept:     muxtsource.Site{Package: c.held.Package, Position: c.held.Define.Position},
+		})
 	}
 	return overrides
 }
