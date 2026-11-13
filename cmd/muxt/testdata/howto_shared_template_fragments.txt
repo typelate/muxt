@@ -7,6 +7,10 @@ muxt generate
 ! stderr .
 exec go test ./...
 
+# The same directory checks every entry.
+muxt check
+cmp stdout want-check.txt
+
 cd workspace
 muxt check
 cd ../billing
@@ -27,6 +31,11 @@ go 1.22
 		}
 	}
 }
+-- want-check.txt --
+example.com/m/billing
+ok: 1 template
+example.com/m/workspace
+ok: 1 template
 -- fragments/fragments.go --
 package fragments
 

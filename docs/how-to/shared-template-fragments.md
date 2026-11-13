@@ -44,14 +44,28 @@ You are splitting a hypertext package into sub-packages, and they should keep on
    {{define "GET /{$} Show()"}}{{template "layout" .Result}}{{end}}
    ```
 
+   `Show` is a method of the entry's receiver type (`Server`). For the shared layout to type check, it returns a value with `Title` and `Body` fields:
+
+   ```go
+   type Page struct {
+   	Title string
+   	Body  string
+   }
+
+   func (Server) Show() Page { return Page{Title: "workspace", Body: "workspace-only text"} }
+   ```
+
 5. Repeat steps 3 and 4 in `billing`, then generate both packages from the top of the module ([muxt.json](muxt-json.md)) and check each one:
 
    ```bash
    muxt generate
-   cd workspace && muxt check
+   muxt check
    ```
 
    ```text
+   example.com/m/billing
+   ok: 1 template
+   example.com/m/workspace
    ok: 1 template
    ```
 
