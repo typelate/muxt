@@ -139,13 +139,18 @@ func (e *MissingEntryError) Error() string {
 
 // MissingDirectoryError reports a muxt.json entry whose directory does not
 // exist or is a file. Key is the packages key and Dir the key's absolute
-// directory.
+// directory. IsFile is set when Dir exists and is not a directory, so the
+// message does not claim a path that is there is missing.
 type MissingDirectoryError struct {
 	Path, Key, Dir string
+	IsFile         bool
 }
 
 // Error returns the path, the entry, and the directory on one line.
 func (e *MissingDirectoryError) Error() string {
+	if e.IsFile {
+		return fmt.Sprintf("%s: packages[%q]: %s is not a directory", e.Path, e.Key, e.Dir)
+	}
 	return fmt.Sprintf("%s: packages[%q]: directory %s does not exist", e.Path, e.Key, e.Dir)
 }
 

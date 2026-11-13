@@ -52,7 +52,7 @@ func requireEntryDirectory(f *composite.File, key, dir string) error {
 		return fmt.Errorf("muxt.json entry %q: %w", key, statErr)
 	}
 	if statErr != nil || !info.IsDir() {
-		return &composite.MissingDirectoryError{Path: f.Name, Key: key, Dir: dir}
+		return &composite.MissingDirectoryError{Path: f.Name, Key: key, Dir: dir, IsFile: statErr == nil}
 	}
 	inside, err := resolvesInside(f.Dir, dir)
 	if err != nil {

@@ -2,6 +2,7 @@ package cli
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"maps"
 	"os"
@@ -591,11 +592,12 @@ func TestGenerateRejectsMissingMuxtJSONDirectory(t *testing.T) {
 	for _, tt := range []struct {
 		name  string
 		setup func(t *testing.T, dir string)
+		want  string // the message after the entry, with %s for the directory
 	}{
-		{name: "missing", setup: func(*testing.T, string) {}},
+		{name: "missing", setup: func(*testing.T, string) {}, want: "directory %s does not exist"},
 		{name: "file", setup: func(t *testing.T, dir string) {
 			require.NoError(t, os.WriteFile(filepath.Join(dir, "gone"), []byte("not a directory\n"), 0o644))
-		}},
+		}, want: "%s is not a directory"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			dir := moduleDir(t)
@@ -611,7 +613,7 @@ func TestGenerateRejectsMissingMuxtJSONDirectory(t *testing.T) {
 			assert.Equal(t, path, missing.Path, "path")
 			assert.Equal(t, "example.com/m/gone", missing.Key, "key")
 			assert.Equal(t, filepath.Join(dir, "gone"), missing.Dir, "dir")
-			assert.Equal(t, path+`: packages["example.com/m/gone"]: directory `+filepath.Join(dir, "gone")+` does not exist`, err.Error(), "message")
+			assert.Equal(t, path+`: packages["example.com/m/gone"]: `+fmt.Sprintf(tt.want, filepath.Join(dir, "gone")), err.Error(), "message")
 			assert.False(t, called, "generate runner called")
 		})
 	}
