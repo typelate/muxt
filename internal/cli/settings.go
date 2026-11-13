@@ -36,6 +36,11 @@ This function also receives an argument with a type matching the name given by o
 			Name: outputSSETemplateDataType, Default: defaultSSETemplateDataTypeName, NonEmpty: true, Example: "PageEvent",
 			Usage: `The type name for the template data passed to Server-Sent Events route templates.`,
 		}),
+		stringSetting(&c.TemplateRoutePathsTypeName, spec[string]{
+			Name: outputTemplateRoutePathsType, Default: defaultTemplateRoutePathsTypeName, NonEmpty: true,
+			Deprecated: []string{deprecatedTemplateRoutePathsType}, Example: "SitePaths",
+			Usage: `The type name for the type with path constructor helper methods.`,
+		}),
 	}
 }
 
