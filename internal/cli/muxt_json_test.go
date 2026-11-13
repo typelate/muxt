@@ -450,7 +450,7 @@ func TestGenerateRejectsMuxtJSONMultipartMaxMemoryValue(t *testing.T) {
 	called, err := generateFailureOf(t, dir)
 
 	var flagCfg generate.RoutesFileConfiguration
-	flagErr := (&multipartMaxMemoryFlag{cfg: &flagCfg}).Set("lots")
+	flagErr := byteSize{p: &flagCfg.MultipartMaxMemory}.Set("lots")
 	require.Error(t, flagErr)
 	var invalid *composite.InvalidEntryError
 	require.ErrorAs(t, err, &invalid, "error %v", err)

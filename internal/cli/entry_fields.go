@@ -79,14 +79,14 @@ func entryFields() []entryField {
 				}
 				// The flag's own parser turns "64MB" into bytes, so the entry and
 				// the command line accept the same values.
-				if err := (&multipartMaxMemoryFlag{cfg: c}).Set(*e.OutputMultipartMaxMemory); err != nil {
+				if err := (byteSize{p: &c.MultipartMaxMemory}).Set(*e.OutputMultipartMaxMemory); err != nil {
 					return false, fmt.Errorf("%s: %w", muxtJSONKey(outputMultipartMaxMemory), err)
 				}
 				return true, nil
 			},
 			// The flag prints the size the run uses, 32 MiB when none was set,
 			// in a form its parser reads back.
-			Value: func(c generate.RoutesFileConfiguration) any { return (&multipartMaxMemoryFlag{cfg: &c}).String() },
+			Value: func(c generate.RoutesFileConfiguration) any { return byteSize{p: &c.MultipartMaxMemory}.String() },
 		},
 		entryValue(inputStaticAssetsDirectory, func(e composite.Entry) *string { return e.InputStaticAssetsDirectory }, func(c *generate.RoutesFileConfiguration) *string { return &c.StaticAssetsDirectory }),
 		entryValue(outputStaticAssetsPath, func(e composite.Entry) *string { return e.OutputStaticAssetsPath }, func(c *generate.RoutesFileConfiguration) *string { return &c.StaticAssetsPath }),

@@ -3,9 +3,7 @@ package cli
 import (
 	"fmt"
 	"go/token"
-	"math"
 
-	"github.com/dustin/go-humanize"
 	"github.com/spf13/pflag"
 
 	"github.com/typelate/muxt/internal/generate"
@@ -57,44 +55,10 @@ func addOutputFlagsToFlagSet(flagSet *pflag.FlagSet, g *generate.RoutesFileConfi
 	flagSet.BoolVar(&g.OutputDatastar, outputDatastar, false, outputDatastarHelp)
 	flagSet.BoolVar(&g.OutputExportedDefaultIdentifiers, outputExportedDefaultIdentifiers, true, outputExportedDefaultIdentifiersHelp)
 	flagSet.BoolVar(&g.OutputMuxtVersion, outputMuxtVersion, true, outputMuxtVersionHelp)
-	flagSet.Var(&multipartMaxMemoryFlag{cfg: g}, outputMultipartMaxMemory, outputMultipartMaxMemoryHelp)
+	flagSet.Var(byteSize{p: &g.MultipartMaxMemory}, outputMultipartMaxMemory, outputMultipartMaxMemoryHelp)
 	flagSet.StringVar(&g.StaticAssetsDirectory, inputStaticAssetsDirectory, "", inputStaticAssetsDirectoryHelp)
 	flagSet.StringVar(&g.StaticAssetsPath, outputStaticAssetsPath, "", outputStaticAssetsPathHelp)
 }
-
-// multipartMaxMemoryFlag implements pflag.Value to parse human-readable byte
-// sizes (e.g. "32MB", "64MiB", "1GB") into RoutesFileConfiguration.MultipartMaxMemory.
-type multipartMaxMemoryFlag struct {
-	cfg *generate.RoutesFileConfiguration
-}
-
-func (f *multipartMaxMemoryFlag) String() string {
-	if f == nil || f.cfg == nil {
-		return humanize.IBytes(uint64(generate.DefaultMultipartMaxMemory))
-	}
-	n := f.cfg.MultipartMaxMemory
-	if n <= 0 {
-		n = generate.DefaultMultipartMaxMemory
-	}
-	return humanize.IBytes(uint64(n))
-}
-
-func (f *multipartMaxMemoryFlag) Set(v string) error {
-	n, err := humanize.ParseBytes(v)
-	if err != nil {
-		return fmt.Errorf("invalid byte size %q: %w", v, err)
-	}
-	if n == 0 {
-		return fmt.Errorf("multipart max memory must be positive, got %q", v)
-	}
-	if n > math.MaxInt64 {
-		return fmt.Errorf("multipart max memory %q exceeds int64 maximum", v)
-	}
-	f.cfg.MultipartMaxMemory = int64(n)
-	return nil
-}
-
-func (f *multipartMaxMemoryFlag) Type() string { return "bytes" }
 
 func addVerboseFlagToFlagSet(flagSet *pflag.FlagSet, out *bool) {
 	flagSet.BoolVarP(out, "verbose", "v", false, "verbose log output")

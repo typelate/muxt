@@ -71,7 +71,7 @@ func TestFindDuplicateVariables(t *testing.T) {
 	})
 }
 
-func TestMultipartMaxMemoryFlag_Set(t *testing.T) {
+func TestByteSize_Set(t *testing.T) {
 	for _, tc := range []struct {
 		name    string
 		input   string
@@ -92,7 +92,7 @@ func TestMultipartMaxMemoryFlag_Set(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			cfg := &generate.RoutesFileConfiguration{}
-			f := &multipartMaxMemoryFlag{cfg: cfg}
+			f := byteSize{p: &cfg.MultipartMaxMemory}
 			err := f.Set(tc.input)
 			if tc.wantErr != "" {
 				require.ErrorContains(t, err, tc.wantErr, "Set(%q)", tc.input)
@@ -104,20 +104,19 @@ func TestMultipartMaxMemoryFlag_Set(t *testing.T) {
 	}
 }
 
-func TestMultipartMaxMemoryFlag_String(t *testing.T) {
+func TestByteSize_String(t *testing.T) {
 	t.Run("zero shows default", func(t *testing.T) {
-		f := &multipartMaxMemoryFlag{cfg: &generate.RoutesFileConfiguration{}}
+		f := byteSize{p: new(int64)}
 		got := f.String()
 		require.True(t, strings.Contains(got, "MiB") || strings.Contains(got, "MB"), "String() = %q, want a human-readable size", got)
 	})
-	t.Run("a nil flag or configuration shows default", func(t *testing.T) {
-		want := (&multipartMaxMemoryFlag{cfg: &generate.RoutesFileConfiguration{}}).String()
-		for name, f := range map[string]*multipartMaxMemoryFlag{"nil flag": nil, "nil configuration": {}} {
-			assert.Equal(t, want, f.String(), "String() of a %s", name)
-		}
+	t.Run("a nil pointer shows default", func(t *testing.T) {
+		want := byteSize{p: new(int64)}.String()
+		assert.Equal(t, want, byteSize{}.String(), "String() of a byteSize with no pointer")
 	})
 	t.Run("override shows override", func(t *testing.T) {
-		f := &multipartMaxMemoryFlag{cfg: &generate.RoutesFileConfiguration{MultipartMaxMemory: 64 << 20}}
+		n := int64(64 << 20)
+		f := byteSize{p: &n}
 		require.Contains(t, f.String(), "64", "String()")
 	})
 }
