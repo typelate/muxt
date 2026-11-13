@@ -21,6 +21,12 @@ func generateSettings(c *generate.RoutesFileConfiguration) []setting {
 			Deprecated: []string{deprecatedReceiverInterface}, Example: "RoutesReceiver",
 			Usage: `The interface name in the generated output file listing the methods used by handler routes in the routes function.`,
 		}),
+		stringSetting(&c.RoutesFunction, spec[string]{
+			Name: outputRoutesFunc, Default: defaultRoutesFunctionName, NonEmpty: true,
+			Deprecated: []string{deprecatedRoutesFunc}, Example: "Routes",
+			Usage: `The function name for the package registering handler functions on an *"net/http".ServeMux.
+This function also receives an argument with a type matching the name given by output-receiver-interface.`,
+		}),
 	}
 }
 
