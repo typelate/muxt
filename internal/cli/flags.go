@@ -12,11 +12,9 @@ import (
 func addGenerateFlags(flagSet *pflag.FlagSet, config *generate.RoutesFileConfiguration, deprecatedTemplatesVar *string) {
 	registerWithDeprecated(flagSet, generateSettings(config))
 	addDeprecatedTemplatesVariable(flagSet, deprecatedTemplatesVar)
-	addUseReceiverTypePackageVarToFlagSet(flagSet, &config.ReceiverPackage)
 	addVerboseFlagToFlagSet(flagSet, &config.Verbose)
 
 	addOutputFlagsToFlagSet(flagSet, config)
-	addDeprecatedUseFlagsToFlagSet(flagSet, config)
 	addDeprecatedOutputFlagsToFlagSet(flagSet, config)
 }
 
@@ -62,14 +60,6 @@ func addOutputFlagsToFlagSet(flagSet *pflag.FlagSet, g *generate.RoutesFileConfi
 
 func addVerboseFlagToFlagSet(flagSet *pflag.FlagSet, out *bool) {
 	flagSet.BoolVarP(out, "verbose", "v", false, "verbose log output")
-}
-
-func addDeprecatedUseFlagsToFlagSet(flagSet *pflag.FlagSet, g *generate.RoutesFileConfiguration) {
-	flagSet.StringVar(&g.ReceiverPackage, deprecatedReceiverTypePackage, "", "DEPRECATED: use --"+useReceiverTypePackage+" instead. "+useReceiverTypePackageHelp)
-	flagSet.StringVar(&g.ReceiverPackage, deprecatedFindReceiverTypePackage, "", "DEPRECATED: use --"+useReceiverTypePackage+" instead. "+useReceiverTypePackageHelp)
-
-	markDeprecated(flagSet, deprecatedReceiverTypePackage, useReceiverTypePackage)
-	markDeprecated(flagSet, deprecatedFindReceiverTypePackage, useReceiverTypePackage)
 }
 
 func addDeprecatedOutputFlagsToFlagSet(flagSet *pflag.FlagSet, g *generate.RoutesFileConfiguration) {
