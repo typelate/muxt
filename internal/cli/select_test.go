@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"go/token"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,10 +13,10 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/tools/go/packages"
 
 	"github.com/typelate/muxt/internal/analysis"
 	"github.com/typelate/muxt/internal/composite"
+	"github.com/typelate/muxt/internal/load"
 	"github.com/typelate/muxt/internal/mutation"
 )
 
@@ -159,9 +158,9 @@ func recordSelection(base, wd string, args ...string) (string, error) {
 		// generate def tests and scripts. The empty load ends in "no
 		// Go package found", where a real load ends in the package's own
 		// error; that text says nothing about selection.
-		load: func(root string, dirs, patterns []string) (*token.FileSet, []*packages.Package, error) {
+		load: func(root string, dirs, patterns []string) (*load.Loaded, error) {
 			r.line("load root=%q dirs=%q patterns=%q", r.rel(root), r.rels(dirs), patterns)
-			return token.NewFileSet(), nil, nil
+			return &load.Loaded{}, nil
 		},
 	})
 	if err != nil {

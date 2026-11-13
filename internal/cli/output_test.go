@@ -13,6 +13,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/tools/go/packages"
+
+	"github.com/typelate/muxt/internal/load"
 )
 
 type multiLineError struct{}
@@ -49,7 +51,7 @@ func TestWarnPartialAST(t *testing.T) {
 			if tt.nilLogger {
 				logger = nil
 			}
-			warnPartialAST(logger, tt.pl)
+			warnPartialAST(logger, load.FromPackages(tt.pl))
 			assert.Equal(t, tt.want, buf.String(), "warnPartialAST() wrote")
 		})
 	}

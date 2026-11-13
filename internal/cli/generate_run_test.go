@@ -3,7 +3,6 @@ package cli
 import (
 	"bytes"
 	"fmt"
-	"go/token"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,7 +10,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/tools/go/packages"
 
 	"github.com/typelate/muxt/internal/composite"
 	"github.com/typelate/muxt/internal/load"
@@ -69,7 +67,7 @@ func (%s) %sPage() any { return nil }
 // generate runner and the go command, counting how often packages are loaded.
 func generateWithLoader(t *testing.T, dir string, flags ...string) (stdout string, loads int, err error) {
 	t.Helper()
-	counting := func(root string, dirs, patterns []string) (*token.FileSet, []*packages.Package, error) {
+	counting := func(root string, dirs, patterns []string) (*load.Loaded, error) {
 		loads++
 		return loadFromGoCommand(root, dirs, patterns)
 	}

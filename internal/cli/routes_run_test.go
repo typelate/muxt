@@ -3,7 +3,6 @@ package cli
 import (
 	"bytes"
 	"encoding/json"
-	"go/token"
 	"io"
 	"os"
 	"path/filepath"
@@ -14,10 +13,10 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/tools/go/packages"
 
 	"github.com/typelate/muxt/internal/analysis"
 	"github.com/typelate/muxt/internal/composite"
+	"github.com/typelate/muxt/internal/load"
 )
 
 // routesJobsOf runs commandLine in wd with a runner that records the jobs
@@ -136,7 +135,7 @@ func TestRoutesConfigurationHasEverySettingOnce(t *testing.T) {
 // and the go command, counting how often packages are loaded.
 func listWithLoader(t *testing.T, dir string, args ...string) (stdout string, loads int, err error) {
 	t.Helper()
-	counting := func(root string, dirs, patterns []string) (*token.FileSet, []*packages.Package, error) {
+	counting := func(root string, dirs, patterns []string) (*load.Loaded, error) {
 		loads++
 		return loadFromGoCommand(root, dirs, patterns)
 	}

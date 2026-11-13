@@ -17,7 +17,6 @@ import (
 
 	"github.com/typelate/muxt/internal/composite"
 	"github.com/typelate/muxt/internal/generate"
-	"github.com/typelate/muxt/internal/load"
 	"github.com/typelate/muxt/internal/muxt"
 	"github.com/typelate/muxt/internal/source"
 	"github.com/typelate/muxt/template/html"
@@ -161,11 +160,11 @@ func inspectPackage(target definitionTarget, config generate.RoutesFileConfigura
 	cannotCheck := func(err error) error {
 		return fmt.Errorf("cannot check whether %q is already defined: %w", name, err)
 	}
-	_, pl, err := loadPackages(wd, []string{wd}, []string{config.ReceiverPackage})
+	l, err := loadPackages(wd, []string{wd}, []string{config.ReceiverPackage})
 	if err != nil {
 		return "", cannotCheck(err)
 	}
-	pkg, err := load.Package(wd, pl, config.TemplatesVariables)
+	pkg, err := l.Package(wd, config.TemplatesVariables)
 	if err != nil {
 		return "", cannotCheck(err)
 	}
@@ -180,18 +179,18 @@ func inspectPackage(target definitionTarget, config generate.RoutesFileConfigura
 		return "", duplicate
 	}
 	if templateFile != "" {
-		if err := load.CheckFileRead(wd, pl, config.TemplatesVariables, templateFile); err != nil {
+		if err := l.CheckFileRead(wd, config.TemplatesVariables, templateFile); err != nil {
 			return "", err
 		}
 	}
 	if config.ReceiverType == "" {
 		return "", nil
 	}
-	receiver, err := load.Receiver(wd, pl, config.ReceiverPackage, config.ReceiverType)
+	receiver, err := l.Receiver(wd, config.ReceiverPackage, config.ReceiverType)
 	if err != nil {
 		return "", err
 	}
-	return methodStubs(pkg, receiver, name, load.StandardLibrary(pl))
+	return methodStubs(pkg, receiver, name, l.StandardLibrary())
 }
 
 // methodStubs returns a stub for each method the route name calls that

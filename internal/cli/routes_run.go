@@ -8,7 +8,6 @@ import (
 
 	"github.com/typelate/muxt/internal/analysis"
 	"github.com/typelate/muxt/internal/composite"
-	"github.com/typelate/muxt/internal/load"
 )
 
 // routesJob is one package directory the route listing reads. It is a
@@ -102,21 +101,21 @@ func routesRunner(loadPackages packageLoader) func(*cobra.Command, []routesJob) 
 			outputDirs = append(outputDirs, job.Config.OutputDirectory(job.Dir))
 			patterns = append(patterns, job.Config.ReceiverPackage)
 		}
-		_, pl, err := loadPackages(jobs[0].Dir, dirs, patterns)
+		l, err := loadPackages(jobs[0].Dir, dirs, patterns)
 		if err != nil {
 			return err
 		}
-		warnPartialAST(log.New(cmd.ErrOrStderr(), "", 0), pl)
+		warnPartialAST(log.New(cmd.ErrOrStderr(), "", 0), l)
 		asJSON, err := isJSON(cmd)
 		if err != nil {
 			return err
 		}
 		// Over several entries JSON is one array, not a value per package.
 		var collected []routesListing
-		for _, i := range importOrder(pl, outputDirs) {
+		for _, i := range l.Imports(outputDirs).Order() {
 			job := jobs[i]
 			config := job.definitions()
-			pkg, receiver, err := load.PackageWithReceiver(outputDirs[i], pl, config.ReceiverPackage, config.ReceiverType, config.TemplatesVariables)
+			pkg, receiver, err := l.PackageWithReceiver(outputDirs[i], config.ReceiverPackage, config.ReceiverType, config.TemplatesVariables)
 			if err != nil {
 				printMultiLineError(cmd, err)
 				return err

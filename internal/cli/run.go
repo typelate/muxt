@@ -39,13 +39,13 @@ func runCheck(cmd *cobra.Command, wd string, config analysis.CheckConfiguration)
 	if err := requireDirectory(cmd.Name(), wd); err != nil {
 		return err
 	}
-	_, pl, err := load.Packages(wd)
+	l, err := load.InDirectories(wd, []string{wd}, nil)
 	if err != nil {
 		return err
 	}
 	logger := log.New(cmd.ErrOrStderr(), "", 0)
-	warnPartialAST(logger, pl)
-	pkg, err := load.Package(wd, pl, config.TemplatesVariables)
+	warnPartialAST(logger, l)
+	pkg, err := l.Package(wd, config.TemplatesVariables)
 	if err != nil {
 		return checkFailure(cmd, err)
 	}
@@ -70,12 +70,12 @@ func loadTemplates(cmd *cobra.Command, wd string, templatesVariables []string) (
 	if err := requireDirectory(cmd.Name(), wd); err != nil {
 		return source.Package{}, err
 	}
-	_, pl, err := load.Packages(wd)
+	l, err := load.InDirectories(wd, []string{wd}, nil)
 	if err != nil {
 		return source.Package{}, err
 	}
-	warnPartialAST(log.New(cmd.ErrOrStderr(), "", 0), pl)
-	return load.Package(wd, pl, templatesVariables)
+	warnPartialAST(log.New(cmd.ErrOrStderr(), "", 0), l)
+	return l.Package(wd, templatesVariables)
 }
 
 func runTemplateCallers(cmd *cobra.Command, wd string, config analysis.TemplateCallersConfiguration) error {

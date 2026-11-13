@@ -3,7 +3,6 @@ package cli
 import (
 	"errors"
 	"fmt"
-	"go/token"
 	"io"
 	"io/fs"
 	"log"
@@ -13,7 +12,6 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
-	"golang.org/x/tools/go/packages"
 
 	"github.com/typelate/muxt/internal/composite"
 	"github.com/typelate/muxt/internal/generate"
@@ -57,11 +55,11 @@ func generateJobs(wd string, flags *pflag.FlagSet, flagConfig *generate.RoutesFi
 // run can serve several package directories and a test can answer without one.
 // root is where the go command runs, dirs the package directories, patterns
 // extra imports.
-type packageLoader func(root string, dirs, patterns []string) (*token.FileSet, []*packages.Package, error)
+type packageLoader func(root string, dirs, patterns []string) (*load.Loaded, error)
 
 // loadFromGoCommand is the packageLoader that runs the go command.
-func loadFromGoCommand(root string, dirs, patterns []string) (*token.FileSet, []*packages.Package, error) {
-	return load.PackagesInDirectories(root, nil, dirs, patterns...)
+func loadFromGoCommand(root string, dirs, patterns []string) (*load.Loaded, error) {
+	return load.InDirectories(root, dirs, patterns)
 }
 
 // generateRunner generates jobs from one load, one directory at a time, a
@@ -89,15 +87,15 @@ func generateRunner(loadPackages packageLoader) func(*cobra.Command, []generateJ
 			wroteTo = stdout
 		}
 		stderr := log.New(cmd.ErrOrStderr(), "", 0)
-		_, pl, err := loadPackages(jobs[0].Dir, dirs, patterns)
+		l, err := loadPackages(jobs[0].Dir, dirs, patterns)
 		if err != nil {
 			return err
 		}
-		warnPartialAST(stderr, pl)
+		warnPartialAST(stderr, l)
 		// The first load already holds a package that did not load, so it
 		// is refused before an earlier entry is written.
 		for _, job := range jobs {
-			if err := load.CheckLoaded(job.Config.OutputDirectory(job.Dir), pl); err != nil {
+			if err := l.CheckLoaded(job.Config.OutputDirectory(job.Dir)); err != nil {
 				// One package has no other entry to name, so it explains
 				// itself the way every later failure of it does.
 				if len(jobs) == 1 {
@@ -110,16 +108,17 @@ func generateRunner(loadPackages packageLoader) func(*cobra.Command, []generateJ
 				return &composite.InvalidEntryError{Path: job.File, Where: fmt.Sprintf("packages[%q]", job.Key), Err: err}
 			}
 		}
-		// changed holds the directories written since the last load. A load
-		// that came before a write saw its package without the new files, so
-		// a job importing one of them needs a fresh load; one that imports
+		// changed holds the jobs written since the last load. A load that
+		// came before a write saw its package without the new files, so a
+		// job importing one of them needs a fresh load; one that imports
 		// none can use the load it has.
-		var changed []string
+		var changed []int
 		outputDirs := make([]string, len(jobs))
 		for i, job := range jobs {
 			outputDirs[i] = job.Config.OutputDirectory(job.Dir)
 		}
-		for _, i := range importOrder(pl, outputDirs) {
+		graph := l.Imports(outputDirs)
+		for _, i := range graph.Order() {
 			job := jobs[i]
 			// With several directories a failure names its package, since
 			// nothing else says which one it was.
@@ -132,14 +131,14 @@ func generateRunner(loadPackages packageLoader) func(*cobra.Command, []generateJ
 					_, _ = fmt.Fprintln(stdout, job.Key)
 				}
 			}
-			dir := job.Config.OutputDirectory(job.Dir)
-			if slices.ContainsFunc(changed, func(written string) bool { return load.Imports(pl, dir, written) }) {
-				if _, pl, err = loadPackages(jobs[0].Dir, dirs, patterns); err != nil {
+			if graph.ImportsAny(i, changed) {
+				if l, err = loadPackages(jobs[0].Dir, dirs, patterns); err != nil {
 					return failed(err)
 				}
+				graph = l.Imports(outputDirs)
 				changed = nil
 			}
-			files, err := resolveJob(cmd, pl, job, len(jobs) > 1)
+			files, err := resolveJob(cmd, l, job, len(jobs) > 1)
 			if err != nil {
 				return failed(err)
 			}
@@ -152,42 +151,18 @@ func generateRunner(loadPackages packageLoader) func(*cobra.Command, []generateJ
 				return failed(err)
 			}
 			if wrote {
-				changed = append(changed, dir)
+				changed = append(changed, i)
 			}
 		}
 		return nil
 	}
 }
 
-// importOrder returns the indexes of dirs, the package directory of each job,
-// so that a directory follows every directory it imports, and directories with
-// no import between them keep their order. The go command rejects import
-// cycles, so there is always a directory to take next. It takes directories,
-// not jobs, so a run that lists packages orders them the way generate does.
-func importOrder(pl []*packages.Package, dirs []string) []int {
-	remaining := make([]int, len(dirs))
-	for i := range remaining {
-		remaining[i] = i
-	}
-	ordered := make([]int, 0, len(dirs))
-	for len(remaining) > 0 {
-		next := slices.IndexFunc(remaining, func(i int) bool {
-			return !slices.ContainsFunc(remaining, func(dependency int) bool {
-				return load.Imports(pl, dirs[i], dirs[dependency])
-			})
-		})
-		next = max(next, 0)
-		ordered = append(ordered, remaining[next])
-		remaining = slices.Delete(remaining, next, next+1)
-	}
-	return ordered
-}
-
-// resolveJob returns the files job generates from the loaded packages pl. A
+// resolveJob returns the files job generates from the loaded packages l. A
 // failure that explains itself over several lines is printed before it is
 // returned, after job's key when several jobs run, since that printed text
 // replaces the returned error.
-func resolveJob(cmd *cobra.Command, pl []*packages.Package, job generateJob, several bool) ([]generate.GeneratedFile, error) {
+func resolveJob(cmd *cobra.Command, l *load.Loaded, job generateJob, several bool) ([]generate.GeneratedFile, error) {
 	report := func(err error) {
 		if _, ok := errors.AsType[muxt.MultiLineError](err); ok && several {
 			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "%s:\n", job.Key)
@@ -195,12 +170,12 @@ func resolveJob(cmd *cobra.Command, pl []*packages.Package, job generateJob, sev
 		printMultiLineError(cmd, err)
 	}
 	config := job.Config
-	pkg, receiver, err := load.PackageWithReceiver(config.OutputDirectory(job.Dir), pl, config.ReceiverPackage, config.ReceiverType, config.TemplatesVariables)
+	pkg, receiver, err := l.PackageWithReceiver(config.OutputDirectory(job.Dir), config.ReceiverPackage, config.ReceiverType, config.TemplatesVariables)
 	if err != nil {
 		report(err)
 		return nil, err
 	}
-	defs, err := muxt.ResolveDefinitions(pkg, receiver, load.StandardLibrary(pl))
+	defs, err := muxt.ResolveDefinitions(pkg, receiver, l.StandardLibrary())
 	if err != nil {
 		report(err)
 		return nil, err
