@@ -148,8 +148,8 @@ The documentation for this version is in the binary:
 		formatCommand(workingDirectory, run.format),
 		listTemplateCallersCommand(workingDirectory, getEnv, run.callers),
 		listTemplateCallsCommand(workingDirectory, getEnv, run.calls),
-		exploreModuleCommand(workingDirectory),
-		generateFakeServerCommand(workingDirectory),
+		exploreModuleCommand(workingDirectory, getEnv),
+		generateFakeServerCommand(workingDirectory, getEnv),
 		testTemplateMutationsCommand(workingDirectory, getEnv, run.mutations),
 		documentationCommand(version),
 	)

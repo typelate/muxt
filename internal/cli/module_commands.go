@@ -18,16 +18,6 @@ import (
 	"github.com/typelate/muxt/internal/load"
 )
 
-// hasMuxtJSONEntry reports whether a muxt.json entry configures dir, the
-// condition under which generate rejects flags there.
-func hasMuxtJSONEntry(dir string) (bool, error) {
-	lookup, err := lookupMuxtJSONEntry(dir)
-	if err != nil {
-		return false, err
-	}
-	return lookup.HasEntry, nil
-}
-
 // parseModuleHeader reads the arguments recorded in a generated file's
 // header into what analysis.NewModule reports about the package. It reports
 // false when they do not parse.
@@ -56,7 +46,7 @@ func parseModuleHeader(args []string) (analysis.PackageConfig, bool) {
 	}, true
 }
 
-func exploreModuleCommand(workingDirectory *string) *cobra.Command {
+func exploreModuleCommand(workingDirectory *string, getEnv func(string) string) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     exploreModuleCommandName,
 		Aliases: []string{"explore"},
@@ -66,7 +56,7 @@ func exploreModuleCommand(workingDirectory *string) *cobra.Command {
 			if err := checkFormat(cmd); err != nil {
 				return err
 			}
-			result, err := analysis.NewModule(*workingDirectory, parseModuleHeader, hasMuxtJSONEntry)
+			result, err := analysis.NewModule(*workingDirectory, parseModuleHeader, configuredHook(getEnv))
 			if err != nil {
 				return err
 			}
@@ -80,7 +70,7 @@ func exploreModuleCommand(workingDirectory *string) *cobra.Command {
 	return cmd
 }
 
-func generateFakeServerCommand(workingDirectory *string) *cobra.Command {
+func generateFakeServerCommand(workingDirectory *string, getEnv func(string) string) *cobra.Command {
 	var outputDir string
 
 	cmd := &cobra.Command{
@@ -103,7 +93,7 @@ This command is intended for exploratory use only.`,
 				packageDir = absoluteDir(*workingDirectory, args[0])
 			}
 
-			mod, err := analysis.NewModule(*workingDirectory, parseModuleHeader, hasMuxtJSONEntry)
+			mod, err := analysis.NewModule(*workingDirectory, parseModuleHeader, configuredHook(getEnv))
 			if err != nil {
 				return err
 			}

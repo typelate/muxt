@@ -413,17 +413,17 @@ func TestSettingFlagsCount(t *testing.T) {
 }
 
 // TestEveryCommandSelectsForTheModuleListing states which muxt.json entries
-// explore-module and generate-fake-server read: only whether a package's
-// directory has one, never whether it is valid. Both run the go command for
-// the module, and neither loads a package here: generate-fake-server is given
-// a directory without a generated file, so it stops after the listing.
+// explore-module and generate-fake-server read: the entry of each package
+// directory that has a generated file, selected as every other command does.
+// An entry for a directory without one is not read. Both run the go command
+// for the module, and neither loads a package here: generate-fake-server is
+// given a directory without a generated file, so it stops after the listing.
 func TestEveryCommandSelectsForTheModuleListing(t *testing.T) {
-	// tasks has a header and an entry that breaks a rule; ghost has an entry
-	// and no directory.
+	// tasks has a header and an entry; ghost has an entry and no directory.
 	const muxtJSON = `{
 	"packages": {
 		"example.com/fieldkit/contacts": {},
-		"example.com/fieldkit/tasks": {"output_routes_func": "1Routes"},
+		"example.com/fieldkit/tasks": {},
 		"example.com/fieldkit/ghost": {}
 	}
 }`
@@ -443,7 +443,7 @@ func TestEveryCommandSelectsForTheModuleListing(t *testing.T) {
 	t.Run("generate-fake-server", func(t *testing.T) {
 		err := commands(base, []string{"generate-fake-server", "fragments"}, func(string) string { return "" }, func() (string, bool) { return "v1.2.3", true }, strings.NewReader(""), new(bytes.Buffer), new(bytes.Buffer), runners{})
 		require.Error(t, err, "generate-fake-server in a directory with no generated file")
-		assert.Equal(t, "no muxt-generated package found at "+filepath.Join(base, "fragments"), err.Error(), "the listing succeeded: the broken entry is not read")
+		assert.Equal(t, "no muxt-generated package found at "+filepath.Join(base, "fragments"), err.Error(), "the listing succeeded")
 	})
 }
 
@@ -451,7 +451,7 @@ func testExploreModule(t *testing.T, base string, args []string) {
 	t.Helper()
 	var out bytes.Buffer
 	err := commands(base, args, func(string) string { return "" }, func() (string, bool) { return "v1.2.3", true }, strings.NewReader(""), &out, new(bytes.Buffer), runners{})
-	require.NoError(t, err, "explore-module with an entry that breaks a rule and one with no directory")
+	require.NoError(t, err, "explore-module with an entry for a missing directory")
 
 	var module struct {
 		Packages []struct {
@@ -470,7 +470,7 @@ func testExploreModule(t *testing.T, base string, args []string) {
 		"contacts": "muxt -C " + filepath.Join(base, "contacts") + " generate",
 		"extra":    "muxt -C " + filepath.Join(base, "extra") + " generate --use-receiver-type=Server",
 		"tasks":    "muxt -C " + filepath.Join(base, "tasks") + " generate",
-	}, got, "generate command of each package: an entry configures its directory, valid or not")
+	}, got, "generate command of each package: an entry configures its directory")
 }
 
 // TestGenerateNamesMissingDirectory states that generate and bare muxt, run

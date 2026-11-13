@@ -2,6 +2,7 @@ package cli
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/typelate/muxt/internal/analysis"
+	"github.com/typelate/muxt/internal/composite"
 	"github.com/typelate/muxt/internal/fakeserver"
 )
 
@@ -206,4 +208,41 @@ func TestExploreModuleGenerateCommandForConfiguredPackage(t *testing.T) {
 		}
 		assert.Equal(t, want, pkg.Commands.Generate, "generate command for %s", pkg.Path)
 	}
+}
+
+// brokenEntryModule is a module whose package a has a generated file and a
+// muxt.json entry that sets two frontends, which generate rejects.
+func brokenEntryModule(t *testing.T) string {
+	t.Helper()
+	wd := newTwoPackageModule(t)
+	_, _, err := execute(t, wd, "-C", "a", "generate")
+	require.NoError(t, err, "generate")
+	writeTestFile(t, wd, "muxt.json", `{"packages": {"example.com/a": {"output_htmx": true, "output_datastar": true}}}`)
+	return wd
+}
+
+func requireInvalidEntry(t *testing.T, err error) {
+	t.Helper()
+	require.Error(t, err, "the command read an entry that breaks a rule")
+	invalid, ok := errors.AsType[*composite.InvalidEntryError](err)
+	require.True(t, ok, "error = %v, want *composite.InvalidEntryError", err)
+	assert.Equal(t, `packages["example.com/a"]`, invalid.Where, "the entry named")
+	assert.True(t, strings.HasPrefix(err.Error(), invalid.Path+": packages[\"example.com/a\"]: "), "error = %q, want the file and the entry first", err.Error())
+}
+
+// TestExploreModuleRejectsInvalidEntry states that a package whose muxt.json
+// entry breaks a rule fails explore-module as it fails every other command in
+// that directory.
+func TestExploreModuleRejectsInvalidEntry(t *testing.T) {
+	wd := brokenEntryModule(t)
+	_, _, err := execute(t, wd, "explore-module", "--format=json")
+	requireInvalidEntry(t, err)
+}
+
+// TestGenerateFakeServerRejectsInvalidEntry is the same for generate-fake-server.
+func TestGenerateFakeServerRejectsInvalidEntry(t *testing.T) {
+	wd := brokenEntryModule(t)
+	_, _, err := execute(t, wd, "generate-fake-server", "a")
+	requireInvalidEntry(t, err)
+	assert.NoDirExists(t, filepath.Join(wd, "cmd", "explore-goland"), "generate-fake-server wrote output")
 }

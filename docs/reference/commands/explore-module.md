@@ -17,7 +17,7 @@ The JSON is `{module, moduleDir, packages}`; each package has:
 | `commands` | Ready-to-run `listRoutes`, `calls`, `callers`, `check`, `generate` command lines; `generate` is `muxt -C DIR generate` for a package a `muxt.json` entry configures, and otherwise carries the flags recorded in the generated file's header |
 | `externalAssets` | `url`, `file`, `line`, `startCol`, `endCol` for each URL in a `.gohtml` file |
 
-Optional keys are absent when empty or false. Text output shows the same, minus the `logger`, `pathPrefix`, and `middleware` booleans, `endCol`, and `moduleDir`.
+A `muxt.json` entry that breaks a rule fails the command, as it fails `generate`. Optional keys are absent when empty or false. Text output shows the same, minus the `logger`, `pathPrefix`, and `middleware` booleans, `endCol`, and `moduleDir`.
 
 ```bash
 muxt explore-module --format=json | jq -r '.packages[].commands.calls' | sh

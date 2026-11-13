@@ -185,3 +185,24 @@ func fallbackSelection(spec jobSpec, dir string, f *composite.File, given []stri
 	config.Verbose = spec.Verbose
 	return selection{File: f, Jobs: []packageJob{{Dir: dir, Config: config, Given: given}}}, nil
 }
+
+// configuredHook is analysis.NewModule's answer to whether a muxt.json entry
+// configures a package directory. It asks selectJobs, as every other command
+// does, so an entry that breaks a rule fails here too instead of passing as
+// configured.
+func configuredHook(getEnv func(string) string) func(dir string) (bool, error) {
+	spec := jobSpec{
+		Name:  exploreModuleCommandName,
+		Scope: itsEntry,
+		Fallback: func(dir string) (generate.RoutesFileConfiguration, error) {
+			return defaultConfiguration(dir, getEnv)
+		},
+	}
+	return func(dir string) (bool, error) {
+		sel, err := selectJobs(spec, dir, nil, getEnv)
+		if err != nil {
+			return false, err
+		}
+		return sel.Jobs[0].File != "", nil
+	}
+}
