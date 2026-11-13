@@ -52,7 +52,6 @@ const (
 	useReceiverTypePackageHelp = `The package path to use when looking for use-receiver-type. If not set, the package in the current directory is used.`
 
 	outputMultipartMaxMemoryHelp = `Maximum memory used by request.ParseMultipartForm in generated handlers. Accepts a human-readable byte size (e.g. 32MB, 64MiB, 1GB).`
-	outputMuxtVersionHelp        = `When false, the muxt version is left out of generated files: the "// muxt version:" header comment is omitted and no MuxtVersion method is added to TemplateData. Defaults to true.`
 
 	inputStaticAssetsDirectoryHelp = `A directory inside the templates package, relative to it, whose files generate embeds and serves under --output-static-assets-path. Requires --output-static-assets-path.`
 	outputStaticAssetsPathHelp     = `The URL path the files of --input-static-assets-directory are served under with GET, such as /static (a trailing / is added). Adds a TemplateRoutePaths method returning it. Requires --input-static-assets-directory.`

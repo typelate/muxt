@@ -81,6 +81,10 @@ This function also receives an argument with a type matching the name given by o
 			Name: outputExportedDefaultIdentifiers, Default: true, Example: "false",
 			Usage: `When false, default generated identifiers (functions, types, interfaces) use lowercase/private names. Does not affect explicit --output-* flag values. Defaults to true.`,
 		}),
+		boolSetting(&c.OutputMuxtVersion, spec[bool]{
+			Name: outputMuxtVersion, Default: true, Example: "false",
+			Usage: `When false, the muxt version is left out of generated files: the "// muxt version:" header comment is omitted and no MuxtVersion method is added to TemplateData. Defaults to true.`,
+		}),
 	}
 }
 
