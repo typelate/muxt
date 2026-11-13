@@ -329,7 +329,7 @@ func TestGeneratePackageNeedsMuxtJSON(t *testing.T) {
 
 	_, err := runCommand(t, root, "generate package workspace")
 
-	require.EqualError(t, err, "no muxt.json found; create one with: muxt generate config")
+	require.EqualError(t, err, "no muxt.json found at or above "+root+" up to the module root; create one with: muxt generate config")
 	_, statErr := os.Stat(filepath.Join(root, "workspace"))
 	assert.ErrorIs(t, statErr, os.ErrNotExist, "no directory is created")
 }

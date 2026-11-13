@@ -28,9 +28,9 @@ type NoFileError struct {
 	Dir string
 }
 
-// Error returns the fix on one line.
+// Error returns the directory searched from and the fix on one line.
 func (e *NoFileError) Error() string {
-	return "no muxt.json found; create one with: muxt generate config"
+	return fmt.Sprintf("no muxt.json found at or above %s up to the module root; create one with: muxt generate config", e.Dir)
 }
 
 // ParseError reports a muxt.json that is not valid JSON. Line and Col are the
