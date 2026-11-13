@@ -73,6 +73,10 @@ This function also receives an argument with a type matching the name given by o
 			Name: outputHTMX, Deprecated: []string{outputHTMXHelpers}, Example: "true",
 			Usage: `Adds HTMX helper methods to TemplateData for setting response headers (HX-Location, HX-Redirect, etc.) and reading request headers (HX-Request, HX-Boosted, etc.).`,
 		}),
+		boolSetting(&c.OutputDatastar, spec[bool]{
+			Name: outputDatastar, Example: "true",
+			Usage: `Frames Server-Sent Events with the Datastar patch protocol: SSETemplateData gains the patch option setters and WriteTo emits datastar-patch-elements events. Mutually exclusive with --output-htmx.`,
+		}),
 	}
 }
 
