@@ -19,7 +19,7 @@ The `go:generate` form, next to the [templates variable](../templates-variable.m
 With no flags, `generate` reads [`muxt.json`](../muxt-json.md): in the file's directory it writes every entry, elsewhere the directory's entry. In a directory an entry configures, a flag is rejected and nothing is written; `-v` and `-C` are accepted:
 
 ```text
-Error: configure generate with fields in /home/me/app/muxt.json instead of flags
+Error: configure generate with fields in /home/me/app/muxt.json instead of flags: --output-htmx (output_htmx)
 ```
 
 | Sub-command | Aliases | Does | Flags |

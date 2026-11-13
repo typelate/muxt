@@ -2,6 +2,7 @@ package composite
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 )
 
@@ -182,17 +183,31 @@ func (e *InvalidEntryError) Unwrap() error {
 // muxt.json entry already configures it. Path is the file's absolute
 // path. Command is the word the person typed for the command that
 // was run, such as "check", so the message is about what they ran. Flags are the
-// flag names given, sorted, without "--".
+// flag names given, sorted, without "--". Keys maps a flag name to the muxt.json
+// key that replaces it; composite does not know the settings, so the caller
+// says, and a deprecated spelling maps to its current key.
 type ConfiguredDirectoryError struct {
 	Path    string
 	Command string
 	Flags   []string
+	Keys    map[string]string
 }
 
-// Error returns the command and the path the person should configure the
-// directory in, on one line.
+// Error returns the command, the path the person should configure the
+// directory in, and each flag given with its key, on one line.
 func (e *ConfiguredDirectoryError) Error() string {
-	return fmt.Sprintf("configure %s with fields in %s instead of flags", e.Command, e.Path)
+	msg := fmt.Sprintf("configure %s with fields in %s instead of flags", e.Command, e.Path)
+	for i, flag := range slices.Sorted(slices.Values(e.Flags)) {
+		sep := ", "
+		if i == 0 {
+			sep = ": "
+		}
+		msg += sep + "--" + flag
+		if key, ok := e.Keys[flag]; ok {
+			msg += " (" + key + ")"
+		}
+	}
+	return msg
 }
 
 // DeprecatedKeyError reports a key in a muxt.json entry that is an old flag

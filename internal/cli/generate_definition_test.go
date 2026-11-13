@@ -371,9 +371,10 @@ func TestGenerateDefRejectsReceiverTypeFlagInConfiguredDirectory(t *testing.T) {
 
 	_, _, err := runCommandArgs(dir, []string{"generate", "def", "GET /foo Index()", "--output-file=index.gohtml", "--use-receiver-type=U"}, runners{})
 
-	_, ok := errors.AsType[*composite.ConfiguredDirectoryError](err)
+	configured, ok := errors.AsType[*composite.ConfiguredDirectoryError](err)
 	require.True(t, ok, "error is a *composite.ConfiguredDirectoryError: %v", err)
-	assert.Equal(t, "configure generate def with fields in "+filepath.Join(dir, "muxt.json")+" instead of flags", err.Error(), "message")
+	assert.Equal(t, "generate def", configured.Command, "command")
+	assert.Equal(t, map[string]string{"use-receiver-type": "use_receiver_type"}, configured.Keys, "keys")
 	assert.NoFileExists(t, filepath.Join(dir, "index.gohtml"))
 }
 
@@ -386,9 +387,10 @@ func TestGenerateDefRejectsReceiverTypeFlagWhenPackageDefaultsNamesOne(t *testin
 
 	_, _, err := runCommandArgs(dir, []string{"generate", "def", "GET /foo Index()", "--output-file=index.gohtml", "--use-receiver-type=U"}, runners{})
 
-	_, ok := errors.AsType[*composite.ConfiguredDirectoryError](err)
+	configured, ok := errors.AsType[*composite.ConfiguredDirectoryError](err)
 	require.True(t, ok, "error is a *composite.ConfiguredDirectoryError: %v", err)
-	assert.Equal(t, "configure generate def with fields in "+filepath.Join(dir, "muxt.json")+" instead of flags", err.Error(), "message")
+	assert.Equal(t, "generate def", configured.Command, "command")
+	assert.Equal(t, map[string]string{"use-receiver-type": "use_receiver_type"}, configured.Keys, "keys")
 	assert.NoFileExists(t, filepath.Join(dir, "index.gohtml"))
 }
 

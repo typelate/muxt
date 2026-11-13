@@ -151,7 +151,7 @@ func TestEntryFlagsRejectedWhereMuxtJSONConfigures(t *testing.T) {
 			require.ErrorAs(t, err, &configured, "error %v", err)
 			assert.Equal(t, filepath.Join(parent, composite.FileName), configured.Path, "path")
 			assert.Equal(t, []string{"use-templates-variable"}, configured.Flags, "flags")
-			assert.Equal(t, "configure "+tt.command+" with fields in "+filepath.Join(parent, composite.FileName)+" instead of flags", err.Error(), "message")
+			assert.Equal(t, tt.command, configured.Command, "command")
 			assert.False(t, ran, "the command ran")
 		})
 	}
@@ -219,7 +219,7 @@ func TestMutationsRejectsFlagsForConfiguredDirectory(t *testing.T) {
 	var configured *composite.ConfiguredDirectoryError
 	require.ErrorAs(t, err, &configured, "error %v", err)
 	assert.Equal(t, []string{"use-templates-variable"}, configured.Flags, "flags")
-	assert.Equal(t, "configure test-template-mutations with fields in "+filepath.Join(parent, composite.FileName)+" instead of flags", err.Error(), "message")
+	assert.Equal(t, "test-template-mutations", configured.Command, "command")
 	assert.False(t, ran, "the command ran")
 }
 

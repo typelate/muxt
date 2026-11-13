@@ -38,7 +38,7 @@ example.com/m
 generating handler for pattern GET /{$}
 wrote template_routes.go: 1 route
 -- want-err.txt --
-Error: configure generate with fields in $WORK/muxt.json instead of flags
+Error: configure generate with fields in $WORK/muxt.json instead of flags: --output-htmx (output_htmx)
 -- server.go --
 package m
 

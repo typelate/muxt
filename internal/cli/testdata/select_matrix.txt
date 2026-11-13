@@ -144,34 +144,34 @@ error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defi
 == entries, no entry for extra: mutations test-template-mutations --dry-run
 mutations dir="extra" templates=[templates]
 == setting flags, contacts has an entry: generate generate -v --use-receiver-type=Server --use-templates-variable=templates
-error: configure generate with fields in $BASE/muxt.json instead of flags
+error: configure generate with fields in $BASE/muxt.json instead of flags: --use-receiver-type (use_receiver_type), --use-templates-variable (use_templates_variable)
 == setting flags, contacts has an entry: muxt --use-receiver-type=Server --use-templates-variable=templates
-error: configure muxt with fields in $BASE/muxt.json instead of flags
+error: configure muxt with fields in $BASE/muxt.json instead of flags: --use-receiver-type (use_receiver_type), --use-templates-variable (use_templates_variable)
 == setting flags, contacts has an entry: check check --use-templates-variable=templates
-error: configure check with fields in $BASE/muxt.json instead of flags
+error: configure check with fields in $BASE/muxt.json instead of flags: --use-templates-variable (use_templates_variable)
 == setting flags, contacts has an entry: calls list-template-calls --use-templates-variable=templates
-error: configure list-template-calls with fields in $BASE/muxt.json instead of flags
+error: configure list-template-calls with fields in $BASE/muxt.json instead of flags: --use-templates-variable (use_templates_variable)
 == setting flags, contacts has an entry: callers list-template-callers --use-templates-variable=templates
-error: configure list-template-callers with fields in $BASE/muxt.json instead of flags
+error: configure list-template-callers with fields in $BASE/muxt.json instead of flags: --use-templates-variable (use_templates_variable)
 == setting flags, contacts has an entry: def generate def GET /things/{id} GetThing(ctx, id) --use-receiver-type=Server
-error: configure generate def with fields in $BASE/muxt.json instead of flags
+error: configure generate def with fields in $BASE/muxt.json instead of flags: --use-receiver-type (use_receiver_type)
 == setting flags, contacts has an entry: mutations test-template-mutations --dry-run --use-templates-variable=templates
-error: configure test-template-mutations with fields in $BASE/muxt.json instead of flags
+error: configure test-template-mutations with fields in $BASE/muxt.json instead of flags: --use-templates-variable (use_templates_variable)
 == setting flags, entry names no receiver: generate generate -v --use-receiver-type=Server --use-templates-variable=templates
-error: configure generate with fields in $BASE/muxt.json instead of flags
+error: configure generate with fields in $BASE/muxt.json instead of flags: --use-receiver-type (use_receiver_type), --use-templates-variable (use_templates_variable)
 == setting flags, entry names no receiver: muxt --use-receiver-type=Server --use-templates-variable=templates
-error: configure muxt with fields in $BASE/muxt.json instead of flags
+error: configure muxt with fields in $BASE/muxt.json instead of flags: --use-receiver-type (use_receiver_type), --use-templates-variable (use_templates_variable)
 == setting flags, entry names no receiver: check check --use-templates-variable=templates
-error: configure check with fields in $BASE/muxt.json instead of flags
+error: configure check with fields in $BASE/muxt.json instead of flags: --use-templates-variable (use_templates_variable)
 == setting flags, entry names no receiver: calls list-template-calls --use-templates-variable=templates
-error: configure list-template-calls with fields in $BASE/muxt.json instead of flags
+error: configure list-template-calls with fields in $BASE/muxt.json instead of flags: --use-templates-variable (use_templates_variable)
 == setting flags, entry names no receiver: callers list-template-callers --use-templates-variable=templates
-error: configure list-template-callers with fields in $BASE/muxt.json instead of flags
+error: configure list-template-callers with fields in $BASE/muxt.json instead of flags: --use-templates-variable (use_templates_variable)
 == setting flags, entry names no receiver: def generate def GET /things/{id} GetThing(ctx, id) --use-receiver-type=Server
 load root="contacts" dirs=["contacts"] patterns=[""]
 error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: no Go package found at $BASE/contacts
 == setting flags, entry names no receiver: mutations test-template-mutations --dry-run --use-templates-variable=templates
-error: configure test-template-mutations with fields in $BASE/muxt.json instead of flags
+error: configure test-template-mutations with fields in $BASE/muxt.json instead of flags: --use-templates-variable (use_templates_variable)
 == setting flags, file directory is not an entry: generate generate -v --use-receiver-type=Server
 generate key="" file="" dir="." receiver="Server" receiver-package="" templates=[templates] output="template_routes.go" htmx=false logger=false verbose=true
 == setting flags, file directory is not an entry: muxt --use-templates-variable=templates
@@ -409,9 +409,9 @@ mutations dir="inventory" templates=[catalogTemplates]
 == .: test-template-mutations --dry-run extra
 mutations dir="extra" templates=[templates]
 == .: test-template-mutations --dry-run inventory --use-templates-variable=catalogTemplates
-error: configure test-template-mutations with fields in $BASE/muxt.json instead of flags
+error: configure test-template-mutations with fields in $BASE/muxt.json instead of flags: --use-templates-variable (use_templates_variable)
 == .: check inventory --use-templates-variable=catalogTemplates
-error: configure check with fields in $BASE/muxt.json instead of flags
+error: configure check with fields in $BASE/muxt.json instead of flags: --use-templates-variable (use_templates_variable)
 == .: check ./...
 error: check takes one package directory, not a pattern: ./...
 == .: check inventory contacts

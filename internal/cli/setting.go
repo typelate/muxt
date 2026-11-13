@@ -357,6 +357,24 @@ func (g givenSettings) spellings() []string {
 	return slices.Compact(all)
 }
 
+// keys maps each spelling that gave a setting to the muxt.json key that
+// replaces it, so a deprecated spelling names the current key.
+func (g givenSettings) keys() map[string]string {
+	keys := map[string]string{}
+	for name, spellings := range g {
+		for _, spelling := range spellings {
+			keys[spelling] = composite.Key(name)
+		}
+	}
+	return keys
+}
+
+// configuredDirectory is the error for g given where the muxt.json at path
+// already has an entry, for the command named command.
+func (g givenSettings) configuredDirectory(path, command string) *composite.ConfiguredDirectoryError {
+	return &composite.ConfiguredDirectoryError{Path: path, Command: command, Flags: g.spellings(), Keys: g.keys()}
+}
+
 // givenFlags returns the settings fs was given, by the spelling typed. A
 // flag that is not a spelling of a setting, such as --verbose, is not
 // configuration and is left out. --templates-variable is filed under the

@@ -418,14 +418,14 @@ func TestGenerateRejectsFlagsForConfiguredDirectory(t *testing.T) {
 	const file = `{"packages": {"example.com/m/workspace": {}}}`
 	require.NoError(t, os.WriteFile(filepath.Join(parent, composite.FileName), []byte(file), 0o644))
 
-	called, err := generateFailureOfLine(t, workspace, "generate --output-htmx")
+	called, err := generateFailureOfLine(t, workspace, "generate --templates-variable=x --output-htmx")
 
 	var configured *composite.ConfiguredDirectoryError
 	require.ErrorAs(t, err, &configured, "error %v", err)
 	path := filepath.Join(parent, composite.FileName)
 	assert.Equal(t, path, configured.Path, "path")
-	assert.Equal(t, []string{"output-htmx"}, configured.Flags, "flags")
-	assert.Equal(t, "configure generate with fields in "+path+" instead of flags", err.Error(), "message")
+	assert.Equal(t, []string{"output-htmx", "templates-variable"}, configured.Flags, "flags")
+	assert.Equal(t, "configure generate with fields in "+path+" instead of flags: --output-htmx (output_htmx), --templates-variable (use_templates_variable)", err.Error(), "message")
 	assert.False(t, called, "generate runner called")
 }
 

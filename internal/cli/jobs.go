@@ -102,7 +102,7 @@ func selectJobs(spec jobSpec, dir string, flags *pflag.FlagSet, getEnv func(stri
 	f := lookup.File
 	if len(given) > 0 {
 		if lookup.HasEntry {
-			return selection{}, &composite.ConfiguredDirectoryError{Path: f.Name, Command: spec.Name, Flags: given.spellings()}
+			return selection{}, given.configuredDirectory(f.Name, spec.Name)
 		}
 		return fallbackSelection(spec, dir, f, given)
 	}

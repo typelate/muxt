@@ -12,7 +12,6 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/tools/txtar"
 
-	"github.com/typelate/muxt/internal/composite"
 	"github.com/typelate/muxt/internal/generate"
 	"github.com/typelate/muxt/internal/muxt"
 )
@@ -70,7 +69,7 @@ The method stub it prints is a placeholder to rewrite: its result type is any, i
 				// in a configured directory it only fills a receiver type the
 				// resolved entry, package_defaults included, leaves unnamed.
 				if config.ReceiverType != "" {
-					return &composite.ConfiguredDirectoryError{Path: job.File, Command: spec.Name, Flags: []string{useReceiverType}}
+					return givenSettings{useReceiverType: {useReceiverType}}.configuredDirectory(job.File, spec.Name)
 				}
 				config.ReceiverType = receiverType
 			}

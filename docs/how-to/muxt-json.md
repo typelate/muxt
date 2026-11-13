@@ -102,7 +102,7 @@ muxt generate --output-htmx
 ```
 
 ```text
-Error: configure generate with fields in /home/me/app/muxt.json instead of flags
+Error: configure generate with fields in /home/me/app/muxt.json instead of flags: --output-htmx (output_htmx)
 ```
 
 Change the entry. `-v` and `-C` are still accepted.
