@@ -1,5 +1,7 @@
 {{if .Overrides}}Overrides:
-{{range .Overrides}}  - {{.Name}}: {{.Replaced}} replaced by {{.Kept}}
+{{range .Overrides}}  - {{.Name}}
+      replaced: {{.Replaced}}
+      kept:     {{.Kept}}
 {{end}}
 {{end}}{{if .Receiver}}
 Receiver Type: {{.Receiver}}

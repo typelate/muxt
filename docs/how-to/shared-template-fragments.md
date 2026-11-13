@@ -73,7 +73,9 @@ Define the same name in the package's own file. The later definition wins, as in
 
 ```text
 Overrides:
-  - layout: ../fragments/layout.gohtml:1:1 replaced by over.gohtml:1:1
+  - layout
+      replaced: /home/me/app/fragments/layout.gohtml:1:1
+      kept:     /home/me/app/workspace/over.gohtml:1:1
 ```
 
 `muxt check` never reports a shared template as unused.

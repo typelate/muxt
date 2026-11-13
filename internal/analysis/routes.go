@@ -61,16 +61,11 @@ func (result *Routes) WriteTo(w io.Writer) (int64, error) {
 	return io.Copy(w, &buf)
 }
 
-func sitePosition(base PathBase, site source.Site) string {
-	position := site.Position
-	position.Filename = base.Relative(position.Filename)
-	return position.String()
-}
-
 // NewRoutes lists each templates variable's route definitions and
 // functions, and the receiver's methods when a receiver type was named. Files
-// in the overrides are named relative to base.
-func NewRoutes(pkg source.Package, receiver *types.Named, base PathBase) ([]*Routes, error) {
+// in the overrides are named by the absolute path the templates carry, so an
+// editor can open them.
+func NewRoutes(pkg source.Package, receiver *types.Named) ([]*Routes, error) {
 	var results []*Routes
 
 	for _, tv := range pkg.Variables {
@@ -108,8 +103,8 @@ func NewRoutes(pkg source.Package, receiver *types.Named, base PathBase) ([]*Rou
 		for _, o := range tv.Overrides {
 			result.Overrides = append(result.Overrides, Override{
 				Name:     o.Name,
-				Replaced: sitePosition(base, o.Replaced),
-				Kept:     sitePosition(base, o.Kept),
+				Replaced: o.Replaced.Position.String(),
+				Kept:     o.Kept.Position.String(),
 			})
 		}
 

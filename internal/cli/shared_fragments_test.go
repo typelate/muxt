@@ -75,6 +75,16 @@ func runMuxt(t *testing.T, dir string, args ...string) (output string, err error
 	return out.String(), err
 }
 
+// resolvedDir returns dir with symlinks resolved, the form muxt prints: the go
+// command reports file paths that way, which on macOS turns /var into
+// /private/var.
+func resolvedDir(t *testing.T, dir string) string {
+	t.Helper()
+	resolved, err := filepath.EvalSymlinks(dir)
+	require.NoError(t, err, "resolve %s", dir)
+	return resolved
+}
+
 // TestGenerateReadsAnotherPackagesEmbedFS states that muxt generate succeeds in
 // a package whose templates variable parses another package's exported
 // embed.FS before its own files.
@@ -562,8 +572,8 @@ func TestCheckTypeChecksTheOverridingDefinition(t *testing.T) {
 
 // TestRoutesListsOverriddenSharedNames states that the bare listing names, after
 // the Configuration section and before the routes, each name defined in a
-// shared file and again later in the chain, with both sites relative to the
-// working directory, and that it says which one the chain kept. With nothing
+// shared file and again later in the chain, with both sites by absolute path
+// on a line each, and that it says which one the chain kept. With nothing
 // overridden the section is absent.
 func TestRoutesListsOverriddenSharedNames(t *testing.T) {
 	if testing.Short() {
@@ -576,27 +586,27 @@ func TestRoutesListsOverriddenSharedNames(t *testing.T) {
 	}{
 		{
 			name: "own file after the shared files",
-			want: "Overrides:\n  - footer: ../fragments/footer.gohtml:1:1 replaced by page.gohtml:2:1\n\nTemplate Routes:",
+			want: "Overrides:\n  - footer\n      replaced: %[1]s/fragments/footer.gohtml:1:1\n      kept:     %[1]s/workspace/page.gohtml:2:1\n\nTemplate Routes:",
 		},
 		{
 			name:       "shared files after the own file",
 			sharedLast: true,
-			want:       "Overrides:\n  - footer: page.gohtml:2:1 replaced by ../fragments/footer.gohtml:1:1\n\nTemplate Routes:",
+			want:       "Overrides:\n  - footer\n      replaced: %[1]s/workspace/page.gohtml:2:1\n      kept:     %[1]s/fragments/footer.gohtml:1:1\n\nTemplate Routes:",
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			dir := overriddenFooter(t, tt.sharedLast)
+			dir := resolvedDir(t, overriddenFooter(t, tt.sharedLast))
 
 			output, err := runMuxt(t, filepath.Join(dir, "workspace"))
 
 			require.NoError(t, err, "muxt: %s", output)
-			assert.Contains(t, output, tt.want, "muxt output")
+			assert.Contains(t, output, fmt.Sprintf(tt.want, filepath.ToSlash(dir)), "muxt output")
 			assert.Less(t, strings.Index(output, "Configuration:"), strings.Index(output, "Overrides:"), "Overrides come after Configuration")
 		})
 	}
 
 	t.Run("json", func(t *testing.T) {
-		dir := overriddenFooter(t, false)
+		dir := resolvedDir(t, overriddenFooter(t, false))
 
 		output, err := runMuxt(t, filepath.Join(dir, "workspace"), "--format", "json")
 
@@ -607,8 +617,8 @@ func TestRoutesListsOverriddenSharedNames(t *testing.T) {
 		require.NoError(t, json.Unmarshal([]byte(output), &listing), "muxt output: %s", output)
 		require.Len(t, listing.Overrides, 1, "Overrides")
 		assert.Equal(t, "footer", listing.Overrides[0].Name, "Name")
-		assert.Equal(t, "../fragments/footer.gohtml:1:1", listing.Overrides[0].Replaced, "Replaced")
-		assert.Equal(t, "page.gohtml:2:1", listing.Overrides[0].Kept, "Kept")
+		assert.Equal(t, filepath.Join(dir, "fragments", "footer.gohtml")+":1:1", listing.Overrides[0].Replaced, "Replaced")
+		assert.Equal(t, filepath.Join(dir, "workspace", "page.gohtml")+":2:1", listing.Overrides[0].Kept, "Kept")
 	})
 
 	t.Run("none", func(t *testing.T) {
@@ -633,10 +643,7 @@ func TestCheckNamesSharedFileByAbsolutePath(t *testing.T) {
 		"fragments/layout.gohtml": `{{define "layout"}}<main>{{.Nope}}</main>{{end}}`,
 		"workspace/own.gohtml":    `{{define "orphan"}}<i></i>{{end}}`,
 	})
-	// The go command prints the directory with symlinks resolved, which on
-	// macOS turns /var into /private/var.
-	dir, err := filepath.EvalSymlinks(dir)
-	require.NoError(t, err, "resolve module directory")
+	dir = resolvedDir(t, dir)
 	workspace := filepath.Join(dir, "workspace")
 	output, err := runMuxt(t, workspace, "generate", "--use-receiver-type=T")
 	require.NoError(t, err, "generate: %s", output)

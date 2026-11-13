@@ -18,10 +18,6 @@ type routesJob struct {
 	generateJob
 	// Report is the Configuration section the listing starts with.
 	Report configurationReport
-
-	// WorkingDirectory is where muxt was started, after -C. The listing
-	// names template files relative to it.
-	WorkingDirectory string
 }
 
 // newRoutesJob is the job for a generateJob, with the report of its
@@ -67,7 +63,6 @@ func routesJobs(wd string, flags *pflag.FlagSet, flagConfig analysis.Definitions
 				if listing[i], err = newRoutesJob(f, nil, job); err != nil {
 					return nil, err
 				}
-				listing[i].WorkingDirectory = wd
 			}
 			return listing, nil
 		}
@@ -86,7 +81,6 @@ func routesJobs(wd string, flags *pflag.FlagSet, flagConfig analysis.Definitions
 	if err != nil {
 		return nil, err
 	}
-	job.WorkingDirectory = wd
 	return []routesJob{job}, nil
 }
 
@@ -121,8 +115,7 @@ func routesRunner(loadPackages packageLoader) func(*cobra.Command, []routesJob) 
 				printMultiLineError(cmd, err)
 				return err
 			}
-			root, _ := moduleRoot(job.WorkingDirectory)
-			results, err := analysis.NewRoutes(pkg, receiver, analysis.PathBase{Dir: job.WorkingDirectory, ModuleRoot: root})
+			results, err := analysis.NewRoutes(pkg, receiver)
 			if err != nil {
 				printMultiLineError(cmd, err)
 				return err

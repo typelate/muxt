@@ -40,7 +40,7 @@ Template Routes:
 Template Functions:
 ```
 
-When a name is defined in another package's files and again later in the chain, an `Overrides:` section follows `Configuration:`: `- footer: ../fragments/layout.gohtml:3:9 replaced by page.gohtml:1:9`. Paths are relative to the working directory. `--format json` has an `Overrides` array of `{Name, Replaced, Kept}`.
+When a name is defined in another package's files and again later in the chain, an `Overrides:` section follows `Configuration:`: one entry per name, with the absolute `file:line:col` of the define clause dropped and the one kept on lines of their own: `replaced: /home/me/app/fragments/layout.gohtml:3:9`, `kept:     /home/me/app/workspace/page.gohtml:1:9`. `--format json` has an `Overrides` array of `{Name, Replaced, Kept}`.
 
 ## Flags
 
