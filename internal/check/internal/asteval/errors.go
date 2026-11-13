@@ -1,6 +1,7 @@
 package asteval
 
 import (
+	"errors"
 	"fmt"
 	"go/token"
 	"path/filepath"
@@ -98,3 +99,31 @@ type NotEmbedFSError struct {
 func (e NotEmbedFSError) Error() string {
 	return fmt.Sprintf("%s: %s.%s is a %s, not an embed.FS; ParseFS reads an exported embed.FS variable of another package", e.Position, e.Package, e.Name, e.Type)
 }
+
+// SharedParseError is a parse error in a file of another package's embed.FS.
+// The parser names a file by its base name, which reads as if the file were in
+// the package that consumes it, so this names it by absolute path, the way
+// type errors in the same file are reported.
+type SharedParseError struct {
+	// Filename is the file's absolute path.
+	Filename string
+
+	// Line is the line the parser reported.
+	Line int
+
+	// Err is the parse error. Unwrap reaches it, and the *template.ParseError
+	// inside it.
+	Err error
+}
+
+// Error is one line: the file and line, then what the parser said.
+func (e SharedParseError) Error() string {
+	cause := e.Err
+	if inner := errors.Unwrap(cause); inner != nil {
+		cause = inner
+	}
+	return fmt.Sprintf("%s:%d: %s", e.Filename, e.Line, cause)
+}
+
+// Unwrap returns the parse error.
+func (e SharedParseError) Unwrap() error { return e.Err }

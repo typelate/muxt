@@ -3,6 +3,7 @@ package asteval
 import (
 	"bytes"
 	"cmp"
+	"errors"
 	"fmt"
 	"go/ast"
 	"go/format"
@@ -431,6 +432,10 @@ func parseFiles(t *template.Template[*types.Signature], text bool, fm map[string
 		treeSet := make(map[string]*template.Tree)
 		tree, err := template.ParseTree(filepath.ToSlash(absoluteFilename), templateName, s, treeSet, options)
 		if err != nil {
+			var parseErr *template.ParseError
+			if pkgPath != "" && errors.As(err, &parseErr) {
+				return nil, SharedParseError{Filename: absoluteFilename, Line: parseErr.Position().Line, Err: err}
+			}
 			return nil, err
 		}
 		if meta != nil {
