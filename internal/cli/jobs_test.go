@@ -41,6 +41,7 @@ func TestSelectJobs(t *testing.T) {
 		wantKeys  []string // "" is a Fallback job
 		wantGiven []string
 		wantFile  bool
+		wantKeyed bool // the run lists each package under its key
 		wantErr   func(error) bool
 	}{
 		{name: "row 1 a directory that is not one reads nothing, whatever the muxt.json lists", spec: reads, muxtJSON: fieldkitEntries, dir: "missing", wantKeys: []string{""}},
@@ -63,8 +64,10 @@ func TestSelectJobs(t *testing.T) {
 		{name: "row 5 listing", spec: lists, muxtJSON: fieldkitEmpty, dir: ".", wantKeys: []string{""}, wantFile: true},
 		{name: "row 5 check", spec: reads, muxtJSON: fieldkitEmpty, dir: ".", wantKeys: []string{""}, wantFile: true},
 
-		{name: "row 6 generate takes every entry", spec: writes, muxtJSON: fieldkitEntries, dir: ".", wantKeys: []string{contacts, inventory, tasks}, wantFile: true},
-		{name: "row 6 listing takes every entry", spec: lists, muxtJSON: fieldkitEntries, dir: ".", wantKeys: []string{contacts, inventory, tasks}, wantFile: true},
+		{name: "row 6 generate takes every entry", spec: writes, muxtJSON: fieldkitEntries, dir: ".", wantKeys: []string{contacts, inventory, tasks}, wantFile: true, wantKeyed: true},
+		{name: "row 6 listing takes every entry", spec: lists, muxtJSON: fieldkitEntries, dir: ".", wantKeys: []string{contacts, inventory, tasks}, wantFile: true, wantKeyed: true},
+		{name: "row 6 listing of a file with one entry is keyed as with two", spec: lists, muxtJSON: `{"packages": {"example.com/fieldkit/contacts": {}}}`, dir: ".", wantKeys: []string{contacts}, wantFile: true, wantKeyed: true},
+		{name: "row 6 generate of a file with one entry is keyed as with two", spec: writes, muxtJSON: `{"packages": {"example.com/fieldkit/contacts": {}}}`, dir: ".", wantKeys: []string{contacts}, wantFile: true, wantKeyed: true},
 		{name: "row 6 check without an entry for the file's directory", spec: reads, muxtJSON: fieldkitEntries, dir: ".", wantKeys: []string{""}, wantFile: true},
 		{name: "row 6 check with an entry for the file's directory", spec: reads, muxtJSON: fieldkitWithRoot, dir: ".", wantKeys: []string{root}, wantFile: true},
 		{name: "row 6 check validates only its own entry", spec: reads, muxtJSON: fieldkitStale, dir: ".", wantKeys: []string{""}, wantFile: true},
@@ -110,6 +113,9 @@ func TestSelectJobs(t *testing.T) {
 				assert.Equal(t, job.Key == "", sel.EntryFile(job) == nil, "EntryFile(%q) is nil only for a fallback job", job.Key)
 			}
 			assert.Equal(t, tc.wantKeys, keys, "job keys")
+			for _, job := range sel.Jobs {
+				assert.Equal(t, tc.wantKeyed, job.Keyed, "job %q Keyed", job.Key)
+			}
 			assert.Equal(t, tc.wantGiven, sel.Jobs[0].Given.spellings(), "given flags")
 			assert.Equal(t, tc.wantFile, sel.File != nil, "muxt.json read")
 			if tc.wantKeys[0] == "" {

@@ -40,7 +40,11 @@ Template Routes:
 Template Functions:
 ```
 
-When a name is defined in another package's files and again later in the chain, an `Overrides:` section follows `Configuration:`: one entry per name, with the absolute `file:line:col` of the last define clause dropped from a package other than the kept one's, and of the one kept, which renders, on lines of their own: `replaced: /home/me/app/fragments/layout.gohtml:3:9`, `kept:     /home/me/app/workspace/page.gohtml:1:9`. `--format json` has an `Overrides` array of `{Name, Replaced, Kept}`. Over several `muxt.json` entries, `--format json` is one array of each package's object, with its `Key`; over one package it is the object alone.
+When a name is defined in another package's files and again later in the chain, an `Overrides:` section follows `Configuration:`: one entry per name, with the absolute `file:line:col` of the last define clause dropped from a package other than the kept one's, and of the one kept, which renders, on lines of their own: `replaced: /home/me/app/fragments/layout.gohtml:3:9`, `kept:     /home/me/app/workspace/page.gohtml:1:9`. `--format json` has an `Overrides` array of `{Name, Replaced, Kept}`.
+
+### Keyed output
+
+A run with no flags in the directory of a [`muxt.json`](muxt-json.md) is keyed, however many entries the file has: `check`, `list-template-calls`, `list-template-callers`, bare `muxt` and `generate -v` print each package's key on a line of its own ahead of its output, and `--format json` is one array of objects with a `Key`. A run in a package directory, or one configured by flags, prints no key, and its JSON is the object alone.
 
 ## Flags
 

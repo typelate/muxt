@@ -104,7 +104,7 @@ func TestGenerateEveryMuxtJSONEntryLoadsOnce(t *testing.T) {
 
 // TestGenerateEveryMuxtJSONEntryNamesEachDirectory states that with -v a run
 // over several entries prints each entry's key before that directory's
-// output, and a run over one entry prints no key.
+// output, and a run in one package directory prints no key.
 func TestGenerateEveryMuxtJSONEntryNamesEachDirectory(t *testing.T) {
 	if testing.Short() {
 		t.Skip("loads packages with the go command")
@@ -120,7 +120,22 @@ func TestGenerateEveryMuxtJSONEntryNamesEachDirectory(t *testing.T) {
 	stdout, _, err = generateWithLoader(t, filepath.Join(dir, "workspace"), "-v")
 
 	require.NoError(t, err, "generate -v in workspace")
-	assert.Equal(t, "generating handler for pattern GET /Space\nwrote template_routes.go: 1 route\n", stdout, "stdout of a run over one entry")
+	assert.Equal(t, "generating handler for pattern GET /Space\nwrote template_routes.go: 1 route\n", stdout, "stdout of a run in one package directory")
+}
+
+// TestGenerateOneMuxtJSONEntryNamesItsDirectory states that with -v a run in
+// the directory of a muxt.json with one entry prints that entry's key, as it
+// does for two.
+func TestGenerateOneMuxtJSONEntryNamesItsDirectory(t *testing.T) {
+	if testing.Short() {
+		t.Skip("loads packages with the go command")
+	}
+	dir := entryModule(t, map[string]string{".": "Root"}, nil)
+
+	stdout, _, err := generateWithLoader(t, dir, "-v")
+
+	require.NoError(t, err, "generate -v")
+	assert.Equal(t, "example.com/m\ngenerating handler for pattern GET /Root\nwrote template_routes.go: 1 route\n", stdout, "stdout")
 }
 
 // withMissingVariableEntry rewrites the muxt.json of dir, a module entryModule

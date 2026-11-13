@@ -32,7 +32,7 @@ func generateRunner(loadPackages packageLoader) func(*cobra.Command, []packageJo
 		if len(jobs) == 0 {
 			return nil
 		}
-		several := len(jobs) > 1
+		several := jobs[0].Keyed
 		// What was written is for -v; a run that has nothing to say is silent.
 		stdout := cmd.OutOrStdout()
 		verbose := jobs[0].Config.Verbose
@@ -63,7 +63,7 @@ func generateRunner(loadPackages packageLoader) func(*cobra.Command, []packageJo
 				}
 				// One package has no other entry to name, so it explains
 				// itself the way every later failure of it does.
-				if !several {
+				if len(jobs) == 1 {
 					printMultiLineError(cmd, err)
 					return err
 				}

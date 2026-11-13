@@ -129,6 +129,36 @@ func TestCallsListsEveryMuxtJSONEntryUnderItsKey(t *testing.T) {
 	}
 }
 
+// TestOneMuxtJSONEntryIsKeyedAsTwoAre states that a flagless run in the
+// directory of a muxt.json with one entry prints the entry's key line in text
+// and writes the keyed array with --format json, as it does for two entries,
+// so a script reading the output does not change when an entry is added.
+func TestOneMuxtJSONEntryIsKeyedAsTwoAre(t *testing.T) {
+	if testing.Short() {
+		t.Skip("loads packages with the go command")
+	}
+	dir := generatedEntryModule(t, map[string]string{".": "Root"}, nil)
+
+	stdout, _, _, err := analyzeWithLoader(t, dir, "check")
+	require.NoError(t, err, "muxt check")
+	assert.Regexp(t, `\A`+regexp.QuoteMeta(testModule)+`\nok: \d+ templates?\n\z`, stdout, "check stdout")
+
+	for _, command := range []string{"list-template-calls", "list-template-callers"} {
+		t.Run(command, func(t *testing.T) {
+			stdout, _, _, err := analyzeWithLoader(t, dir, command)
+			require.NoError(t, err, "muxt %s", command)
+			assert.True(t, strings.HasPrefix(stdout, testModule+"\n"), "key line ahead of the listing in\n%s", stdout)
+
+			stdout, _, _, err = analyzeWithLoader(t, dir, command, "--format", "json")
+			require.NoError(t, err, "muxt %s --format json", command)
+			var listings []struct{ Key string }
+			require.NoError(t, json.Unmarshal([]byte(stdout), &listings), "output:\n%s", stdout)
+			require.Len(t, listings, 1, "output:\n%s", stdout)
+			assert.Equal(t, testModule, listings[0].Key, "key")
+		})
+	}
+}
+
 // TestListingsStopAtTheFirstFailingMuxtJSONEntry states that a listing over
 // several entries fails naming the entry that has no templates variable, with
 // no "fail: " the way check says it.

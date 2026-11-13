@@ -158,11 +158,12 @@ func TestRoutesPrintsConfigurationBeforeRoutes(t *testing.T) {
 
 	text, _, err := listWithLoader(t, dir)
 	require.NoError(t, err, "muxt")
-	assert.Regexp(t, `(?s)\AConfiguration:\n.*\n\n.*Template Routes:\n  - GET /Root RootPage\(\)\n`, text, "text output")
+	assert.Regexp(t, `(?s)\Aexample\.com/m\nConfiguration:\n.*\n\n.*Template Routes:\n  - GET /Root RootPage\(\)\n`, text, "text output")
 
 	asJSON, _, err := listWithLoader(t, dir, "--format", "json")
 	require.NoError(t, err, "muxt --format json")
-	var listing struct {
+	var listings []struct {
+		Key           string
 		Definitions   []struct{ String string }
 		Configuration []struct {
 			Source   string
@@ -172,7 +173,10 @@ func TestRoutesPrintsConfigurationBeforeRoutes(t *testing.T) {
 			}
 		}
 	}
-	require.NoError(t, json.Unmarshal([]byte(asJSON), &listing), "output:\n%s", asJSON)
+	require.NoError(t, json.Unmarshal([]byte(asJSON), &listings), "output:\n%s", asJSON)
+	require.Len(t, listings, 1, "one entry is an array of one:\n%s", asJSON)
+	listing := listings[0]
+	assert.Equal(t, "example.com/m", listing.Key, "key")
 	require.Len(t, listing.Definitions, 1, "definitions")
 	assert.Equal(t, "GET /Root RootPage()", listing.Definitions[0].String, "definition")
 	values := make(map[string]any)

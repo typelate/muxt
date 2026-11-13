@@ -62,6 +62,12 @@ type packageJob struct {
 	Dir    string
 	Config generate.RoutesFileConfiguration
 	Given  givenSettings
+	// Keyed is set on every job of a run that read every entry of the muxt.json
+	// in its own directory, however many entries it holds. Such a run names each
+	// package by its key; a run in one package directory, or one that flags
+	// configured, does not. Choosing by the entry count instead would change
+	// the output shape of a run when an entry is added.
+	Keyed bool
 }
 
 // selection is what selectJobs chose.
@@ -116,6 +122,7 @@ func selectJobs(spec jobSpec, dir string, flags *pflag.FlagSet, getEnv func(stri
 		return selection{}, fmt.Errorf("muxt.json entry for %s: %w", f.Dir, err)
 	}
 	keys := []string{lookup.Key}
+	keyed := false
 	if lookup.Key != ownKey {
 		if !lookup.HasEntry {
 			if spec.RequireEntry {
@@ -141,6 +148,8 @@ func selectJobs(spec jobSpec, dir string, flags *pflag.FlagSet, getEnv func(stri
 				return fallbackSelection(spec, dir, f, nil)
 			}
 			keys = []string{lookup.Key}
+		} else {
+			keyed = true
 		}
 	}
 	version := spec.Version
@@ -165,7 +174,7 @@ func selectJobs(spec jobSpec, dir string, flags *pflag.FlagSet, getEnv func(stri
 			return selection{}, &composite.InvalidEntryError{Path: f.Name, Where: fmt.Sprintf("packages[%q]", key), Err: err}
 		}
 		config.Verbose = spec.Verbose
-		jobs = append(jobs, packageJob{File: f.Name, Key: key, Dir: entryDir, Config: config})
+		jobs = append(jobs, packageJob{File: f.Name, Key: key, Dir: entryDir, Config: config, Keyed: keyed})
 	}
 	return selection{File: f, Jobs: jobs}, nil
 }
