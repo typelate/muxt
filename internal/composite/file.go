@@ -141,15 +141,17 @@ func (f *File) Save() error {
 	if f.Packages == nil {
 		f.Packages = map[string]Entry{}
 	}
-	out, err := f.normalized()
-	if err != nil {
-		return fmt.Errorf("encoding %s: %w", f.Name, err)
+	// An entry that is nil would be written as null, which reads back as {}.
+	for key, e := range f.Packages {
+		if e == nil {
+			f.Packages[key] = Entry{}
+		}
 	}
 	var buf bytes.Buffer
 	enc := json.NewEncoder(&buf)
 	enc.SetEscapeHTML(false)
 	enc.SetIndent("", "\t")
-	if err := enc.Encode(out); err != nil {
+	if err := enc.Encode(f); err != nil {
 		return fmt.Errorf("encoding %s: %w", f.Name, err)
 	}
 	tmp, err := os.CreateTemp(f.Dir, FileName+".*")
@@ -172,92 +174,6 @@ func (f *File) Save() error {
 		return fmt.Errorf("writing %s: %w", f.Name, err)
 	}
 	return nil
-}
-
-// savedFile is what Save writes. package_defaults is omitzero, not omitempty,
-// so defaults that held only empty lists are still written as {}: the entry
-// struct the values were once typed as was not zero then.
-type savedFile struct {
-	Defaults Entry            `json:"package_defaults,omitzero"`
-	Packages map[string]Entry `json:"packages"`
-}
-
-// normalized is f with each value spelled the way Save has always written it:
-// re-encoded without HTML escaping, and an empty list left out, so an entry
-// that spelled one starts inheriting the default again. The values were typed
-// once, as an entry struct's fields, and this keeps what a rewrite writes the
-// same until a later change writes each value as the file spelled it.
-func (f *File) normalized() (*savedFile, error) {
-	out := &savedFile{Packages: make(map[string]Entry, len(f.Packages))}
-	if len(f.Defaults) > 0 {
-		defaults, err := normalizedEntry(f.Defaults)
-		if err != nil {
-			return nil, fmt.Errorf("package_defaults: %w", err)
-		}
-		out.Defaults = defaults
-	}
-	var err error
-	for key, e := range f.Packages {
-		if out.Packages[key], err = normalizedEntry(e); err != nil {
-			return nil, fmt.Errorf("packages[%q]: %w", key, err)
-		}
-	}
-	return out, nil
-}
-
-// normalizedEntry is normalized for one entry. It is never nil, so an empty
-// entry is written as {}.
-func normalizedEntry(e Entry) (Entry, error) {
-	out := Entry{}
-	for key, value := range e {
-		v, keep, err := normalizedValue(value)
-		if err != nil {
-			return nil, fmt.Errorf("key %q: %w", key, err)
-		}
-		if keep {
-			out[key] = v
-		}
-	}
-	return out, nil
-}
-
-// normalizedValue re-encodes a string, a boolean or a list of strings, the
-// three JSON types an entry holds. keep is false for null and an empty list.
-func normalizedValue(value json.RawMessage) (v json.RawMessage, keep bool, err error) {
-	if isNull(value) {
-		return nil, false, nil
-	}
-	var s string
-	if json.Unmarshal(value, &s) == nil {
-		v, err = encodeWithoutEscaping(s)
-		return v, err == nil, err
-	}
-	var b bool
-	if json.Unmarshal(value, &b) == nil {
-		v, err = encodeWithoutEscaping(b)
-		return v, err == nil, err
-	}
-	var list []string
-	if json.Unmarshal(value, &list) == nil {
-		if len(list) == 0 {
-			return nil, false, nil
-		}
-		v, err = encodeWithoutEscaping(list)
-		return v, err == nil, err
-	}
-	return value, true, nil
-}
-
-// encodeWithoutEscaping is json.Marshal with HTML escaping off, as Save
-// writes the file.
-func encodeWithoutEscaping[T any](v T) (json.RawMessage, error) {
-	var buf bytes.Buffer
-	enc := json.NewEncoder(&buf)
-	enc.SetEscapeHTML(false)
-	if err := enc.Encode(v); err != nil {
-		return nil, fmt.Errorf("encoding value: %w", err)
-	}
-	return bytes.TrimSpace(buf.Bytes()), nil
 }
 
 // isNull reports whether value is the JSON null.

@@ -105,8 +105,9 @@ func TestGeneratePackageRecordsToday(t *testing.T) {
 }
 
 // TestGeneratePackageRewritesOtherEntries states what rewriting the file does
-// to what it already holds: a list the file spelled empty is dropped from its
-// entry, and an empty package_defaults is not written.
+// to what it already holds: a list the file spelled empty stays in its entry,
+// so the entry still does not inherit the default's list, and an empty
+// package_defaults is not written.
 func TestGeneratePackageRewritesOtherEntries(t *testing.T) {
 	const file = `{"package_defaults": {}, "packages": {"example.com/m/a": {"output_routes_func": "Root", "use_templates_variable": []}}}`
 	root := moduleDir(t)
@@ -118,16 +119,15 @@ func TestGeneratePackageRewritesOtherEntries(t *testing.T) {
 	require.NoError(t, err)
 	got, err := os.ReadFile(filepath.Join(root, composite.FileName))
 	require.NoError(t, err)
-	const want = "{\n\t\"packages\": {\n\t\t\"example.com/m/a\": {\n\t\t\t\"output_routes_func\": \"Root\"\n\t\t},\n\t\t\"example.com/m/b\": {\n\t\t\t\"use_receiver_type\": \"T\"\n\t\t}\n\t}\n}\n"
+	const want = "{\n\t\"packages\": {\n\t\t\"example.com/m/a\": {\n\t\t\t\"output_routes_func\": \"Root\",\n\t\t\t\"use_templates_variable\": []\n\t\t},\n\t\t\"example.com/m/b\": {\n\t\t\t\"use_receiver_type\": \"T\"\n\t\t}\n\t}\n}\n"
 	assert.Equal(t, want, string(got), "muxt.json")
 }
 
 // TestGeneratePackageKeepsDefaultsThatHeldOnlyAnEmptyList states that a
-// package_defaults holding only an empty list is rewritten as {}, not dropped:
-// the list goes, the object it was in stays.
+// package_defaults holding only an empty list is rewritten with the list.
 func TestGeneratePackageKeepsDefaultsThatHeldOnlyAnEmptyList(t *testing.T) {
 	got := muxtJSONAfter(t, `{"package_defaults": {"use_templates_variable": []}, "packages": {}}`, "generate package a")
 
-	const want = "{\n\t\"package_defaults\": {},\n\t\"packages\": {\n\t\t\"example.com/m/a\": {\n\t\t\t\"use_receiver_type\": \"T\"\n\t\t}\n\t}\n}\n"
+	const want = "{\n\t\"package_defaults\": {\n\t\t\"use_templates_variable\": []\n\t},\n\t\"packages\": {\n\t\t\"example.com/m/a\": {\n\t\t\t\"use_receiver_type\": \"T\"\n\t\t}\n\t}\n}\n"
 	assert.Equal(t, want, got, "muxt.json")
 }
