@@ -32,8 +32,8 @@ type File struct {
 	// moduleDir the directory holding it. An import path in the module is
 	// the module path joined with a directory below moduleDir.
 	module, moduleDir string
-	// Name is the file's path relative to the working directory the search
-	// started from. Errors name the file this way.
+	// Name is the file's absolute path, the string an editor can open.
+	// Errors name the file this way.
 	Name string `json:"-"`
 	// Defaults holds the keys every entry takes unless the entry sets them
 	// itself. It is a separate object so one shared value is written once.
@@ -73,13 +73,7 @@ func Find(wd string, deprecated map[string]string) (f *File, found bool, err err
 	}
 	dir := start
 	for {
-		// Errors name the file relative to wd, the way the rest of muxt
-		// names paths, while Dir keeps the absolute directory.
-		shown, err := filepath.Rel(start, filepath.Join(dir, FileName))
-		if err != nil {
-			return nil, false, fmt.Errorf("path of %s from %s: %w", dir, start, err)
-		}
-		f, err := read(filepath.Join(dir, FileName), shown, deprecated)
+		f, err := read(filepath.Join(dir, FileName), deprecated)
 		if err == nil {
 			return f, true, nil
 		}
@@ -100,25 +94,29 @@ func Find(wd string, deprecated map[string]string) (f *File, found bool, err err
 // Create writes an empty muxt.json into dir, the file a flagless generate
 // reads before any entry is added.
 func Create(dir string) error {
-	return writeNew(filepath.Join(dir, FileName), FileName, []byte("{\n\t\"packages\": {}\n}\n"))
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return fmt.Errorf("absolute path of %s: %w", dir, err)
+	}
+	return writeNew(filepath.Join(abs, FileName), []byte("{\n\t\"packages\": {}\n}\n"))
 }
 
 // writeNew creates path with data and fails with an *ExistsError, writing
-// nothing, when path already exists. shown is the name the error gives it.
-func writeNew(path, shown string, data []byte) error {
+// nothing, when path already exists.
+func writeNew(path string, data []byte) error {
 	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
 	if errors.Is(err, fs.ErrExist) {
-		return &ExistsError{Path: shown}
+		return &ExistsError{Path: path}
 	}
 	if err != nil {
-		return fmt.Errorf("creating %s: %w", shown, err)
+		return fmt.Errorf("creating %s: %w", path, err)
 	}
 	if _, err := f.Write(data); err != nil {
 		_ = f.Close()
-		return fmt.Errorf("writing %s: %w", shown, err)
+		return fmt.Errorf("writing %s: %w", path, err)
 	}
 	if err := f.Close(); err != nil {
-		return fmt.Errorf("writing %s: %w", shown, err)
+		return fmt.Errorf("writing %s: %w", path, err)
 	}
 	return nil
 }
@@ -238,33 +236,31 @@ type Entry struct {
 	UseTemplatesVariable []string `json:"use_templates_variable,omitempty"`
 }
 
-// read reads the muxt.json at path. shown is the name its errors give the
-// file, relative to the working directory, so a message names the file the
-// way the person typed it. A missing file is an error that matches
-// fs.ErrNotExist.
-func read(path, shown string, deprecated map[string]string) (*File, error) {
+// read reads the muxt.json at path, an absolute path its errors name the file
+// by. A missing file is an error that matches fs.ErrNotExist.
+func read(path string, deprecated map[string]string) (*File, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("reading %s: %w", shown, err)
+		return nil, fmt.Errorf("reading %s: %w", path, err)
 	}
 	var f File
 	if err := json.Unmarshal(data, &f); err != nil {
 		var syntax *json.SyntaxError
 		if errors.As(err, &syntax) {
 			line, col := position(data, syntax.Offset)
-			return nil, &ParseError{Path: shown, Line: line, Col: col, Err: syntax}
+			return nil, &ParseError{Path: path, Line: line, Col: col, Err: syntax}
 		}
-		return nil, fmt.Errorf("parsing %s: %w", shown, err)
+		return nil, fmt.Errorf("parsing %s: %w", path, err)
 	}
 	f.Dir = filepath.Dir(path)
-	f.Name = shown
+	f.Name = path
 	var hasModule bool
 	f.module, f.moduleDir, hasModule, err = moduleOf(f.Dir)
 	if err != nil {
-		return nil, fmt.Errorf("%s: %w", shown, err)
+		return nil, fmt.Errorf("%s: %w", path, err)
 	}
 	if !hasModule {
-		return nil, &NoModuleError{Path: shown}
+		return nil, &NoModuleError{Path: path}
 	}
 	if err := f.checkKeys(data, deprecated); err != nil {
 		return nil, err
@@ -278,23 +274,22 @@ func read(path, shown string, deprecated map[string]string) (*File, error) {
 // and then for each packages entry. json.Unmarshal drops unknown keys without a
 // word, so the keys are read again here.
 func (f *File) checkKeys(data []byte, deprecated map[string]string) error {
-	shown := f.Name
 	var raw struct {
 		PackageDefaults map[string]json.RawMessage            `json:"package_defaults"`
 		Packages        map[string]map[string]json.RawMessage `json:"packages"`
 	}
 	if err := json.Unmarshal(data, &raw); err != nil {
-		return fmt.Errorf("parsing %s: %w", shown, err)
+		return fmt.Errorf("parsing %s: %w", f.Name, err)
 	}
 	known := entryKeys()
-	if err := checkEntryKeys(shown, "package_defaults", raw.PackageDefaults, deprecated, known); err != nil {
+	if err := checkEntryKeys(f.Name, "package_defaults", raw.PackageDefaults, deprecated, known); err != nil {
 		return err
 	}
 	for _, key := range slices.Sorted(maps.Keys(raw.Packages)) {
 		if err := f.checkPackageKey(key); err != nil {
 			return err
 		}
-		if err := checkEntryKeys(shown, fmt.Sprintf("packages[%q]", key), raw.Packages[key], deprecated, known); err != nil {
+		if err := checkEntryKeys(f.Name, fmt.Sprintf("packages[%q]", key), raw.Packages[key], deprecated, known); err != nil {
 			return err
 		}
 	}
@@ -350,10 +345,10 @@ func isRelative(key string) bool {
 // checkEntryKeys returns the error for the first key, in sorted order, of the
 // entry where names: a *DeprecatedKeyError, a *DashedKeyError, or an
 // *UnknownKeyError. known is entryKeys.
-func checkEntryKeys(shown, where string, keys map[string]json.RawMessage, deprecated map[string]string, known []string) error {
+func checkEntryKeys(path, where string, keys map[string]json.RawMessage, deprecated map[string]string, known []string) error {
 	for _, key := range slices.Sorted(maps.Keys(keys)) {
 		if replacement, ok := deprecated[key]; ok {
-			return &DeprecatedKeyError{Path: shown, Where: where, Key: key, Replacement: replacement}
+			return &DeprecatedKeyError{Path: path, Where: where, Key: key, Replacement: replacement}
 		}
 		if slices.Contains(known, key) {
 			continue
@@ -361,9 +356,9 @@ func checkEntryKeys(shown, where string, keys map[string]json.RawMessage, deprec
 		// The dashed spelling is named only when the underscore form is a
 		// key, so a typo with dashes still reads as an unknown key.
 		if underscored := strings.ReplaceAll(key, "-", "_"); slices.Contains(known, underscored) {
-			return &DashedKeyError{Path: shown, Where: where, Key: key, Underscored: underscored}
+			return &DashedKeyError{Path: path, Where: where, Key: key, Underscored: underscored}
 		}
-		return &UnknownKeyError{Path: shown, Where: where, Key: key}
+		return &UnknownKeyError{Path: path, Where: where, Key: key}
 	}
 	return nil
 }

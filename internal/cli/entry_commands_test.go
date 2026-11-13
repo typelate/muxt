@@ -139,9 +139,9 @@ func TestEntryFlagsRejectedWhereMuxtJSONConfigures(t *testing.T) {
 
 			var configured *composite.ConfiguredDirectoryError
 			require.ErrorAs(t, err, &configured, "error %v", err)
-			assert.Equal(t, filepath.Join("..", composite.FileName), configured.Path, "path")
+			assert.Equal(t, filepath.Join(parent, composite.FileName), configured.Path, "path")
 			assert.Equal(t, []string{"use-templates-variable"}, configured.Flags, "flags")
-			assert.Equal(t, "configure "+tt.command+" with fields in ../muxt.json instead of flags", err.Error(), "message")
+			assert.Equal(t, "configure "+tt.command+" with fields in "+filepath.Join(parent, composite.FileName)+" instead of flags", err.Error(), "message")
 			assert.False(t, ran, "the command ran")
 		})
 	}

@@ -27,7 +27,7 @@ muxt generate config
 wrote muxt.json
 ```
 
-The file starts as `{"packages": {}}`. The command refuses to overwrite one: `muxt.json already exists; nothing was written`.
+The file starts as `{"packages": {}}`. The command refuses to overwrite one: `/home/me/app/muxt.json already exists; nothing was written`.
 
 ## 2. Write an entry for each package
 
@@ -98,7 +98,7 @@ muxt generate --output-htmx
 ```
 
 ```text
-Error: configure generate with fields in ../muxt.json instead of flags
+Error: configure generate with fields in /home/me/app/muxt.json instead of flags
 ```
 
 Change the entry. `-v` and `-C` are still accepted.

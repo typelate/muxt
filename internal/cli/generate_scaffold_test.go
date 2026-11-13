@@ -50,7 +50,7 @@ func TestGenerateConfigLeavesExistingMuxtJSON(t *testing.T) {
 
 	_, err := runCommand(t, dir, "generate config")
 
-	require.EqualError(t, err, "muxt.json already exists; nothing was written")
+	require.EqualError(t, err, filepath.Join(dir, "muxt.json")+" already exists; nothing was written")
 	got, err := os.ReadFile(filepath.Join(dir, "muxt.json"))
 	require.NoError(t, err)
 	assert.Equal(t, existing, string(got), "muxt.json is unchanged")
@@ -119,7 +119,7 @@ func TestGenerateConfigDoesNotFollowDanglingMuxtJSONLink(t *testing.T) {
 
 	_, err := runCommand(t, dir, "generate config")
 
-	require.EqualError(t, err, "muxt.json already exists; nothing was written")
+	require.EqualError(t, err, link+" already exists; nothing was written")
 	_, statErr := os.Lstat(target)
 	assert.ErrorIs(t, statErr, os.ErrNotExist, "nothing is created at the link's target")
 }

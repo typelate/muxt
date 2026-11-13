@@ -4,7 +4,7 @@ import "fmt"
 
 // ExistsError reports a file or directory a command would create that is
 // already there, so the command wrote nothing. Path is the name the message
-// gives it, relative to the working directory.
+// gives it, an absolute path an editor can open.
 type ExistsError struct {
 	Path string
 }
@@ -82,8 +82,8 @@ func (e *MissingEntryError) Error() string {
 }
 
 // MissingDirectoryError reports a muxt.json entry whose directory does not
-// exist or is a file. Key is the packages key and Dir the key's directory
-// relative to the working directory, the way the person would type it.
+// exist or is a file. Key is the packages key and Dir the key's absolute
+// directory.
 type MissingDirectoryError struct {
 	Path, Key, Dir string
 }
@@ -95,8 +95,7 @@ func (e *MissingDirectoryError) Error() string {
 
 // OutsideDirectoryError reports a muxt.json entry whose directory is a symbolic
 // link that resolves outside the directory holding the file. Key is the
-// packages key and Dir the key's directory relative to the working directory,
-// the way the person would type it.
+// packages key and Dir the key's absolute directory.
 type OutsideDirectoryError struct {
 	Path, Key, Dir string
 }
@@ -125,8 +124,8 @@ func (e *InvalidEntryError) Unwrap() error {
 }
 
 // ConfiguredDirectoryError reports generate flags given in a directory whose
-// muxt.json entry already configures it. Path is the file, relative to the
-// working directory. Command is the word the person typed for the command that
+// muxt.json entry already configures it. Path is the file's absolute
+// path. Command is the word the person typed for the command that
 // was run, such as "check", so the message is about what they ran. Flags are the
 // flag names given, sorted, without "--".
 type ConfiguredDirectoryError struct {
@@ -182,7 +181,7 @@ func (e *KeyOutsideError) Error() string {
 
 // NoModuleError reports a muxt.json with no go.mod at or above it. Its packages
 // keys are import paths, which only a module path can complete, so the file
-// cannot be read. Path is the file, relative to the working directory.
+// cannot be read. Path is the file's absolute path.
 type NoModuleError struct {
 	Path string
 }

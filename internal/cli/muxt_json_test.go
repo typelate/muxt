@@ -241,7 +241,7 @@ func TestGenerateRejectsPackageDefaultsKey(t *testing.T) {
 		require.ErrorAs(t, err, &unknown, "error %v", err)
 		assert.Equal(t, "package_defaults", unknown.Where, "where")
 		assert.Equal(t, "zzz", unknown.Key, "key")
-		assert.Equal(t, `muxt.json: package_defaults: unknown key "zzz"`, err.Error(), "message")
+		assert.Equal(t, filepath.Join(dir, composite.FileName)+`: package_defaults: unknown key "zzz"`, err.Error(), "message")
 		assert.False(t, called, "generate runner called")
 	})
 
@@ -255,7 +255,7 @@ func TestGenerateRejectsPackageDefaultsKey(t *testing.T) {
 		var dashed *composite.DashedKeyError
 		require.ErrorAs(t, err, &dashed, "error %v", err)
 		assert.Equal(t, "package_defaults", dashed.Where, "where")
-		assert.Equal(t, `muxt.json: package_defaults: key "use-receiver-type" is written with underscores; write "use_receiver_type"`, err.Error(), "message")
+		assert.Equal(t, filepath.Join(dir, composite.FileName)+`: package_defaults: key "use-receiver-type" is written with underscores; write "use_receiver_type"`, err.Error(), "message")
 		assert.False(t, called, "generate runner called")
 	})
 
@@ -269,7 +269,7 @@ func TestGenerateRejectsPackageDefaultsKey(t *testing.T) {
 		var deprecated *composite.DeprecatedKeyError
 		require.ErrorAs(t, err, &deprecated, "error %v", err)
 		assert.Equal(t, "package_defaults", deprecated.Where, "where")
-		assert.Equal(t, `muxt.json: package_defaults: key "receiver_type" is deprecated; write "use_receiver_type"`, err.Error(), "message")
+		assert.Equal(t, filepath.Join(dir, composite.FileName)+`: package_defaults: key "receiver_type" is deprecated; write "use_receiver_type"`, err.Error(), "message")
 		assert.False(t, called, "generate runner called")
 	})
 }
@@ -312,17 +312,17 @@ func TestGenerateRejectsMalformedMuxtJSON(t *testing.T) {
 
 	var parseErr *composite.ParseError
 	require.ErrorAs(t, err, &parseErr, "error %v", err)
-	assert.Equal(t, composite.FileName, parseErr.Path, "path")
+	assert.Equal(t, path, parseErr.Path, "path")
 	assert.Equal(t, 3, parseErr.Line, "line")
 	assert.Equal(t, 10, parseErr.Col, "column")
-	assert.Equal(t, "muxt.json:3:10: invalid character 'x' looking for beginning of value", err.Error(), "message")
+	assert.Equal(t, path+":3:10: invalid character 'x' looking for beginning of value", err.Error(), "message")
 	assert.False(t, called, "generate runner called")
 }
 
 // TestGenerateRejectsMalformedMuxtJSONInParentDirectory states that a muxt.json
 // in the parent of the working directory that is not valid JSON fails a
-// flagless muxt generate, naming the file relative to the working directory.
-// The runner is not called.
+// flagless muxt generate, naming the file by its absolute path. The runner is
+// not called.
 func TestGenerateRejectsMalformedMuxtJSONInParentDirectory(t *testing.T) {
 	parent := moduleDir(t)
 	workspace := filepath.Join(parent, "workspace")
@@ -334,10 +334,11 @@ func TestGenerateRejectsMalformedMuxtJSONInParentDirectory(t *testing.T) {
 
 	var parseErr *composite.ParseError
 	require.ErrorAs(t, err, &parseErr, "error %v", err)
-	assert.Equal(t, filepath.Join("..", composite.FileName), parseErr.Path, "path")
+	path := filepath.Join(parent, composite.FileName)
+	assert.Equal(t, path, parseErr.Path, "path")
 	assert.Equal(t, 3, parseErr.Line, "line")
 	assert.Equal(t, 18, parseErr.Col, "column")
-	assert.Equal(t, "../muxt.json:3:18: invalid character 'x' looking for beginning of value", err.Error(), "message")
+	assert.Equal(t, path+":3:18: invalid character 'x' looking for beginning of value", err.Error(), "message")
 	assert.False(t, called, "generate runner called")
 }
 
@@ -354,10 +355,10 @@ func TestGenerateRejectsUnknownMuxtJSONKey(t *testing.T) {
 
 	var unknown *composite.UnknownKeyError
 	require.ErrorAs(t, err, &unknown, "error %v", err)
-	assert.Equal(t, composite.FileName, unknown.Path, "path")
+	assert.Equal(t, path, unknown.Path, "path")
 	assert.Equal(t, `packages["example.com/m"]`, unknown.Where, "where")
 	assert.Equal(t, "nope", unknown.Key, "key")
-	assert.Equal(t, `muxt.json: packages["example.com/m"]: unknown key "nope"`, err.Error(), "message")
+	assert.Equal(t, path+`: packages["example.com/m"]: unknown key "nope"`, err.Error(), "message")
 	assert.False(t, called, "generate runner called")
 }
 
@@ -374,11 +375,11 @@ func TestGenerateRejectsDeprecatedMuxtJSONKey(t *testing.T) {
 
 	var deprecated *composite.DeprecatedKeyError
 	require.ErrorAs(t, err, &deprecated, "error %v", err)
-	assert.Equal(t, composite.FileName, deprecated.Path, "path")
+	assert.Equal(t, path, deprecated.Path, "path")
 	assert.Equal(t, `packages["example.com/m"]`, deprecated.Where, "where")
 	assert.Equal(t, "receiver_type", deprecated.Key, "key")
 	assert.Equal(t, "use_receiver_type", deprecated.Replacement, "replacement")
-	assert.Equal(t, `muxt.json: packages["example.com/m"]: key "receiver_type" is deprecated; write "use_receiver_type"`, err.Error(), "message")
+	assert.Equal(t, path+`: packages["example.com/m"]: key "receiver_type" is deprecated; write "use_receiver_type"`, err.Error(), "message")
 	assert.False(t, called, "generate runner called")
 }
 
@@ -407,11 +408,11 @@ func TestGenerateMuxtJSONKeysUseUnderscores(t *testing.T) {
 
 		var dashed *composite.DashedKeyError
 		require.ErrorAs(t, err, &dashed, "error %v", err)
-		assert.Equal(t, composite.FileName, dashed.Path, "path")
+		assert.Equal(t, filepath.Join(dir, composite.FileName), dashed.Path, "path")
 		assert.Equal(t, `packages["example.com/m"]`, dashed.Where, "where")
 		assert.Equal(t, "use-receiver-type", dashed.Key, "key")
 		assert.Equal(t, "use_receiver_type", dashed.Underscored, "underscored")
-		assert.Equal(t, `muxt.json: packages["example.com/m"]: key "use-receiver-type" is written with underscores; write "use_receiver_type"`, err.Error(), "message")
+		assert.Equal(t, filepath.Join(dir, composite.FileName)+`: packages["example.com/m"]: key "use-receiver-type" is written with underscores; write "use_receiver_type"`, err.Error(), "message")
 		assert.False(t, called, "generate runner called")
 	})
 }
@@ -429,10 +430,11 @@ func TestGenerateRejectsMuxtJSONEntryFlagConflict(t *testing.T) {
 	const flagMessage = "--output-htmx and --output-datastar are mutually exclusive; a package targets one frontend library (to mix frontends, generate separate packages that share a mux)"
 	var invalid *composite.InvalidEntryError
 	require.ErrorAs(t, err, &invalid, "error %v", err)
-	assert.Equal(t, composite.FileName, invalid.Path, "path")
+	path := filepath.Join(dir, composite.FileName)
+	assert.Equal(t, path, invalid.Path, "path")
 	assert.Equal(t, `packages["example.com/m"]`, invalid.Where, "where")
 	assert.EqualError(t, invalid.Err, flagMessage, "flag error")
-	assert.Equal(t, `muxt.json: packages["example.com/m"]: `+flagMessage, err.Error(), "message")
+	assert.Equal(t, path+`: packages["example.com/m"]: `+flagMessage, err.Error(), "message")
 	assert.False(t, called, "generate runner called")
 }
 
@@ -452,9 +454,10 @@ func TestGenerateRejectsMuxtJSONMultipartMaxMemoryValue(t *testing.T) {
 	require.Error(t, flagErr)
 	var invalid *composite.InvalidEntryError
 	require.ErrorAs(t, err, &invalid, "error %v", err)
-	assert.Equal(t, composite.FileName, invalid.Path, "path")
+	path := filepath.Join(dir, composite.FileName)
+	assert.Equal(t, path, invalid.Path, "path")
 	assert.Equal(t, `packages["example.com/m"]`, invalid.Where, "where")
-	assert.Equal(t, `muxt.json: packages["example.com/m"]: output_multipart_max_memory: `+flagErr.Error(), err.Error(), "message")
+	assert.Equal(t, path+`: packages["example.com/m"]: output_multipart_max_memory: `+flagErr.Error(), err.Error(), "message")
 	assert.False(t, called, "generate runner called")
 }
 
@@ -481,10 +484,11 @@ func TestGenerateRejectsRelativeMuxtJSONKey(t *testing.T) {
 
 			var keyForm *composite.KeyFormError
 			require.ErrorAs(t, err, &keyForm, "error %v", err)
-			assert.Equal(t, composite.FileName, keyForm.Path, "path")
+			path := filepath.Join(dir, composite.FileName)
+			assert.Equal(t, path, keyForm.Path, "path")
 			assert.Equal(t, tt.key, keyForm.Key, "key")
 			assert.Equal(t, tt.want, keyForm.ImportPath, "import path")
-			assert.Equal(t, `muxt.json: packages key "`+tt.key+`" is not an import path; write "`+tt.want+`"`, err.Error(), "message")
+			assert.Equal(t, path+`: packages key "`+tt.key+`" is not an import path; write "`+tt.want+`"`, err.Error(), "message")
 			assert.False(t, called, "generate runner called")
 		})
 	}
@@ -533,9 +537,10 @@ func TestGenerateRejectsDirectoryWithoutMuxtJSONEntry(t *testing.T) {
 
 	var missing *composite.MissingEntryError
 	require.ErrorAs(t, err, &missing, "error %v", err)
-	assert.Equal(t, filepath.Join("..", composite.FileName), missing.Path, "path")
+	path := filepath.Join(parent, composite.FileName)
+	assert.Equal(t, path, missing.Path, "path")
 	assert.Equal(t, "example.com/m/workspace", missing.Key, "key")
-	assert.Equal(t, `../muxt.json: no packages entry "example.com/m/workspace"; add one to generate this directory`, err.Error(), "message")
+	assert.Equal(t, path+`: no packages entry "example.com/m/workspace"; add one to generate this directory`, err.Error(), "message")
 	assert.False(t, called, "generate runner called")
 
 	config := generateConfigurationOf(t, workspace, "generate --use-receiver-type T1")
@@ -557,9 +562,10 @@ func TestGenerateRejectsFlagsForConfiguredDirectory(t *testing.T) {
 
 	var configured *composite.ConfiguredDirectoryError
 	require.ErrorAs(t, err, &configured, "error %v", err)
-	assert.Equal(t, filepath.Join("..", composite.FileName), configured.Path, "path")
+	path := filepath.Join(parent, composite.FileName)
+	assert.Equal(t, path, configured.Path, "path")
 	assert.Equal(t, []string{"output-htmx"}, configured.Flags, "flags")
-	assert.Equal(t, "configure generate with fields in ../muxt.json instead of flags", err.Error(), "message")
+	assert.Equal(t, "configure generate with fields in "+path+" instead of flags", err.Error(), "message")
 	assert.False(t, called, "generate runner called")
 }
 
@@ -674,9 +680,10 @@ func TestGenerateEveryMuxtJSONEntryValidatesEachEntry(t *testing.T) {
 	const flagMessage = "--output-htmx and --output-datastar are mutually exclusive; a package targets one frontend library (to mix frontends, generate separate packages that share a mux)"
 	var invalid *composite.InvalidEntryError
 	require.ErrorAs(t, err, &invalid, "error %v", err)
-	assert.Equal(t, composite.FileName, invalid.Path, "path")
+	path := filepath.Join(dir, composite.FileName)
+	assert.Equal(t, path, invalid.Path, "path")
 	assert.Equal(t, `packages["example.com/m/workspace"]`, invalid.Where, "where")
-	assert.Equal(t, `muxt.json: packages["example.com/m/workspace"]: `+flagMessage, err.Error(), "message")
+	assert.Equal(t, path+`: packages["example.com/m/workspace"]: `+flagMessage, err.Error(), "message")
 	assert.False(t, called, "generate runner called")
 }
 
@@ -740,10 +747,11 @@ func TestGenerateRejectsMissingMuxtJSONDirectory(t *testing.T) {
 
 			var missing *composite.MissingDirectoryError
 			require.ErrorAs(t, err, &missing, "error %v", err)
-			assert.Equal(t, composite.FileName, missing.Path, "path")
+			path := filepath.Join(dir, composite.FileName)
+			assert.Equal(t, path, missing.Path, "path")
 			assert.Equal(t, "example.com/m/gone", missing.Key, "key")
-			assert.Equal(t, "gone", missing.Dir, "dir")
-			assert.Equal(t, `muxt.json: packages["example.com/m/gone"]: directory gone does not exist`, err.Error(), "message")
+			assert.Equal(t, filepath.Join(dir, "gone"), missing.Dir, "dir")
+			assert.Equal(t, path+`: packages["example.com/m/gone"]: directory `+filepath.Join(dir, "gone")+` does not exist`, err.Error(), "message")
 			assert.False(t, called, "generate runner called")
 		})
 	}
@@ -825,9 +833,10 @@ func TestGenerateRejectsMuxtJSONKeyOutsideDirectory(t *testing.T) {
 
 			var outside *composite.KeyOutsideError
 			require.ErrorAs(t, err, &outside, "error %v", err)
-			assert.Equal(t, composite.FileName, outside.Path, "path")
+			path := filepath.Join(dir, composite.FileName)
+			assert.Equal(t, path, outside.Path, "path")
 			assert.Equal(t, key, outside.Key, "key")
-			assert.Equal(t, `muxt.json: packages key "`+key+`" is outside the file's directory`, err.Error(), "message")
+			assert.Equal(t, path+`: packages key "`+key+`" is outside the file's directory`, err.Error(), "message")
 			assert.False(t, called, "generate runner called")
 		})
 	}
@@ -847,7 +856,7 @@ func TestGenerateRejectsMuxtJSONKeyInModuleOutsideDirectory(t *testing.T) {
 
 	var outside *composite.KeyOutsideError
 	require.ErrorAs(t, err, &outside, "error %v", err)
-	assert.Equal(t, `muxt.json: packages key "example.com/m/internal/other" is outside the file's directory`, err.Error(), "message")
+	assert.Equal(t, filepath.Join(hypertext, composite.FileName)+`: packages key "example.com/m/internal/other" is outside the file's directory`, err.Error(), "message")
 	assert.False(t, called, "generate runner called")
 }
 
@@ -870,10 +879,11 @@ func TestGenerateRejectsMuxtJSONLinkOutsideDirectory(t *testing.T) {
 
 	var outside *composite.OutsideDirectoryError
 	require.ErrorAs(t, err, &outside, "error %v", err)
-	assert.Equal(t, composite.FileName, outside.Path, "path")
+	path := filepath.Join(project, composite.FileName)
+	assert.Equal(t, path, outside.Path, "path")
 	assert.Equal(t, "example.com/m/project/linked", outside.Key, "key")
-	assert.Equal(t, "linked", outside.Dir, "dir")
-	assert.Equal(t, `muxt.json: packages["example.com/m/project/linked"]: directory linked resolves outside the file's directory`, err.Error(), "message")
+	assert.Equal(t, filepath.Join(project, "linked"), outside.Dir, "dir")
+	assert.Equal(t, path+`: packages["example.com/m/project/linked"]: directory `+filepath.Join(project, "linked")+` resolves outside the file's directory`, err.Error(), "message")
 	assert.False(t, called, "generate runner called")
 }
 
@@ -906,7 +916,8 @@ func TestGenerateRejectsMuxtJSONWithoutGoMod(t *testing.T) {
 
 	var noModule *composite.NoModuleError
 	require.ErrorAs(t, err, &noModule, "error %v", err)
-	assert.Equal(t, composite.FileName, noModule.Path, "path")
-	assert.Equal(t, "muxt.json: no go.mod found at or above the file; package keys are import paths", err.Error(), "message")
+	path := filepath.Join(dir, composite.FileName)
+	assert.Equal(t, path, noModule.Path, "path")
+	assert.Equal(t, path+": no go.mod found at or above the file; package keys are import paths", err.Error(), "message")
 	assert.False(t, called, "generate runner called")
 }

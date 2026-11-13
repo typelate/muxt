@@ -77,9 +77,9 @@ func TestRoutesRejectsFlagsForConfiguredDirectory(t *testing.T) {
 
 	var configured *composite.ConfiguredDirectoryError
 	require.ErrorAs(t, err, &configured, "error %v", err)
-	assert.Equal(t, filepath.Join("..", composite.FileName), configured.Path, "path")
+	assert.Equal(t, filepath.Join(parent, composite.FileName), configured.Path, "path")
 	assert.Equal(t, []string{"use-receiver-type", "use-templates-variable"}, configured.Flags, "flags")
-	assert.Equal(t, "configure muxt with fields in ../muxt.json instead of flags", err.Error(), "message")
+	assert.Equal(t, "configure muxt with fields in "+filepath.Join(parent, composite.FileName)+" instead of flags", err.Error(), "message")
 	assert.Empty(t, jobs, "jobs")
 }
 
@@ -96,7 +96,7 @@ func TestRoutesRejectsDirectoryWithoutMuxtJSONEntry(t *testing.T) {
 
 	var missing *composite.MissingEntryError
 	require.ErrorAs(t, err, &missing, "error %v", err)
-	assert.Equal(t, filepath.Join("..", composite.FileName), missing.Path, "path")
+	assert.Equal(t, filepath.Join(parent, composite.FileName), missing.Path, "path")
 	assert.Equal(t, "example.com/m/workspace", missing.Key, "key")
 	assert.Empty(t, jobs, "jobs")
 
@@ -188,8 +188,8 @@ func TestRoutesPrintsConfigurationBeforeRoutes(t *testing.T) {
 }
 
 // TestRoutesConfigurationGroupsEntrySettings states that a setting the muxt.json
-// entry sets is under the heading naming the file, relative to the working
-// directory, and the entry's key, written as its muxt.json key and value, and
+// entry sets is under the heading naming the file by its absolute path, and
+// the entry's key, written as its muxt.json key and value, and
 // that the setting is not repeated under another heading.
 func TestRoutesConfigurationGroupsEntrySettings(t *testing.T) {
 	parent := moduleDir(t)
@@ -199,7 +199,7 @@ func TestRoutesConfigurationGroupsEntrySettings(t *testing.T) {
 
 	text := reportOf(t, workspace, "")
 
-	const want = "Configuration:\n  ../muxt.json:\n    packages[\"example.com/m/workspace\"]:\n      \"use_receiver_type\": \"T1\"\n  defaults:\n"
+	want := "Configuration:\n  " + filepath.Join(parent, composite.FileName) + ":\n    packages[\"example.com/m/workspace\"]:\n      \"use_receiver_type\": \"T1\"\n  defaults:\n"
 	assert.True(t, strings.HasPrefix(text, want), "section starts with\n%s\ngot\n%s", want, text)
 	assert.Equal(t, 1, strings.Count(text, "\"use_receiver_type\":"), "lines for use_receiver_type")
 }
@@ -222,8 +222,8 @@ func TestRoutesConfigurationJSONNamesMuxtJSONFile(t *testing.T) {
 	var groups []struct{ Source, File string }
 	require.NoError(t, json.Unmarshal(data, &groups), "groups:\n%s", data)
 	want := []struct{ Source, File string }{
-		{Source: `packages["example.com/m/workspace"]`, File: filepath.Join("..", composite.FileName)},
-		{Source: "package_defaults", File: filepath.Join("..", composite.FileName)},
+		{Source: `packages["example.com/m/workspace"]`, File: filepath.Join(parent, composite.FileName)},
+		{Source: "package_defaults", File: filepath.Join(parent, composite.FileName)},
 		{Source: "defaults"},
 	}
 	assert.Equal(t, want, groups, "groups")
@@ -278,7 +278,7 @@ func TestRoutesConfigurationGroupsPackageDefaults(t *testing.T) {
 
 	text := reportOf(t, dir, "")
 
-	const want = "Configuration:\n  muxt.json:\n    packages[\"example.com/m\"]:\n      \"use_receiver_type\": \"T1\"\n    package_defaults:\n      \"output_htmx\": true\n  defaults:\n"
+	want := "Configuration:\n  " + filepath.Join(dir, composite.FileName) + ":\n    packages[\"example.com/m\"]:\n      \"use_receiver_type\": \"T1\"\n    package_defaults:\n      \"output_htmx\": true\n  defaults:\n"
 	assert.True(t, strings.HasPrefix(text, want), "section starts with\n%s\ngot\n%s", want, text)
 }
 
@@ -333,7 +333,7 @@ func TestRoutesListsOnlyTheEntriesAMuxtJSONHas(t *testing.T) {
 
 	below, _, err := listWithLoader(t, filepath.Join(dir, "workspace"))
 	require.NoError(t, err, "muxt in workspace")
-	assert.Regexp(t, `\A(?s:Configuration:\n  \.\./muxt\.json:\n    packages\["example\.com/m/workspace"\]:\n      "use_receiver_type": "Space"\n  defaults:\n.*Template Routes:\n  - GET /Space SpacePage\(\)\n.*)\z`, below, "stdout in workspace")
+	assert.Regexp(t, `\A(?s:Configuration:\n  `+regexp.QuoteMeta(filepath.Join(dir, composite.FileName))+`:\n    packages\["example\.com/m/workspace"\]:\n      "use_receiver_type": "Space"\n  defaults:\n.*Template Routes:\n  - GET /Space SpacePage\(\)\n.*)\z`, below, "stdout in workspace")
 }
 
 // TestRoutesConfigurationGroupsFlags states that a setting given as a flag, in

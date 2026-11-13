@@ -113,7 +113,17 @@ func scaffoldPackage(out io.Writer, wd, name string, flags *pflag.FlagSet, confi
 			return err
 		}
 	}
-	_, err = fmt.Fprintf(out, "wrote %s: packages[%q]\n", f.Name, key)
+	// A status line names files relative to the working directory, like the
+	// package files above; only errors carry the absolute path.
+	absWD, err := filepath.Abs(wd)
+	if err != nil {
+		return fmt.Errorf("absolute path of %s: %w", wd, err)
+	}
+	shown, err := filepath.Rel(absWD, f.Name)
+	if err != nil {
+		return fmt.Errorf("path of %s from %s: %w", f.Name, absWD, err)
+	}
+	_, err = fmt.Fprintf(out, "wrote %s: packages[%q]\n", shown, key)
 	return err
 }
 

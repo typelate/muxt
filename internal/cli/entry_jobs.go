@@ -123,7 +123,7 @@ func entryJobs(wd string, getEnv func(string) string, version func() (string, bo
 	}
 	for _, k := range keys {
 		dir := f.DirOf(k)
-		if err := requireEntryDirectory(f, k, wd, dir); err != nil {
+		if err := requireEntryDirectory(f, k, dir); err != nil {
 			return nil, nil, false, err
 		}
 		entry, _ := f.Resolve(k)
@@ -175,26 +175,21 @@ func entryJobFor(command, dir string, flagNames []string, getEnv func(string) st
 // requireEntryDirectory returns a *composite.MissingDirectoryError unless dir,
 // the directory of key in f, is a directory, and a
 // *composite.OutsideDirectoryError when it is one that a symbolic link resolves
-// outside f's directory. wd is the working directory the errors name dir
-// relative to.
-func requireEntryDirectory(f *composite.File, key, wd, dir string) error {
+// outside f's directory. The errors name dir by its absolute path.
+func requireEntryDirectory(f *composite.File, key, dir string) error {
 	info, statErr := os.Stat(dir)
 	if statErr != nil && !errors.Is(statErr, fs.ErrNotExist) {
 		return fmt.Errorf("muxt.json entry %q: %w", key, statErr)
 	}
-	rel, err := filepath.Rel(wd, dir)
-	if err != nil {
-		return fmt.Errorf("directory of muxt.json entry %q from %s: %w", key, wd, err)
-	}
 	if statErr != nil || !info.IsDir() {
-		return &composite.MissingDirectoryError{Path: f.Name, Key: key, Dir: rel}
+		return &composite.MissingDirectoryError{Path: f.Name, Key: key, Dir: dir}
 	}
 	inside, err := resolvesInside(f.Dir, dir)
 	if err != nil {
 		return fmt.Errorf("muxt.json entry %q: %w", key, err)
 	}
 	if !inside {
-		return &composite.OutsideDirectoryError{Path: f.Name, Key: key, Dir: rel}
+		return &composite.OutsideDirectoryError{Path: f.Name, Key: key, Dir: dir}
 	}
 	return nil
 }
