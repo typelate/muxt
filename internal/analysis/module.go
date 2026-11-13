@@ -87,7 +87,9 @@ type headerEntry struct {
 // workingDirectory: the directories holding a generated file. parseHeader
 // turns the arguments recorded in a header into the package's configuration
 // and reports false when they do not parse, which skips the directory.
-func NewModule(workingDirectory string, parseHeader func(args []string) (PackageConfig, bool)) (*Module, error) {
+// configured reports whether a muxt.json entry configures a directory: its
+// generate command then carries no flags, which generate rejects there.
+func NewModule(workingDirectory string, parseHeader func(args []string) (PackageConfig, bool), configured func(dir string) (bool, error)) (*Module, error) {
 	mod, err := listModule(workingDirectory)
 	if err != nil {
 		return nil, err
@@ -103,6 +105,13 @@ func NewModule(workingDirectory string, parseHeader func(args []string) (Package
 		config, ok := parseHeader(entry.args)
 		if !ok {
 			continue
+		}
+		isConfigured, err := configured(dir)
+		if err != nil {
+			return nil, fmt.Errorf("looking up the muxt.json entry for %s: %w", dir, err)
+		}
+		if isConfigured {
+			entry.command = ""
 		}
 		info, err := newPackageInfo(mod, entry, config)
 		if err != nil {

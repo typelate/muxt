@@ -18,6 +18,16 @@ import (
 	"github.com/typelate/muxt/internal/load"
 )
 
+// hasMuxtJSONEntry reports whether a muxt.json entry configures dir, the
+// condition under which generate rejects flags there.
+func hasMuxtJSONEntry(dir string) (bool, error) {
+	lookup, err := lookupMuxtJSONEntry(dir)
+	if err != nil {
+		return false, err
+	}
+	return lookup.HasEntry, nil
+}
+
 // parseModuleHeader reads the arguments recorded in a generated file's
 // header into what analysis.NewModule reports about the package. It reports
 // false when they do not parse.
@@ -56,7 +66,7 @@ func exploreModuleCommand(workingDirectory *string) *cobra.Command {
 			if err := checkFormat(cmd); err != nil {
 				return err
 			}
-			result, err := analysis.NewModule(*workingDirectory, parseModuleHeader)
+			result, err := analysis.NewModule(*workingDirectory, parseModuleHeader, hasMuxtJSONEntry)
 			if err != nil {
 				return err
 			}
@@ -93,7 +103,7 @@ This command is intended for exploratory use only.`,
 				packageDir = absoluteDir(*workingDirectory, args[0])
 			}
 
-			mod, err := analysis.NewModule(*workingDirectory, parseModuleHeader)
+			mod, err := analysis.NewModule(*workingDirectory, parseModuleHeader, hasMuxtJSONEntry)
 			if err != nil {
 				return err
 			}

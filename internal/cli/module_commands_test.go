@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -172,4 +173,37 @@ func TestGenerateFakeServerRejectsADirectoryWithoutRoutes(t *testing.T) {
 	require.Error(t, err, "generate-fake-server")
 	want := "no muxt-generated package found at " + filepath.Join(wd, "a")
 	require.True(t, strings.HasSuffix(err.Error(), want), "generate-fake-server error = %v, want ending %q", err, want)
+}
+
+// TestExploreModuleGenerateCommandForConfiguredPackage states that the
+// generate command explore-module prints runs: flags are rejected in a
+// directory a muxt.json entry configures, so that package gets the flagless
+// command, and a package without an entry keeps the flags its header records.
+func TestExploreModuleGenerateCommandForConfiguredPackage(t *testing.T) {
+	wd := newTwoPackageModule(t)
+	for _, name := range []string{"a", "b"} {
+		_, _, err := execute(t, wd, "-C", name, "generate", "--output-routes-func-with-logger-param")
+		require.NoError(t, err, "generate %s", name)
+	}
+	writeTestFile(t, wd, "muxt.json", `{"packages": {"example.com/a": {"output_routes_func_with_logger_param": true}}}`)
+
+	stdout, _, err := execute(t, wd, "explore-module", "--format=json")
+	require.NoError(t, err, "explore-module")
+
+	var got struct {
+		Packages []struct {
+			Path     string
+			Dir      string
+			Commands struct{ Generate string }
+		}
+	}
+	require.NoError(t, json.Unmarshal([]byte(stdout), &got), "explore-module output")
+	require.Len(t, got.Packages, 2, "explore-module packages")
+	for _, pkg := range got.Packages {
+		want := "muxt -C " + pkg.Dir + " generate"
+		if pkg.Path == "example.com/b" {
+			want += " --output-routes-func-with-logger-param"
+		}
+		assert.Equal(t, want, pkg.Commands.Generate, "generate command for %s", pkg.Path)
+	}
 }

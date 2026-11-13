@@ -63,7 +63,7 @@ func TestNewModule(t *testing.T) {
 		return PackageConfig{}, false
 	}
 
-	mod, err := NewModule(root, parseHeader)
+	mod, err := NewModule(root, parseHeader, func(string) (bool, error) { return false, nil })
 	require.NoError(t, err)
 	assert.Equal(t, "example.com/m", mod.ModulePath)
 	moduleDir, err := filepath.EvalSymlinks(mod.ModuleDir)
@@ -80,7 +80,7 @@ func TestNewModule(t *testing.T) {
 
 func TestNewModuleOutsideAModule(t *testing.T) {
 	t.Setenv("GOWORK", "off")
-	_, err := NewModule(t.TempDir(), func([]string) (PackageConfig, bool) { return PackageConfig{}, true })
+	_, err := NewModule(t.TempDir(), func([]string) (PackageConfig, bool) { return PackageConfig{}, true }, func(string) (bool, error) { return false, nil })
 	assert.Error(t, err)
 }
 
@@ -106,7 +106,7 @@ func TestNewModuleReportsUnreadableFiles(t *testing.T) {
 				"page.gohtml":  "<p>hi</p>",
 			})
 			require.NoError(t, os.Chmod(filepath.Join(root, filepath.FromSlash(tt.unreadable)), 0))
-			_, err := NewModule(root, accept)
+			_, err := NewModule(root, accept, func(string) (bool, error) { return false, nil })
 			assert.Error(t, err)
 		})
 	}
