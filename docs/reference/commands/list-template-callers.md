@@ -4,6 +4,8 @@ Lists, for each template, the Go `ExecuteTemplate` call sites and the `{{templat
 
 `use_templates_variable` comes from the directory's [`muxt.json`](../muxt-json.md) entry when there is one; `--use-templates-variable` is rejected there.
 
+With no flags in the directory of a `muxt.json`, it lists every entry, dependencies first, from one package load, each under its key line. `--format json` prints one array whose objects have a `Key`. It stops at the first failure, named by key.
+
 ```bash
 muxt list-template-callers --match=error --match='^GET'
 ```

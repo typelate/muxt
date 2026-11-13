@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"io"
+
 	"github.com/spf13/cobra"
 
 	"github.com/typelate/muxt/internal/analysis"
@@ -74,7 +76,7 @@ func routesRunner(loadPackages packageLoader) func(*cobra.Command, []routesJob) 
 		var (
 			asJSON, formatKnown bool
 			// Over several entries JSON is one array, not a value per package.
-			collected []routesListing
+			collected []io.WriterTo
 		)
 		err := runJobs(cmd, loadPackages, packageJobs, jobVisitor{
 			Visit: func(i int, job packageJob, l *load.Loaded, several bool) (bool, error) {

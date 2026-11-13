@@ -120,10 +120,10 @@ func isJSON(cmd *cobra.Command) (bool, error) {
 // writeListings writes listings as one JSON array, for a run whose several
 // results would otherwise be several top-level values that no JSON parser
 // reads as a document.
-func writeListings(w io.Writer, listings []routesListing) error {
+func writeListings(w io.Writer, listings []io.WriterTo) error {
 	buf, err := json.Marshal(listings, resultJSON)
 	if err != nil {
-		return fmt.Errorf("encoding route listings: %w", err)
+		return fmt.Errorf("encoding listings: %w", err)
 	}
 	_, err = w.Write(append(buf, '\n'))
 	return err

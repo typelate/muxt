@@ -17,6 +17,11 @@ cd ..
 
 # With no flags, muxt generate writes every package the muxt.json lists.
 muxt generate
+
+# The same directory checks every entry the muxt.json lists.
+muxt check
+stdout '^ok: 1 template$'
+
 exec go test ./...
 
 -- go.mod --

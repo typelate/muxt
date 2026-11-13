@@ -37,11 +37,17 @@ routes key="example.com/fieldkit/contacts" file="muxt.json" dir="contacts" recei
 routes key="example.com/fieldkit/inventory" file="muxt.json" dir="inventory" receiver="Catalog" receiver-package="example.com/fieldkit/types" templates=[catalogTemplates] htmx=true verbose=false report=[packages["example.com/fieldkit/inventory"]@muxt.json package_defaults@muxt.json defaults@]
 routes key="example.com/fieldkit/tasks" file="muxt.json" dir="tasks" receiver="Server" receiver-package="example.com/fieldkit/types" templates=[templates] htmx=true verbose=false report=[packages["example.com/fieldkit/tasks"]@muxt.json package_defaults@muxt.json defaults@]
 == entries, file directory: check check
-check dir="." templates=[templates] allow-unused=false
+check dir="contacts" templates=[templates] allow-unused=false
+check dir="inventory" templates=[catalogTemplates] allow-unused=false
+check dir="tasks" templates=[templates] allow-unused=false
 == entries, file directory: calls list-template-calls
-calls dir="." templates=[templates]
+calls dir="contacts" templates=[templates]
+calls dir="inventory" templates=[catalogTemplates]
+calls dir="tasks" templates=[templates]
 == entries, file directory: callers list-template-callers
-callers dir="." templates=[templates]
+callers dir="contacts" templates=[templates]
+callers dir="inventory" templates=[catalogTemplates]
+callers dir="tasks" templates=[templates]
 == entries, file directory: def generate def GET /things/{id} GetThing(ctx, id)
 load root="." dirs=["."] patterns=[""]
 error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: no Go package found at $BASE
@@ -59,10 +65,19 @@ routes key="example.com/fieldkit/inventory" file="muxt.json" dir="inventory" rec
 routes key="example.com/fieldkit/tasks" file="muxt.json" dir="tasks" receiver="Server" receiver-package="" templates=[templates] htmx=true verbose=false report=[packages["example.com/fieldkit/tasks"]@muxt.json package_defaults@muxt.json defaults@]
 == entries and root entry, file directory: check check
 check dir="." templates=[templates] allow-unused=false
+check dir="contacts" templates=[templates] allow-unused=false
+check dir="inventory" templates=[catalogTemplates] allow-unused=false
+check dir="tasks" templates=[templates] allow-unused=false
 == entries and root entry, file directory: calls list-template-calls
 calls dir="." templates=[templates]
+calls dir="contacts" templates=[templates]
+calls dir="inventory" templates=[catalogTemplates]
+calls dir="tasks" templates=[templates]
 == entries and root entry, file directory: callers list-template-callers
 callers dir="." templates=[templates]
+callers dir="contacts" templates=[templates]
+callers dir="inventory" templates=[catalogTemplates]
+callers dir="tasks" templates=[templates]
 == entries and root entry, file directory: def generate def GET /things/{id} GetThing(ctx, id)
 load root="." dirs=["."] patterns=[""]
 error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: no Go package found at $BASE
@@ -285,11 +300,17 @@ routes key="example.com/fieldkit/contacts" file="muxt.json" dir="contacts" recei
 routes key="example.com/fieldkit/inventory" file="muxt.json" dir="inventory" receiver="Catalog" receiver-package="example.com/fieldkit/types" templates=[catalogTemplates] htmx=true verbose=false report=[packages["example.com/fieldkit/inventory"]@muxt.json package_defaults@muxt.json defaults@]
 routes key="example.com/fieldkit/tasks" file="muxt.json" dir="tasks" receiver="Server" receiver-package="example.com/fieldkit/types" templates=[templates] htmx=true verbose=false report=[packages["example.com/fieldkit/tasks"]@muxt.json package_defaults@muxt.json defaults@]
 == -C module: check check
-check dir="." templates=[templates] allow-unused=false
+check dir="contacts" templates=[templates] allow-unused=false
+check dir="inventory" templates=[catalogTemplates] allow-unused=false
+check dir="tasks" templates=[templates] allow-unused=false
 == -C module: calls list-template-calls
-calls dir="." templates=[templates]
+calls dir="contacts" templates=[templates]
+calls dir="inventory" templates=[catalogTemplates]
+calls dir="tasks" templates=[templates]
 == -C module: callers list-template-callers
-callers dir="." templates=[templates]
+callers dir="contacts" templates=[templates]
+callers dir="inventory" templates=[catalogTemplates]
+callers dir="tasks" templates=[templates]
 == -C module: def generate def GET /things/{id} GetThing(ctx, id)
 load root="." dirs=["."] patterns=[""]
 error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: no Go package found at $BASE

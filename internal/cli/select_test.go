@@ -134,16 +134,22 @@ func recordSelection(base, wd string, args ...string) (string, error) {
 			}
 			return nil
 		},
-		check: func(_ *cobra.Command, dir string, c analysis.CheckConfiguration) error {
-			r.line("check dir=%q templates=%v allow-unused=%t", r.rel(dir), c.TemplatesVariables, c.AllowUnused)
+		check: func(_ *cobra.Command, jobs []packageJob, c analysis.CheckConfiguration) error {
+			for _, job := range jobs {
+				r.line("check dir=%q templates=%v allow-unused=%t", r.rel(job.Dir), job.Config.TemplatesVariables, c.AllowUnused)
+			}
 			return nil
 		},
-		calls: func(_ *cobra.Command, dir string, c analysis.TemplateCallsConfiguration) error {
-			r.line("calls dir=%q templates=%v", r.rel(dir), c.TemplatesVariables)
+		calls: func(_ *cobra.Command, jobs []packageJob, _ analysis.TemplateCallsConfiguration) error {
+			for _, job := range jobs {
+				r.line("calls dir=%q templates=%v", r.rel(job.Dir), job.Config.TemplatesVariables)
+			}
 			return nil
 		},
-		callers: func(_ *cobra.Command, dir string, c analysis.TemplateCallersConfiguration) error {
-			r.line("callers dir=%q templates=%v", r.rel(dir), c.TemplatesVariables)
+		callers: func(_ *cobra.Command, jobs []packageJob, _ analysis.TemplateCallersConfiguration) error {
+			for _, job := range jobs {
+				r.line("callers dir=%q templates=%v", r.rel(job.Dir), job.Config.TemplatesVariables)
+			}
 			return nil
 		},
 		mutations: func(_ *cobra.Command, dir string, c mutation.Configuration) error {

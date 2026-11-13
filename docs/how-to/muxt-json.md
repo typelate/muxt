@@ -88,6 +88,8 @@ go generate ./...
 
 It prints nothing unless a route has a note or warning; `-v` lists what was written. `example.com/m` imports `example.com/m/workspace`, so the workspace is written first.
 
+`muxt check` in the same directory checks every entry, the workspace first.
+
 Run `muxt generate` inside `workspace` and it writes that entry only. A directive left in a sub-package generates that package a second time.
 
 ## 6. What a flag does now

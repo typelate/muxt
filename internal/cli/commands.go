@@ -29,10 +29,10 @@ const (
 func Commands(wd string, args []string, getEnv func(string) string, stdin io.Reader, stdout, stderr io.Writer) error {
 	return commands(wd, args, getEnv, cliVersion, stdin, stdout, stderr, runners{
 		routes:    routesRunner(loadFromGoCommand),
-		check:     runCheck,
+		check:     checkRunner(loadFromGoCommand),
 		generate:  generateRunner(loadFromGoCommand),
-		callers:   runTemplateCallers,
-		calls:     runTemplateCalls,
+		callers:   callersRunner(loadFromGoCommand),
+		calls:     callsRunner(loadFromGoCommand),
 		mutations: runTemplateMutations,
 		format:    runFormatCommand,
 		load:      loadFromGoCommand,
@@ -51,10 +51,10 @@ func Commands(wd string, args []string, getEnv func(string) string, stdin io.Rea
 // in their own RunE and have no runner yet.
 type runners struct {
 	routes    func(cmd *cobra.Command, jobs []routesJob) error
-	check     func(cmd *cobra.Command, wd string, config analysis.CheckConfiguration) error
+	check     func(cmd *cobra.Command, jobs []packageJob, config analysis.CheckConfiguration) error
 	generate  func(cmd *cobra.Command, jobs []packageJob) error
-	callers   func(cmd *cobra.Command, wd string, config analysis.TemplateCallersConfiguration) error
-	calls     func(cmd *cobra.Command, wd string, config analysis.TemplateCallsConfiguration) error
+	callers   func(cmd *cobra.Command, jobs []packageJob, config analysis.TemplateCallersConfiguration) error
+	calls     func(cmd *cobra.Command, jobs []packageJob, config analysis.TemplateCallsConfiguration) error
 	mutations func(cmd *cobra.Command, wd string, config mutation.Configuration) error
 	format    func(cmd *cobra.Command, wd string, config formatConfiguration) error
 

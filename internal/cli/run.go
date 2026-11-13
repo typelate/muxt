@@ -4,17 +4,13 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"os/signal"
 	"syscall"
 
 	"github.com/spf13/cobra"
 
-	"github.com/typelate/muxt/internal/analysis"
-	"github.com/typelate/muxt/internal/load"
 	"github.com/typelate/muxt/internal/mutation"
-	"github.com/typelate/muxt/internal/source"
 )
 
 // This file holds what each command does with its configuration: load the
@@ -33,73 +29,6 @@ func requireDirectory(command, dir string) error {
 		return fmt.Errorf("%s: %s is not a package directory", command, dir)
 	}
 	return nil
-}
-
-func runCheck(cmd *cobra.Command, wd string, config analysis.CheckConfiguration) error {
-	if err := requireDirectory(cmd.Name(), wd); err != nil {
-		return err
-	}
-	l, err := load.InDirectories(wd, []string{wd}, nil)
-	if err != nil {
-		return err
-	}
-	logger := log.New(cmd.ErrOrStderr(), "", 0)
-	warnPartialAST(logger, l)
-	pkg, err := l.Package(wd, config.TemplatesVariables)
-	if err != nil {
-		return checkFailure(cmd, err)
-	}
-	result, err := analysis.Check(config, logger, pkg)
-	if err != nil {
-		// Check logged each diagnostic; its error is only their count, and
-		// cobra repeating it after them would bury the last diagnostic.
-		cmd.SilenceErrors = true
-		return err
-	}
-	summary := plural(result.Checked, "template")
-	if result.NonLiteral > 0 {
-		summary += ", " + plural(result.NonLiteral, "call site") + " skipped"
-	}
-	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "ok: %s\n", summary)
-	return nil
-}
-
-// loadTemplates loads the package in wd for a listing, warning on stderr
-// when it has syntax errors.
-func loadTemplates(cmd *cobra.Command, wd string, templatesVariables []string) (source.Package, error) {
-	if err := requireDirectory(cmd.Name(), wd); err != nil {
-		return source.Package{}, err
-	}
-	l, err := load.InDirectories(wd, []string{wd}, nil)
-	if err != nil {
-		return source.Package{}, err
-	}
-	warnPartialAST(log.New(cmd.ErrOrStderr(), "", 0), l)
-	return l.Package(wd, templatesVariables)
-}
-
-func runTemplateCallers(cmd *cobra.Command, wd string, config analysis.TemplateCallersConfiguration) error {
-	pkg, err := loadTemplates(cmd, wd, config.TemplatesVariables)
-	if err != nil {
-		return err
-	}
-	result, err := analysis.NewTemplateCallers(config, pkg)
-	if err != nil {
-		return err
-	}
-	return writeResult(cmd, cmd.OutOrStdout(), result)
-}
-
-func runTemplateCalls(cmd *cobra.Command, wd string, config analysis.TemplateCallsConfiguration) error {
-	pkg, err := loadTemplates(cmd, wd, config.TemplatesVariables)
-	if err != nil {
-		return err
-	}
-	result, err := analysis.NewTemplateCalls(config, pkg)
-	if err != nil {
-		return err
-	}
-	return writeResult(cmd, cmd.OutOrStdout(), result)
 }
 
 func runTemplateMutations(cmd *cobra.Command, wd string, config mutation.Configuration) error {

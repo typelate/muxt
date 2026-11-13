@@ -11,7 +11,7 @@ import (
 	"github.com/typelate/muxt/internal/generate"
 )
 
-func checkCommand(workingDirectory *string, getEnv func(string) string, run func(*cobra.Command, string, analysis.CheckConfiguration) error) *cobra.Command {
+func checkCommand(workingDirectory *string, getEnv func(string) string, run func(*cobra.Command, []packageJob, analysis.CheckConfiguration) error) *cobra.Command {
 	var (
 		config                 analysis.CheckConfiguration
 		ignoredReceiverType    string
@@ -39,7 +39,7 @@ func checkCommand(workingDirectory *string, getEnv func(string) string, run func
 				return err
 			}
 			config.TemplatesVariables = sel.Jobs[0].Config.TemplatesVariables
-			return run(cmd, dir, config)
+			return run(cmd, sel.Jobs, config)
 		},
 	}
 
@@ -56,15 +56,16 @@ func checkCommand(workingDirectory *string, getEnv func(string) string, run func
 	return cmd
 }
 
-// templatesSpec is the jobSpec of a command that reads one package and takes
+// templatesSpec is the jobSpec of a command that reads packages and takes
 // only its templates variables from the command line: check and the listings.
-// Its Fallback is what an empty entry gives, with the variables the flags
-// named.
+// In the directory of a muxt.json it reads every entry, as generate writes
+// them. Its Fallback is what an empty entry gives, with the variables the
+// flags named.
 func templatesSpec(name string, templatesVariables []string, getEnv func(string) string) jobSpec {
 	return jobSpec{
 		Name:     name,
 		Settings: templatesSettingFlags(),
-		Scope:    itsEntry,
+		Scope:    eachEntry,
 		Fallback: func(dir string) (generate.RoutesFileConfiguration, error) {
 			config, err := defaultConfiguration(dir, getEnv)
 			if err != nil {
@@ -106,7 +107,7 @@ func compilePatterns(patterns []string) ([]*regexp.Regexp, error) {
 	return compiled, nil
 }
 
-func listTemplateCallersCommand(wd *string, getEnv func(string) string, run func(*cobra.Command, string, analysis.TemplateCallersConfiguration) error) *cobra.Command {
+func listTemplateCallersCommand(wd *string, getEnv func(string) string, run func(*cobra.Command, []packageJob, analysis.TemplateCallersConfiguration) error) *cobra.Command {
 	var (
 		config                 analysis.TemplateCallersConfiguration
 		deprecatedTemplatesVar string
@@ -139,7 +140,7 @@ func listTemplateCallersCommand(wd *string, getEnv func(string) string, run func
 				return err
 			}
 			config.TemplatesVariables = sel.Jobs[0].Config.TemplatesVariables
-			return run(cmd, dir, config)
+			return run(cmd, sel.Jobs, config)
 		},
 	}
 
@@ -151,7 +152,7 @@ func listTemplateCallersCommand(wd *string, getEnv func(string) string, run func
 	return cmd
 }
 
-func listTemplateCallsCommand(wd *string, getEnv func(string) string, run func(*cobra.Command, string, analysis.TemplateCallsConfiguration) error) *cobra.Command {
+func listTemplateCallsCommand(wd *string, getEnv func(string) string, run func(*cobra.Command, []packageJob, analysis.TemplateCallsConfiguration) error) *cobra.Command {
 	var (
 		config                 analysis.TemplateCallsConfiguration
 		patterns               []string
@@ -184,7 +185,7 @@ func listTemplateCallsCommand(wd *string, getEnv func(string) string, run func(*
 				return err
 			}
 			config.TemplatesVariables = sel.Jobs[0].Config.TemplatesVariables
-			return run(cmd, dir, config)
+			return run(cmd, sel.Jobs, config)
 		},
 	}
 
