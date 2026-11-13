@@ -53,8 +53,7 @@ func checkRunner(loadPackages packageLoader) func(*cobra.Command, []packageJob, 
 					diagnostics = &keyedWriter{w: diagnostics, key: job.Key}
 				}
 				logger := log.New(diagnostics, "", 0)
-				config.TemplatesVariables = job.Config.TemplatesVariables
-				pkg, err := l.Package(job.Dir, config.TemplatesVariables)
+				pkg, err := l.Package(job.Dir, job.Config.TemplatesVariables)
 				if err != nil {
 					err = checkFailure(cmd, err)
 					if several {

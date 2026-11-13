@@ -22,16 +22,16 @@ func templatesVariablesOf(t *testing.T, wd, commandLine string) ([]string, error
 	t.Helper()
 	var got []string
 	err := commands(wd, strings.Fields(commandLine), func(string) string { return "" }, func() (string, bool) { return "v1.2.3", true }, strings.NewReader(""), io.Discard, io.Discard, runners{
-		check: func(_ *cobra.Command, _ []packageJob, c analysis.CheckConfiguration) error {
-			got = c.TemplatesVariables
+		check: func(_ *cobra.Command, jobs []packageJob, _ analysis.CheckConfiguration) error {
+			got = jobs[0].Config.TemplatesVariables
 			return nil
 		},
-		calls: func(_ *cobra.Command, _ []packageJob, c analysis.TemplateCallsConfiguration) error {
-			got = c.TemplatesVariables
+		calls: func(_ *cobra.Command, jobs []packageJob, _ analysis.TemplateCallsConfiguration) error {
+			got = jobs[0].Config.TemplatesVariables
 			return nil
 		},
-		callers: func(_ *cobra.Command, _ []packageJob, c analysis.TemplateCallersConfiguration) error {
-			got = c.TemplatesVariables
+		callers: func(_ *cobra.Command, jobs []packageJob, _ analysis.TemplateCallersConfiguration) error {
+			got = jobs[0].Config.TemplatesVariables
 			return nil
 		},
 	})

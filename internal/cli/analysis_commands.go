@@ -40,7 +40,6 @@ func checkCommand(workingDirectory *string, getEnv func(string) string, run func
 			if err != nil {
 				return err
 			}
-			config.TemplatesVariables = sel.Jobs[0].Config.TemplatesVariables
 			return run(cmd, sel.Jobs, config)
 		},
 	}
@@ -144,7 +143,6 @@ func listTemplateCallersCommand(wd *string, getEnv func(string) string, run func
 			if err != nil {
 				return err
 			}
-			config.TemplatesVariables = sel.Jobs[0].Config.TemplatesVariables
 			return run(cmd, sel.Jobs, config)
 		},
 	}
@@ -192,7 +190,6 @@ func listTemplateCallsCommand(wd *string, getEnv func(string) string, run func(*
 			if err != nil {
 				return err
 			}
-			config.TemplatesVariables = sel.Jobs[0].Config.TemplatesVariables
 			return run(cmd, sel.Jobs, config)
 		},
 	}
