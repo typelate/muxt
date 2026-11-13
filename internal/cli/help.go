@@ -8,7 +8,8 @@ import (
 
 // describe gives each direct subcommand of root that has a reference page a
 // long description: the page's summary, unless the command already has a long
-// description, followed by a line naming the page.
+// description, followed by a line naming the page. Its own sub-commands get
+// the same line after their short description.
 func describe(root *cobra.Command) {
 	for _, cmd := range root.Commands() {
 		summary, ok := docs.Summary(cmd.Name())

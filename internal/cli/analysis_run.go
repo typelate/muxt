@@ -12,11 +12,10 @@ import (
 	"github.com/typelate/muxt/internal/source"
 )
 
-// namedFailure is err for a run over several jobs, naming the job it came
-// from. A caller that wraps must also turn cobra's own error line back on if a
+// namedFailure is err for a keyed run, naming the job it came from. A caller that wraps must also turn cobra's own error line back on if a
 // diagnostic silenced it, or the run ends with no word of whose failure it was.
-func namedFailure(job packageJob, several bool, err error) error {
-	if !several {
+func namedFailure(job packageJob, keyed bool, err error) error {
+	if !keyed {
 		return err
 	}
 	return fmt.Errorf("%s: %w", job.Key, err)
@@ -46,34 +45,34 @@ func (k *keyedWriter) Write(p []byte) (int, error) {
 func checkRunner(loadPackages packageLoader) func(*cobra.Command, []packageJob, analysis.CheckConfiguration) error {
 	return func(cmd *cobra.Command, jobs []packageJob, config analysis.CheckConfiguration) error {
 		return runJobs(cmd, loadPackages, jobs, jobVisitor{
-			Visit: func(_ int, job packageJob, l *load.Loaded, several bool) (bool, error) {
-				// Over several jobs the diagnostics of one say which it is.
+			Visit: func(_ int, job packageJob, l *load.Loaded, keyed bool) (bool, error) {
+				// In a keyed run the diagnostics of a job say which it is.
 				var diagnostics io.Writer = cmd.ErrOrStderr()
-				if several {
+				if keyed {
 					diagnostics = &keyedWriter{w: diagnostics, key: job.Key}
 				}
 				logger := log.New(diagnostics, "", 0)
 				pkg, err := l.Package(job.Dir, job.Config.TemplatesVariables)
 				if err != nil {
 					err = checkFailure(cmd, err)
-					if several {
+					if keyed {
 						cmd.SilenceErrors = false
 					}
-					return false, namedFailure(job, several, err)
+					return false, namedFailure(job, keyed, err)
 				}
 				result, err := analysis.Check(config, logger, pkg)
 				if err != nil {
 					// Check logged each diagnostic; its error is only their count, and
 					// cobra repeating it after them would bury the last diagnostic.
-					// With several jobs the line carries the job's key, so it stays on.
-					cmd.SilenceErrors = !several
-					return false, namedFailure(job, several, err)
+					// In a keyed run the line carries the job's key, so it stays on.
+					cmd.SilenceErrors = !keyed
+					return false, namedFailure(job, keyed, err)
 				}
 				summary := plural(result.Checked, "template")
 				if result.NonLiteral > 0 {
 					summary += ", " + plural(result.NonLiteral, "call site") + " skipped"
 				}
-				if several {
+				if keyed {
 					_, _ = fmt.Fprintln(cmd.OutOrStdout(), job.Key)
 				}
 				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "ok: %s\n", summary)
@@ -109,7 +108,7 @@ func callsRunner(loadPackages packageLoader) func(*cobra.Command, []packageJob, 
 	}
 }
 
-// runListing writes what list makes of each job's package. Over several jobs
+// runListing writes what list makes of each job's package. In a keyed run
 // each listing carries its job's key, and with --format json they are one
 // array, since several top-level values are not a document a JSON parser
 // reads.
@@ -119,7 +118,7 @@ func runListing(cmd *cobra.Command, loadPackages packageLoader, jobs []packageJo
 		collected           []io.WriterTo
 	)
 	err := runJobs(cmd, loadPackages, jobs, jobVisitor{
-		Visit: func(_ int, job packageJob, l *load.Loaded, several bool) (bool, error) {
+		Visit: func(_ int, job packageJob, l *load.Loaded, keyed bool) (bool, error) {
 			if !formatKnown {
 				var err error
 				if asJSON, err = isJSON(cmd); err != nil {
@@ -129,23 +128,23 @@ func runListing(cmd *cobra.Command, loadPackages packageLoader, jobs []packageJo
 			}
 			pkg, err := l.Package(job.Dir, job.Config.TemplatesVariables)
 			if err != nil {
-				if several {
+				if keyed {
 					cmd.SilenceErrors = false
 				}
-				return false, namedFailure(job, several, err)
+				return false, namedFailure(job, keyed, err)
 			}
 			var key string
-			if several {
+			if keyed {
 				key = job.Key
 			}
 			result, err := list(pkg, key)
 			if err != nil {
-				if several {
+				if keyed {
 					cmd.SilenceErrors = false
 				}
-				return false, namedFailure(job, several, err)
+				return false, namedFailure(job, keyed, err)
 			}
-			if asJSON && several {
+			if asJSON && keyed {
 				collected = append(collected, result)
 				return false, nil
 			}
@@ -161,8 +160,8 @@ func runListing(cmd *cobra.Command, loadPackages packageLoader, jobs []packageJo
 	return writeListings(cmd.OutOrStdout(), collected)
 }
 
-// callsListing is one package's template calls, headed by its key when a run
-// lists several.
+// callsListing is one package's template calls, headed by its key in a keyed
+// run.
 type callsListing struct {
 	*analysis.TemplateCalls
 	Key string `json:",omitzero"`
@@ -172,8 +171,8 @@ func (l callsListing) WriteTo(w io.Writer) (int64, error) {
 	return writeKeyed(w, l.Key, l.TemplateCalls)
 }
 
-// callersListing is one package's template callers, headed by its key when a
-// run lists several.
+// callersListing is one package's template callers, headed by its key in a
+// keyed run.
 type callersListing struct {
 	*analysis.TemplateCallers
 	Key string `json:",omitzero"`

@@ -32,7 +32,7 @@ func generateRunner(loadPackages packageLoader) func(*cobra.Command, []packageJo
 		if len(jobs) == 0 {
 			return nil
 		}
-		several := jobs[0].Keyed
+		keyed := jobs[0].Keyed
 		// What was written is for -v; a run that has nothing to say is silent.
 		stdout := cmd.OutOrStdout()
 		verbose := jobs[0].Config.Verbose
@@ -41,14 +41,14 @@ func generateRunner(loadPackages packageLoader) func(*cobra.Command, []packageJo
 			wroteTo = stdout
 		}
 		stderr := log.New(cmd.ErrOrStderr(), "", 0)
-		// With several directories a failure names its package, since
-		// nothing else says which one it was.
+		// In a keyed run a failure names its package, since nothing else
+		// says which one it was.
 		failed := func(job packageJob, err error) error {
 			if entryErr, ok := entryVariableError(job, err); ok {
 				// It names the entry already.
 				return entryErr
 			}
-			if several {
+			if keyed {
 				return fmt.Errorf("%s: %w", job.Key, err)
 			}
 			return err
@@ -73,19 +73,19 @@ func generateRunner(loadPackages packageLoader) func(*cobra.Command, []packageJo
 				return &composite.InvalidEntryError{Path: job.File, Where: fmt.Sprintf("packages[%q]", job.Key), Err: err}
 			},
 			Begin: func(_ int, job packageJob) {
-				if several && verbose {
+				if keyed && verbose {
 					// Several directories write to one stream, so each
 					// says whose lines follow.
 					_, _ = fmt.Fprintln(stdout, job.Key)
 				}
 			},
-			Visit: func(_ int, job packageJob, l *load.Loaded, several bool) (bool, error) {
-				files, err := resolveJob(cmd, l, job, several)
+			Visit: func(_ int, job packageJob, l *load.Loaded, keyed bool) (bool, error) {
+				files, err := resolveJob(cmd, l, job, keyed)
 				if err != nil {
 					return false, failed(job, err)
 				}
 				jobStderr := stderr
-				if several {
+				if keyed {
 					jobStderr = log.New(cmd.ErrOrStderr(), job.Key+": ", 0)
 				}
 				wrote, err := writeJob(wroteTo, jobStderr, job, files)
@@ -100,11 +100,11 @@ func generateRunner(loadPackages packageLoader) func(*cobra.Command, []packageJo
 
 // resolveJob returns the files job generates from the loaded packages l. A
 // failure that explains itself over several lines is printed before it is
-// returned, after job's key when several jobs run, since that printed text
+// returned, after job's key in a keyed run, since that printed text
 // replaces the returned error.
-func resolveJob(cmd *cobra.Command, l *load.Loaded, job packageJob, several bool) ([]generate.GeneratedFile, error) {
+func resolveJob(cmd *cobra.Command, l *load.Loaded, job packageJob, keyed bool) ([]generate.GeneratedFile, error) {
 	report := func(err error) {
-		if _, ok := errors.AsType[muxt.MultiLineError](err); ok && several {
+		if _, ok := errors.AsType[muxt.MultiLineError](err); ok && keyed {
 			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "%s:\n", job.Key)
 		}
 		printMultiLineError(cmd, err)
@@ -122,7 +122,7 @@ func resolveJob(cmd *cobra.Command, l *load.Loaded, job packageJob, several bool
 	}
 	// Several jobs share one stream, so each note says whose it is.
 	logs := generate.Loggers{Progress: log.New(cmd.OutOrStdout(), "", 0), Notes: log.New(cmd.OutOrStdout(), "", 0)}
-	if several {
+	if keyed {
 		logs.Notes.SetPrefix(job.Key + ": ")
 	}
 	files, err := generate.TemplateRoutesFiles(job.Dir, config, pkg, defs, logs)

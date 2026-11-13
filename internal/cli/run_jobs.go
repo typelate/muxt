@@ -21,7 +21,7 @@ type jobVisitor struct {
 	// Visit does one job and reports whether it wrote files in the job's
 	// output directory. Its error is returned as it is; naming the job is
 	// the visitor's to do.
-	Visit func(i int, job packageJob, l *load.Loaded, several bool) (wrote bool, err error)
+	Visit func(i int, job packageJob, l *load.Loaded, keyed bool) (wrote bool, err error)
 }
 
 // runJobs requires each job's directory, loads every directory and receiver

@@ -22,11 +22,11 @@ import (
 // An import with no module (the standard library) is described with an empty
 // ModulePath. It and an import in another module, or one that embeds
 // nothing, are returned with Vars nil: they are described, so the evaluator
-// can say why they cannot be read, but their files are not parsed. For the
-// rest the package's Go files are parsed with
-// comments into pkg's token.FileSet, because the //go:embed comment that
-// decides which files a variable holds is on the declaration, and the load
-// does not keep the syntax of an import.
+// can say why they cannot be read, but their files are not parsed. A package
+// of this module that embeds files has its Go files parsed with comments into
+// pkg's token.FileSet, because the //go:embed comment that decides which
+// files a variable holds is on the declaration, and the load does not keep
+// the syntax of an import.
 func embedPackages(pkg *packages.Package) (map[string]source.EmbedPackage, error) {
 	result := make(map[string]source.EmbedPackage)
 	// Sorted, so the first error is the same on every run.

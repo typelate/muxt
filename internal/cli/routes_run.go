@@ -72,11 +72,11 @@ func routesRunner(loadPackages packageLoader) func(*cobra.Command, []routesJob) 
 		}
 		var (
 			asJSON, formatKnown bool
-			// Over several entries JSON is one array, not a value per package.
+			// In a keyed run JSON is one array, not a value per package.
 			collected []io.WriterTo
 		)
 		err := runJobs(cmd, loadPackages, packageJobs, jobVisitor{
-			Visit: func(i int, job packageJob, l *load.Loaded, several bool) (bool, error) {
+			Visit: func(i int, job packageJob, l *load.Loaded, keyed bool) (bool, error) {
 				if !formatKnown {
 					var err error
 					if asJSON, err = isJSON(cmd); err != nil {
@@ -100,10 +100,10 @@ func routesRunner(loadPackages packageLoader) func(*cobra.Command, []routesJob) 
 				}
 				for n, result := range results {
 					listing := routesListing{Routes: result, Configuration: jobs[i].Report, printConfiguration: n == 0}
-					if several {
+					if keyed {
 						listing.Key = job.Key
 					}
-					if asJSON && several {
+					if asJSON && keyed {
 						collected = append(collected, listing)
 						continue
 					}
