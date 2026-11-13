@@ -2,6 +2,7 @@ package composite
 
 import (
 	"fmt"
+	"path/filepath"
 	"slices"
 	"strings"
 )
@@ -268,13 +269,20 @@ func (e *KeyOutsideError) Error() string {
 
 // NoModuleError reports a muxt.json with no go.mod at or above it. Its packages
 // keys are import paths, which only a module path can complete, so the file
-// cannot be read. Path is the file's absolute path.
+// cannot be read. Path is the file's absolute path. Creating is set when the
+// file does not exist yet, so the message names the directory and the command
+// to run, not a file the person never wrote.
 type NoModuleError struct {
-	Path string
+	Path     string
+	Creating bool
 }
 
-// Error returns the path and the fact that keys are import paths on one line.
+// Error returns the path and the fact that keys are import paths on one line,
+// or the directory and what to run when the file was to be created.
 func (e *NoModuleError) Error() string {
+	if e.Creating {
+		return fmt.Sprintf("%s: no go.mod found at or above this directory; run go mod init MODULE here first", filepath.Dir(e.Path))
+	}
 	return fmt.Sprintf("%s: no go.mod found at or above the file; package keys are import paths", e.Path)
 }
 

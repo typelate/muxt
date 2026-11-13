@@ -409,7 +409,7 @@ func TestCreateRefuses(t *testing.T) {
 			name:  "no go.mod",
 			setup: func(*testing.T, string) {},
 			want: func(root string) string {
-				return filepath.Join(root, composite.FileName) + ": no go.mod found at or above the file; package keys are import paths"
+				return root + ": no go.mod found at or above this directory; run go mod init MODULE here first"
 			},
 			as: isError[*composite.NoModuleError],
 		},

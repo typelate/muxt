@@ -109,7 +109,7 @@ func Create(dir string, keys Keys) error {
 		return fmt.Errorf("%s: %w", path, err)
 	}
 	if !hasModule {
-		return &NoModuleError{Path: path}
+		return &NoModuleError{Path: path, Creating: true}
 	}
 	return writeNew(path, []byte("{\n\t\"packages\": {}\n}\n"))
 }

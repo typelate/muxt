@@ -444,7 +444,7 @@ func TestGenerateConfigNeedsModule(t *testing.T) {
 
 	var noModule *composite.NoModuleError
 	require.ErrorAs(t, err, &noModule)
-	require.EqualError(t, err, filepath.Join(dir, "muxt.json")+": no go.mod found at or above the file; package keys are import paths")
+	require.EqualError(t, err, dir+": no go.mod found at or above this directory; run go mod init MODULE here first")
 	_, statErr := os.Stat(filepath.Join(dir, "muxt.json"))
 	assert.ErrorIs(t, statErr, os.ErrNotExist, "muxt.json is not written")
 }
