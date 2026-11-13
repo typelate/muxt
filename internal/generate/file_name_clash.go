@@ -18,8 +18,8 @@ type GeneratedFileClashError struct {
 	// FileName is the generated file name both would write.
 	FileName string
 
-	// First and Second are the template files, relative to the directory the
-	// generated files are written into. The package's own file is First.
+	// First and Second are the template files by absolute path. The package's
+	// own file is First.
 	First, Second string
 }
 
@@ -28,9 +28,9 @@ func (e *GeneratedFileClashError) Error() string {
 }
 
 // checkGeneratedFileNames fails when two of sourceFiles would write the same
-// generated file into wd. A file another package owns is listed after the
-// package's own, so the error names the file the package can rename first.
-func checkGeneratedFileNames(wd string, sourceFiles []string, pkg source.Package) error {
+// generated file. A file another package owns is listed after the package's
+// own, so the error names the file the package can rename first.
+func checkGeneratedFileNames(sourceFiles []string, pkg source.Package) error {
 	shared := make(map[string]bool)
 	for _, variable := range pkg.Variables {
 		for _, definition := range variable.Definitions {
@@ -54,7 +54,7 @@ func checkGeneratedFileNames(wd string, sourceFiles []string, pkg source.Package
 	for _, sourceFile := range ordered {
 		name := generatedFileName(sourceFile)
 		if first, ok := writtenFor[name]; ok {
-			return &GeneratedFileClashError{FileName: name, First: relativeOrSame(wd, first), Second: relativeOrSame(wd, sourceFile)}
+			return &GeneratedFileClashError{FileName: name, First: first, Second: sourceFile}
 		}
 		writtenFor[name] = sourceFile
 	}
@@ -66,13 +66,4 @@ func checkGeneratedFileNames(wd string, sourceFiles []string, pkg source.Package
 // absolute path.
 func generatedFileName(sourceFile string) string {
 	return strings.TrimSuffix(filepath.Base(sourceFile), filepath.Ext(sourceFile)) + "_template_routes_gen.go"
-}
-
-// relativeOrSame returns path relative to dir, even when that is a ../ path,
-// and path itself when no relative path exists.
-func relativeOrSame(dir, path string) string {
-	if rel, err := filepath.Rel(dir, path); err == nil {
-		return rel
-	}
-	return path
 }

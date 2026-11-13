@@ -245,7 +245,7 @@ func TestGenerateMultipleFilesNamesClashWithSharedFile(t *testing.T) {
 	output, err := runMuxt(t, filepath.Join(dir, "workspace"), "generate", "--output-multiple-files", "--use-receiver-type=T")
 
 	require.Error(t, err, "generate: %s", output)
-	assert.Contains(t, output, "layout_template_routes_gen.go would be written for both layout.gohtml and ../fragments/layout.gohtml; rename one template file", "generate output")
+	assert.Contains(t, output, "layout_template_routes_gen.go would be written for both "+filepath.Join(dir, "workspace", "layout.gohtml")+" and "+filepath.Join(dir, "fragments", "layout.gohtml")+"; rename one template file", "generate output")
 }
 
 // TestGenerateMultipleFilesWritesOnlyInThePackage states that with

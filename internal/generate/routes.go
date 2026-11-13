@@ -206,7 +206,7 @@ func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, pkg source.P
 	topLevelRoutes := groups.all
 	if config.OutputMultipleFiles {
 		templateSourceFiles := slices.Sorted(maps.Keys(groups.byFile))
-		if err := checkGeneratedFileNames(wd, templateSourceFiles, pkg); err != nil {
+		if err := checkGeneratedFileNames(templateSourceFiles, pkg); err != nil {
 			return nil, err
 		}
 		files, err := sourceFileRouteFunctionFiles(wd, config, templateSourceFiles, groups, logs.Progress, file, receiverInterface, routesFunc)

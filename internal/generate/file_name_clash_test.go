@@ -17,7 +17,6 @@ import (
 // package can rename.
 func TestCheckGeneratedFileNames(t *testing.T) {
 	const (
-		wd     = "/m/workspace"
 		own    = "/m/workspace/layout.gohtml"
 		shared = "/m/fragments/layout.gohtml"
 	)
@@ -43,23 +42,23 @@ func TestCheckGeneratedFileNames(t *testing.T) {
 			name:    "a shared file and an own file share a base name",
 			files:   []string{shared, own},
 			pkg:     definedIn(shared),
-			wantErr: &GeneratedFileClashError{FileName: "layout_template_routes_gen.go", First: "layout.gohtml", Second: "../fragments/layout.gohtml"},
+			wantErr: &GeneratedFileClashError{FileName: "layout_template_routes_gen.go", First: own, Second: shared},
 		},
 		{
 			name:    "the own file is first whatever the input order",
 			files:   []string{own, shared},
 			pkg:     definedIn(shared),
-			wantErr: &GeneratedFileClashError{FileName: "layout_template_routes_gen.go", First: "layout.gohtml", Second: "../fragments/layout.gohtml"},
+			wantErr: &GeneratedFileClashError{FileName: "layout_template_routes_gen.go", First: own, Second: shared},
 		},
 		{
 			name:    "two own files in different directories",
 			files:   []string{"/m/workspace/a/layout.gohtml", own},
 			pkg:     definedIn(),
-			wantErr: &GeneratedFileClashError{FileName: "layout_template_routes_gen.go", First: "a/layout.gohtml", Second: "layout.gohtml"},
+			wantErr: &GeneratedFileClashError{FileName: "layout_template_routes_gen.go", First: "/m/workspace/a/layout.gohtml", Second: own},
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			err := checkGeneratedFileNames(wd, tt.files, tt.pkg)
+			err := checkGeneratedFileNames(tt.files, tt.pkg)
 
 			if tt.wantErr == nil {
 				require.NoError(t, err, "checkGeneratedFileNames(%q)", tt.files)
