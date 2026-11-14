@@ -38,10 +38,6 @@ const Module = "github.com/typelate/htt"
 // import.
 const enginePackage = Module + "/template"
 
-// ModuleDirEnv names the environment variable holding a directory of
-// Module's source, which the modfile copy then replaces Module with.
-const ModuleDirEnv = "MUXT_MODULE_DIR"
-
 // shim is html/template's API forwarded to htt's template package, which
 // the overlay puts in place of html/template's own files.
 //
@@ -65,12 +61,6 @@ type Toolchain struct {
 
 	// Env is the go command's environment, nil for the process's own.
 	Env []string
-
-	// ModuleDir is a directory of Module's source to replace Module
-	// with. When empty, ModuleDirEnv in Env says, and when that is
-	// empty too, nothing replaces Module. A relative directory is
-	// relative to Dir.
-	ModuleDir string
 }
 
 func (tc Toolchain) goBin() string {
@@ -249,48 +239,7 @@ func Resolve(ctx context.Context, tc Toolchain) (Target, error) {
 	if err != nil {
 		return Target{}, err
 	}
-	dir, err := tc.moduleDir()
-	if err != nil {
-		return Target{}, err
-	}
-	if dir != "" {
-		req.Dir = dir
-	}
 	return Target{tc: tc, goroot: goroot, goMod: targetMod, req: req}, nil
-}
-
-// moduleDir is the absolute module directory the toolchain names, "" for
-// none.
-func (tc Toolchain) moduleDir() (string, error) {
-	dir := tc.ModuleDir
-	if dir == "" {
-		dir = tc.getenv(ModuleDirEnv)
-	}
-	if dir == "" {
-		return "", nil
-	}
-	if !filepath.IsAbs(dir) {
-		dir = filepath.Join(tc.Dir, dir)
-	}
-	abs, err := filepath.Abs(dir)
-	if err != nil {
-		return "", fmt.Errorf("%s: %w", ModuleDirEnv, err)
-	}
-	return abs, nil
-}
-
-// getenv is the value of key in the go command's environment.
-func (tc Toolchain) getenv(key string) string {
-	if tc.Env == nil {
-		return os.Getenv(key)
-	}
-	value := ""
-	for _, kv := range tc.Env {
-		if k, v, ok := strings.Cut(kv, "="); ok && k == key {
-			value = v // the last one wins, as in os/exec
-		}
-	}
-	return value
 }
 
 // Write writes under scratchDir the files go test needs to build the test

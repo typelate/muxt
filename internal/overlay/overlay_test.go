@@ -140,39 +140,6 @@ func TestWriteCopiesGoSum(t *testing.T) {
 	}
 }
 
-// TestWriteModuleDir states that a module directory, from the toolchain or
-// from MUXT_MODULE_DIR in its environment, replaces the engine's module in
-// the modfile copy, a relative one resolved against the toolchain's
-// directory.
-func TestWriteModuleDir(t *testing.T) {
-	realGOROOT(t)
-	target := writeTarget(t, map[string]string{"go.mod": targetGoMod})
-	source := t.TempDir()
-	for _, tt := range []struct {
-		name string
-		tc   overlay.Toolchain
-		want string
-	}{
-		{name: "the toolchain's field", tc: overlay.Toolchain{Dir: target, ModuleDir: source}, want: source},
-		{name: "the environment, relative to the directory", tc: overlay.Toolchain{Dir: target, Env: append(os.Environ(), overlay.ModuleDirEnv+"=engine")}, want: filepath.Join(target, "engine")},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			scratch := t.TempDir()
-
-			files, err := writeEngine(context.Background(), tt.tc, scratch)
-			if err != nil {
-				t.Fatalf("Write: %v", err)
-			}
-			if files.ModuleDir != tt.want {
-				t.Errorf("ModuleDir = %q, want %q", files.ModuleDir, tt.want)
-			}
-			if b, want := readFile(t, files.ModFile), "replace "+overlay.Module+" => "+tt.want; !strings.Contains(b, want) {
-				t.Errorf("the modfile copy lacks %q:\n%s", want, b)
-			}
-		})
-	}
-}
-
 // TestWriteNeedsAModule states that a target outside any module is an
 // error: there is no go.mod to add the engine to.
 func TestWriteNeedsAModule(t *testing.T) {

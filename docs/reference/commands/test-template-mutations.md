@@ -182,8 +182,6 @@ The command is `go test -count=1 -v -mod=mod -modfile=<scratch>/go.mod -overlay=
 
 muxt never writes your `go.mod` or `go.sum`. `-mod=mod` lets the go command add the sums htt's requirements need to the copy. The go command takes htt from the module cache, where `go install` or `go get` left it, and fetches it from the module proxy otherwise. With `-v`, the [timing](#timing) preamble names the module the engine came from, as in `coverage pre-pass 2.4s (engine github.com/typelate/htt@v0.2.0)`, and adds `, not your go.mod's v0.1.0` when the copy overrode your version. muxt removes the scratch directory when the run ends.
 
-Set `MUXT_MODULE_DIR` to a directory of htt's source, and the copy replaces `github.com/typelate/htt` with it.
-
 Each test binary that runs the engine writes its profile, `<pid>.cov`, as it starts, before it renders anything. A profile with no blocks is a test binary that executed no template, and every mutant it would have reached is unreached. No profile at all means no test binary ran the engine, and coverage is unknown.
 
 The overlay adds no package under GOROOT, so vet runs in the pre-pass as in your normal test run. `-v` lets a test binary that stopped recording coverage say so in its output.
