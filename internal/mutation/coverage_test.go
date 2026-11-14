@@ -686,7 +686,7 @@ func TestEngineNote(t *testing.T) {
 		want  string
 	}{
 		{overlay.Files{Version: "v0.2.0"}, "engine github.com/typelate/htt@v0.2.0"},
-		{overlay.Files{Version: "v0.2.0", ModuleDir: "/src/htt"}, "engine github.com/typelate/htt@v0.2.0 => /src/htt"},
+		{overlay.Files{Version: "v0.2.0", Replace: "/src/htt"}, "engine github.com/typelate/htt@v0.2.0 => /src/htt"},
 		{overlay.Files{Version: "v0.2.0", TargetVersion: "v0.1.0"}, "engine github.com/typelate/htt@v0.2.0, not your go.mod's v0.1.0"},
 	} {
 		assert.Equal(t, tt.want, engineNote(tt.files), "engineNote(%+v)", tt.files)

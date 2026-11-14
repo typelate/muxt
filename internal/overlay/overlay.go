@@ -115,9 +115,9 @@ type Files struct {
 	// this muxt was built with.
 	Version string
 
-	// ModuleDir is the directory ModFile replaces Module with, "" for
-	// none.
-	ModuleDir string
+	// Replace is what ModFile replaces Module with, as muxt's build did:
+	// a directory, or path@version of another module; "" for none.
+	Replace string
 
 	// TargetVersion is the version of Module the test target's go.mod
 	// requires, when it requires one other than Version, which ModFile
@@ -264,11 +264,11 @@ func Write(target Target, scratchDir string) (Files, error) {
 	}
 
 	files := Files{
-		Overlay:   filepath.Join(scratchDir, "overlay.json"),
-		ModFile:   filepath.Join(scratchDir, "go.mod"),
-		Target:    targetMod,
-		Version:   req.Version,
-		ModuleDir: req.Dir,
+		Overlay: filepath.Join(scratchDir, "overlay.json"),
+		ModFile: filepath.Join(scratchDir, "go.mod"),
+		Target:  targetMod,
+		Version: req.Version,
+		Replace: req.Dir,
 	}
 	local := filepath.Join(scratchDir, "html-template", shimFile)
 	if err := writeFile(local, shim); err != nil {

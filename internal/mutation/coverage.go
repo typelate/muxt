@@ -114,8 +114,8 @@ func templateCoverage(ctx context.Context, tc overlay.Toolchain, scratch string,
 // requirement when the copy overrode it.
 func engineNote(engine overlay.Files) string {
 	note := "engine " + overlay.Module + "@" + engine.Version
-	if engine.ModuleDir != "" {
-		note += " => " + engine.ModuleDir
+	if engine.Replace != "" {
+		note += " => " + engine.Replace
 	}
 	if engine.TargetVersion != "" {
 		note += ", not your go.mod's " + engine.TargetVersion
