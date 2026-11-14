@@ -1,6 +1,6 @@
 module github.com/typelate/muxt
 
-go 1.27
+go 1.27.0
 
 require (
 	github.com/dustin/go-humanize v1.1.0
@@ -10,6 +10,7 @@ require (
 	github.com/spf13/pflag v1.0.10
 	github.com/stretchr/testify v1.12.1
 	github.com/typelate/dom v0.10.0
+	github.com/typelate/htt v0.0.0-dev.0
 	golang.org/x/mod v0.42.0
 	golang.org/x/net v0.62.0
 	golang.org/x/tools v0.52.0

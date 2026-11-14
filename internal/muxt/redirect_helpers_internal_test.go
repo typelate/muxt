@@ -3,16 +3,16 @@ package muxt
 import (
 	"testing"
 
-	"github.com/typelate/muxt/template"
+	"github.com/typelate/htt"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func firstCommand(t *testing.T, text string) *template.CommandNode {
+func firstCommand(t *testing.T, text string) *htt.CommandNode {
 	t.Helper()
 	_, page := pageIn(t, text)
-	action, ok := page.Tree.Root.Nodes[0].(*template.ActionNode)
+	action, ok := page.Tree.Root.Nodes[0].(*htt.ActionNode)
 	require.True(t, ok, "%q does not start with an action", text)
 	return action.Pipe.Commands[0]
 }
@@ -108,33 +108,33 @@ func TestCallsMethodOnTemplateData(t *testing.T) {
 }
 
 // pipeOf is the parenthesised pipeline (arg).
-func pipeOf(arg template.Node) *template.PipeNode {
-	return &template.PipeNode{Commands: []*template.CommandNode{{Args: []template.Node{arg}}}}
+func pipeOf(arg htt.Node) *htt.PipeNode {
+	return &htt.PipeNode{Commands: []*htt.CommandNode{{Args: []htt.Node{arg}}}}
 }
 
 func TestChainStartsAtTemplateData(t *testing.T) {
 	for _, tt := range []struct {
 		name string
-		node template.Node
+		node htt.Node
 		dot  bool
 		want bool
 	}{
-		{name: "dot with dot as data", node: &template.DotNode{}, dot: true, want: true},
-		{name: "dot rebound", node: &template.DotNode{}},
-		{name: "root variable", node: &template.VariableNode{Ident: []string{"$"}}, want: true},
-		{name: "root variable with a field", node: &template.VariableNode{Ident: []string{"$", "A"}}, want: true},
-		{name: "local variable", node: &template.VariableNode{Ident: []string{"$x"}}, dot: true},
-		{name: "empty variable", node: &template.VariableNode{}, dot: true},
-		{name: "pipeline of dot with dot as data", node: pipeOf(&template.DotNode{}), dot: true, want: true},
-		{name: "pipeline of dot with dot rebound", node: pipeOf(&template.DotNode{})},
-		{name: "pipeline of the root variable", node: pipeOf(&template.VariableNode{Ident: []string{"$"}}), want: true},
-		{name: "pipeline selecting from dot", node: pipeOf(&template.FieldNode{Ident: []string{"Result"}}), dot: true},
-		{name: "pipeline declaring a variable", node: &template.PipeNode{Decl: []*template.VariableNode{{Ident: []string{"$x"}}}, Commands: pipeOf(&template.DotNode{}).Commands}, dot: true},
-		{name: "empty pipeline", node: &template.PipeNode{}, dot: true},
-		{name: "literal", node: &template.StringNode{}, dot: true},
+		{name: "dot with dot as data", node: &htt.DotNode{}, dot: true, want: true},
+		{name: "dot rebound", node: &htt.DotNode{}},
+		{name: "root variable", node: &htt.VariableNode{Ident: []string{"$"}}, want: true},
+		{name: "root variable with a field", node: &htt.VariableNode{Ident: []string{"$", "A"}}, want: true},
+		{name: "local variable", node: &htt.VariableNode{Ident: []string{"$x"}}, dot: true},
+		{name: "empty variable", node: &htt.VariableNode{}, dot: true},
+		{name: "pipeline of dot with dot as data", node: pipeOf(&htt.DotNode{}), dot: true, want: true},
+		{name: "pipeline of dot with dot rebound", node: pipeOf(&htt.DotNode{})},
+		{name: "pipeline of the root variable", node: pipeOf(&htt.VariableNode{Ident: []string{"$"}}), want: true},
+		{name: "pipeline selecting from dot", node: pipeOf(&htt.FieldNode{Ident: []string{"Result"}}), dot: true},
+		{name: "pipeline declaring a variable", node: &htt.PipeNode{Decl: []*htt.VariableNode{{Ident: []string{"$x"}}}, Commands: pipeOf(&htt.DotNode{}).Commands}, dot: true},
+		{name: "empty pipeline", node: &htt.PipeNode{}, dot: true},
+		{name: "literal", node: &htt.StringNode{}, dot: true},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, chainStartsAtTemplateData(&template.ChainNode{Node: tt.node}, tt.dot), "chainStartsAtTemplateData(%s, dot=%t)", tt.name, tt.dot)
+			assert.Equal(t, tt.want, chainStartsAtTemplateData(&htt.ChainNode{Node: tt.node}, tt.dot), "chainStartsAtTemplateData(%s, dot=%t)", tt.name, tt.dot)
 		})
 	}
 }

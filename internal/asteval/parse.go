@@ -4,8 +4,8 @@ import (
 	"cmp"
 	"go/types"
 
-	"github.com/typelate/muxt/template"
-	"github.com/typelate/muxt/template/lex"
+	"github.com/typelate/htt"
+	"github.com/typelate/htt/lex"
 )
 
 // ParseTrees parses template text into the trees it defines, the way
@@ -29,7 +29,7 @@ import (
 // `function "name" not defined`; a nil functions turns that check off.
 // Registering a function named break or continue turns that keyword off,
 // as it does in Template.Parse.
-func ParseTrees(name, text, leftDelim, rightDelim string, functions map[string]*types.Signature, html bool) (map[string]*template.Tree, error) {
+func ParseTrees(name, text, leftDelim, rightDelim string, functions map[string]*types.Signature, html bool) (map[string]*htt.Tree, error) {
 	_, hasBreak := functions["break"]
 	_, hasContinue := functions["continue"]
 	var names map[string]bool
@@ -39,8 +39,8 @@ func ParseTrees(name, text, leftDelim, rightDelim string, functions map[string]*
 			names[name] = true
 		}
 	}
-	treeSet := make(map[string]*template.Tree)
-	root, err := template.ParseTree(name, name, text, treeSet, lex.Options{
+	treeSet := make(map[string]*htt.Tree)
+	root, err := htt.ParseTree(name, name, text, treeSet, lex.Options{
 		EmitComment: true,
 		ParseHTML:   html,
 		LeftDelim:   cmp.Or(leftDelim, "{{"),
@@ -57,11 +57,11 @@ func ParseTrees(name, text, leftDelim, rightDelim string, functions map[string]*
 	// a second definition that is not empty is a parse error, and a top-level
 	// template holding nothing but define clauses gives way to a define of
 	// its own name.
-	treeSet = template.DefinedTrees(root, treeSet)
+	treeSet = htt.DefinedTrees(root, treeSet)
 	if html {
 		for _, tree := range treeSet {
 			tree.HTMLMode = true
-			template.AnnotateHTMLContexts(tree.Root)
+			htt.AnnotateHTMLContexts(tree.Root)
 		}
 	}
 	return treeSet, nil

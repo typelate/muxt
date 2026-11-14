@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/typelate/muxt/template"
-	"github.com/typelate/muxt/template/lex"
+	"github.com/typelate/htt"
+	"github.com/typelate/htt/lex"
 	"golang.org/x/net/html"
 	"golang.org/x/net/html/atom"
 )
@@ -33,14 +33,14 @@ func netHTMLNormalize(t *testing.T, s string) string {
 // assertCodeMultiset compares got and want as multisets of diagnostic
 // codes (order-insensitive). On mismatch it reports the full diagnostics
 // for debugging.
-func assertCodeMultiset(t *testing.T, got template.Diagnostics, want []template.DiagnosticCode) {
+func assertCodeMultiset(t *testing.T, got htt.Diagnostics, want []htt.DiagnosticCode) {
 	t.Helper()
-	gotCodes := make([]template.DiagnosticCode, len(got))
+	gotCodes := make([]htt.DiagnosticCode, len(got))
 	for i, d := range got {
 		gotCodes[i] = d.Code
 	}
 	sort.Slice(gotCodes, func(i, j int) bool { return gotCodes[i] < gotCodes[j] })
-	wantCodes := append([]template.DiagnosticCode(nil), want...)
+	wantCodes := append([]htt.DiagnosticCode(nil), want...)
 	sort.Slice(wantCodes, func(i, j int) bool { return wantCodes[i] < wantCodes[j] })
 	if len(gotCodes) != len(wantCodes) {
 		t.Fatalf("diagnostic codes = %v, want %v\nfull diagnostics: %v", gotCodes, wantCodes, got)
@@ -56,11 +56,11 @@ func assertCodeMultiset(t *testing.T, got template.Diagnostics, want []template.
 // (no import cycle: package analysis already imports the root htt
 // package). AnnotateHTMLContexts must run before execution so contextual
 // escaping is applied the same way application code would see it.
-func executeHTT(t *testing.T, tree *template.Tree) string {
+func executeHTT(t *testing.T, tree *htt.Tree) string {
 	t.Helper()
-	template.AnnotateHTMLContexts(tree.Root)
+	htt.AnnotateHTMLContexts(tree.Root)
 	var sb strings.Builder
-	if err := template.ExecuteTemplate(&sb, tree, nil); err != nil {
+	if err := htt.ExecuteTemplate(&sb, tree, nil); err != nil {
 		t.Fatalf("ExecuteTemplate: %v", err)
 	}
 	return sb.String()
@@ -80,31 +80,31 @@ func executeHTT(t *testing.T, tree *template.Tree) string {
 func TestSpecConformance(t *testing.T) {
 	for _, test := range []struct {
 		name, input string
-		wantCodes   []template.DiagnosticCode // multiset, order-insensitive
-		oracle      bool                      // assert htt output == browser view (only meaningful with no wantCodes)
+		wantCodes   []htt.DiagnosticCode // multiset, order-insensitive
+		oracle      bool                 // assert htt output == browser view (only meaningful with no wantCodes)
 	}{
 		// adoption agency (§13.2.6.4.7)
-		{"misnested b i", `<b><i>x</b>y`, []template.DiagnosticCode{template.DiagMisnestedTag}, false},
+		{"misnested b i", `<b><i>x</b>y`, []htt.DiagnosticCode{htt.DiagMisnestedTag}, false},
 		{"clean formatting", `<p><b><i>x</i></b>y</p>`, nil, true},
 		// foster parenting (§13.2.6.4.9)
-		{"div in table", `<table><tbody><tr><td>a</td></tr></tbody><div>x</div></table>`, []template.DiagnosticCode{template.DiagFosteredContent}, false},
+		{"div in table", `<table><tbody><tr><td>a</td></tr></tbody><div>x</div></table>`, []htt.DiagnosticCode{htt.DiagFosteredContent}, false},
 		{"hidden input in table", `<table><input type="hidden" name="n"><tbody><tr><td>a</td></tr></tbody></table>`, nil, true},
 		{"whitespace in table", "<table> <tbody><tr><td>a</td></tr></tbody> </table>", nil, true},
 		{"script in table", `<table><script>let x=1</script><tbody><tr><td>a</td></tr></tbody></table>`, nil, true},
 		// orphan end tags
-		{"orphan close", `a</b>c`, []template.DiagnosticCode{template.DiagOrphanEndTag}, false},
+		{"orphan close", `a</b>c`, []htt.DiagnosticCode{htt.DiagOrphanEndTag}, false},
 		// nested containers (§13.2.6.4.7)
-		{"nested form", `<form><fieldset><form>x</form></fieldset></form>`, []template.DiagnosticCode{template.DiagNestedForm}, false},
-		{"nested a", `<a href="/o">o<a href="/i">i</a></a>`, []template.DiagnosticCode{template.DiagNestedLink}, false},
+		{"nested form", `<form><fieldset><form>x</form></fieldset></form>`, []htt.DiagnosticCode{htt.DiagNestedForm}, false},
+		{"nested a", `<a href="/o">o<a href="/i">i</a></a>`, []htt.DiagnosticCode{htt.DiagNestedLink}, false},
 		// auto-close (§13.2.6.3, §13.2.6.4.7)
-		{"p div", `<p>a<div>b</div></p>`, []template.DiagnosticCode{template.DiagAutoClosed}, false},
-		{"li li", `<ul><li>a<li>b</li></ul>`, []template.DiagnosticCode{template.DiagAutoClosed}, false},
+		{"p div", `<p>a<div>b</div></p>`, []htt.DiagnosticCode{htt.DiagAutoClosed}, false},
+		{"li li", `<ul><li>a<li>b</li></ul>`, []htt.DiagnosticCode{htt.DiagAutoClosed}, false},
 		{"clean list", `<ul><li>a</li><li>b</li></ul>`, nil, true},
 		// clean kitchen sink
 		{"clean page fragment", `<div class="card"><h2>t</h2><p>body</p><a href="/x">more</a></div>`, nil, true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			tree, err := template.ParseTree("test.gohtml", test.name, test.input, nil, lex.NewOptions())
+			tree, err := htt.ParseTree("test.gohtml", test.name, test.input, nil, lex.NewOptions())
 			if err != nil {
 				t.Fatalf("ParseTree: %v", err)
 			}
@@ -129,7 +129,7 @@ func FuzzCheckStructure(f *testing.F) {
 	f.Add(`<form><form></form></form>`)
 	f.Add(`<p><span><div>x`)
 	f.Fuzz(func(t *testing.T, input string) {
-		tree, err := template.ParseTree("fuzz.gohtml", "fuzz", input, nil, lex.NewOptions())
+		tree, err := htt.ParseTree("fuzz.gohtml", "fuzz", input, nil, lex.NewOptions())
 		if err != nil || tree == nil {
 			return
 		}

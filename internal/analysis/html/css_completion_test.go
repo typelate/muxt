@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/typelate/muxt/template"
-	"github.com/typelate/muxt/template/lex"
+	"github.com/typelate/htt"
+	"github.com/typelate/htt/lex"
 )
 
 func TestCSSCompletionAt(t *testing.T) {
@@ -44,7 +44,7 @@ func TestCSSCompletionAt(t *testing.T) {
 		{name: "other attribute", input: `<p title="col"></p>`, before: `col`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			tree, err := template.ParseTree("test.gohtml", test.name, test.input, nil, lex.NewOptions())
+			tree, err := htt.ParseTree("test.gohtml", test.name, test.input, nil, lex.NewOptions())
 			if err != nil {
 				t.Fatalf("ParseTree error: %v", err)
 			}

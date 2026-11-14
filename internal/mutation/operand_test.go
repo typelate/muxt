@@ -3,7 +3,7 @@ package mutation
 import (
 	"testing"
 
-	"github.com/typelate/muxt/template"
+	"github.com/typelate/htt"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -35,7 +35,7 @@ func TestOperandsAreFoundWhereTheyAreWritten(t *testing.T) {
 			require.NoError(t, err)
 			var got []string
 			for _, node := range topLevelNodes(trees["t"]) {
-				a, ok := node.(*template.ActionNode)
+				a, ok := node.(*htt.ActionNode)
 				if !ok {
 					continue
 				}

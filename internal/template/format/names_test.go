@@ -8,10 +8,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/typelate/htt"
+	"github.com/typelate/htt/lex"
+
 	analysis "github.com/typelate/muxt/internal/analysis/html"
 	"github.com/typelate/muxt/internal/template/format/internal/rendering"
-	"github.com/typelate/muxt/template"
-	"github.com/typelate/muxt/template/lex"
 )
 
 // TestDefineNames pins how the formatter writes the name literals of
@@ -230,12 +231,12 @@ func executePair(defines, calls string) (string, error) {
 	return b.String(), err
 }
 
-func parseTrees(t *testing.T, sources []string) []*template.Tree {
+func parseTrees(t *testing.T, sources []string) []*htt.Tree {
 	t.Helper()
-	var trees []*template.Tree
+	var trees []*htt.Tree
 	for i, src := range sources {
 		name := "t" + strconv.Itoa(i) + ".gohtml"
-		tree, err := template.ParseTree(name, name, src, nil, lex.Options{EmitComment: true, ParseHTML: true, BreakOK: true, ContinueOK: true})
+		tree, err := htt.ParseTree(name, name, src, nil, lex.Options{EmitComment: true, ParseHTML: true, BreakOK: true, ContinueOK: true})
 		if err != nil {
 			t.Fatalf("ParseTree(%q): %v", src, err)
 		}
@@ -254,24 +255,24 @@ func renamedCaller(callerSrc, output string) string {
 		return callerSrc
 	}
 	defined := make(map[string]bool)
-	tree, err := template.ParseTree("output.gohtml", "output.gohtml", output, nil, lex.Options{EmitComment: true, ParseHTML: true, BreakOK: true, ContinueOK: true})
+	tree, err := htt.ParseTree("output.gohtml", "output.gohtml", output, nil, lex.Options{EmitComment: true, ParseHTML: true, BreakOK: true, ContinueOK: true})
 	if err != nil {
 		return callerSrc
 	}
-	template.Walk(tree, func(_ *template.Tree, n template.Node) {
+	htt.Walk(tree, func(_ *htt.Tree, n htt.Node) {
 		switch n := n.(type) {
-		case *template.DefineNode:
+		case *htt.DefineNode:
 			defined[n.Name] = true
-		case *template.BlockNode:
+		case *htt.BlockNode:
 			defined[n.Name] = true
 		}
 	})
-	caller, err := template.ParseTree("caller.gohtml", "caller.gohtml", callerSrc, nil, lex.Options{EmitComment: true, ParseHTML: true, BreakOK: true, ContinueOK: true})
+	caller, err := htt.ParseTree("caller.gohtml", "caller.gohtml", callerSrc, nil, lex.Options{EmitComment: true, ParseHTML: true, BreakOK: true, ContinueOK: true})
 	if err != nil {
 		return callerSrc
 	}
-	template.Walk(caller, func(_ *template.Tree, n template.Node) {
-		if call, ok := n.(*template.TemplateNode); ok {
+	htt.Walk(caller, func(_ *htt.Tree, n htt.Node) {
+		if call, ok := n.(*htt.TemplateNode); ok {
 			if c := CanonicalName(call.Name); !defined[call.Name] && defined[c] {
 				callerSrc = strings.ReplaceAll(callerSrc, strconv.Quote(call.Name), strconv.Quote(c))
 			}

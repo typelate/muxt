@@ -7,7 +7,7 @@ import (
 	"testing"
 	texttemplate "text/template"
 
-	"github.com/typelate/muxt/template"
+	"github.com/typelate/htt"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -33,13 +33,13 @@ func TestValueStart(t *testing.T) {
 			trees, err := asteval.ParseTrees("t", tt.text, "", "", nil, true)
 			require.NoError(t, err)
 			nodes := topLevelNodes(trees["t"])
-			var pipe *template.PipeNode
+			var pipe *htt.PipeNode
 			switch node := nodes[len(nodes)-1].(type) {
-			case *template.ActionNode:
+			case *htt.ActionNode:
 				pipe = node.Pipe
-			case *template.RangeNode:
+			case *htt.RangeNode:
 				pipe = node.Pipe
-			case *template.WithNode:
+			case *htt.WithNode:
 				pipe = node.Pipe
 			}
 			src := newFileSource("t.gohtml", "t.gohtml", tt.text, "", "")
@@ -340,7 +340,7 @@ func dropMutants(t *testing.T, text string) []mutant {
 	e := &enumerator{src: src, template: "t"}
 	walkActions(src.regions, nil, nil, trees["t"].Root, func(a action) {
 		switch a.node.(type) {
-		case *template.WithNode, *template.RangeNode, *template.TemplateNode:
+		case *htt.WithNode, *htt.RangeNode, *htt.TemplateNode:
 			e.variations(a)
 		}
 	})

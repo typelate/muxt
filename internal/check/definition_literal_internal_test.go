@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/typelate/muxt/template/lex"
+	"github.com/typelate/htt/lex"
 )
 
 // findLiteral parses src and returns the first string literal in it,

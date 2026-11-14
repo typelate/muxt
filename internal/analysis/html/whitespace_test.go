@@ -5,9 +5,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/typelate/htt"
+	"github.com/typelate/htt/lex"
+
 	"github.com/typelate/muxt/internal/template/selectors"
-	"github.com/typelate/muxt/template"
-	"github.com/typelate/muxt/template/lex"
 )
 
 func TestComputeWhitespace(t *testing.T) {
@@ -144,8 +145,8 @@ func TestComputeWhitespace(t *testing.T) {
 		{source: `<div style="float:{{.F}}"></div>`, selector: `div`, want: Whitespace{DisplayUnknown, WhiteSpaceUnknown}},
 	} {
 		t.Run(test.source, func(t *testing.T) {
-			trees := []*template.Tree{parseWhitespaceTree(t, "t.gohtml", test.source)}
-			var context []*template.Tree
+			trees := []*htt.Tree{parseWhitespaceTree(t, "t.gohtml", test.source)}
+			var context []*htt.Tree
 			if test.context != "" {
 				context = append(context, parseWhitespaceTree(t, "context.gohtml", test.context))
 			}
@@ -166,7 +167,7 @@ func TestComputeWhitespace(t *testing.T) {
 }
 
 func TestComputeWhitespaceClassifiesEveryElement(t *testing.T) {
-	trees := []*template.Tree{parseWhitespaceTree(t, "t.gohtml", `<div><p>{{if .X}}<b>x</b>{{else}}<i>y</i>{{end}}</p>{{range .}}<li></li>{{end}}</div>{{define "d"}}<em></em>{{end}}`)}
+	trees := []*htt.Tree{parseWhitespaceTree(t, "t.gohtml", `<div><p>{{if .X}}<b>x</b>{{else}}<i>y</i>{{end}}</p>{{range .}}<li></li>{{end}}</div>{{define "d"}}<em></em>{{end}}`)}
 	got := ComputeWhitespace(trees, WhitespaceOptions{})
 	for _, name := range []string{"div", "p", "b", "i", "li", "em"} {
 		el := queryElement(t, trees, name)
@@ -179,16 +180,16 @@ func TestComputeWhitespaceClassifiesEveryElement(t *testing.T) {
 	}
 }
 
-func parseWhitespaceTree(t *testing.T, name, source string) *template.Tree {
+func parseWhitespaceTree(t *testing.T, name, source string) *htt.Tree {
 	t.Helper()
-	tree, err := template.ParseTree(name, name, source, nil, lex.NewOptions())
+	tree, err := htt.ParseTree(name, name, source, nil, lex.NewOptions())
 	if err != nil {
 		t.Fatalf("ParseTree(%q) error: %v", source, err)
 	}
 	return tree
 }
 
-func queryElement(t *testing.T, trees []*template.Tree, selector string) *template.HTMLElementNode {
+func queryElement(t *testing.T, trees []*htt.Tree, selector string) *htt.HTMLElementNode {
 	t.Helper()
 	sel := selectors.MustCompile(selector)
 	for _, root := range templateRoots(trees) {
@@ -212,7 +213,7 @@ func TestComputeWhitespaceMalformedStyle(t *testing.T) {
 		`<style>p{a:b;c:</style><p>x</p>`,
 	} {
 		t.Run(source, func(t *testing.T) {
-			trees := []*template.Tree{parseWhitespaceTree(t, "t.gohtml", source)}
+			trees := []*htt.Tree{parseWhitespaceTree(t, "t.gohtml", source)}
 			got := ComputeWhitespace(trees, WhitespaceOptions{})
 			if len(got) == 0 {
 				t.Errorf("ComputeWhitespace(%q) classified no element", source)
@@ -269,7 +270,7 @@ func TestWhiteSpaceMovedMatcher(t *testing.T) {
 		}
 		sheets := []Stylesheet{{Filename: "site.css", Text: tt.sheet}}
 		m := WhiteSpaceMovedMatcher(nil, WhitespaceOptions{Sheets: sheets, AuthorCSSKnown: true, MissingSheets: tt.missing})
-		if got := m.MayMatch([]*template.HTMLElementNode{moved}); got != tt.want {
+		if got := m.MayMatch([]*htt.HTMLElementNode{moved}); got != tt.want {
 			t.Errorf("WhiteSpaceMovedMatcher(%q, missing %v).MayMatch(div#moved) = %v, want %v", tt.sheet, tt.missing, got, tt.want)
 		}
 	}
@@ -312,11 +313,11 @@ func TestWhiteSpaceMovedMatcherMayChange(t *testing.T) {
 			t.Fatal("no moved element")
 		}
 		sheets := []Stylesheet{{Filename: "site.css", Text: tt.sheet}}
-		m := WhiteSpaceMovedMatcher([]*template.Tree{tree}, WhitespaceOptions{Sheets: sheets, AuthorCSSKnown: true})
-		if got := m.MayChange([]*template.HTMLElementNode{moved}, tt.owner); got != tt.want {
+		m := WhiteSpaceMovedMatcher([]*htt.Tree{tree}, WhitespaceOptions{Sheets: sheets, AuthorCSSKnown: true})
+		if got := m.MayChange([]*htt.HTMLElementNode{moved}, tt.owner); got != tt.want {
 			t.Errorf("WhiteSpaceMovedMatcher(%q).MayChange(div#moved, %v) = %v, want %v", tt.sheet, tt.owner, got, tt.want)
 		}
-		if !m.MayMatch([]*template.HTMLElementNode{moved}) && tt.want {
+		if !m.MayMatch([]*htt.HTMLElementNode{moved}) && tt.want {
 			t.Errorf("WhiteSpaceMovedMatcher(%q): MayChange without MayMatch", tt.sheet)
 		}
 	}
@@ -360,10 +361,10 @@ func TestComputeWhitespaceAncestry(t *testing.T) {
 		{name: "child of the implied body", sheet: `div>p{white-space:pre}`, source: `<p></p>`, want: WhiteSpaceCollapse},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			trees := []*template.Tree{parseWhitespaceTree(t, "t.gohtml", test.source)}
+			trees := []*htt.Tree{parseWhitespaceTree(t, "t.gohtml", test.source)}
 			options := WhitespaceOptions{AuthorCSSKnown: true, Sheets: []Stylesheet{{Filename: "site.css", Text: test.sheet}}}
 			if test.context != "" {
-				options.Context = []*template.Tree{parseWhitespaceTree(t, "c.gohtml", test.context)}
+				options.Context = []*htt.Tree{parseWhitespaceTree(t, "c.gohtml", test.context)}
 			}
 			got := ComputeWhitespace(trees, options)[queryElement(t, trees, "p")]
 			if got.WhiteSpace != test.want {
@@ -385,7 +386,7 @@ func BenchmarkComputeWhitespaceCallSites(b *testing.B) {
 	}
 }
 
-func callSitesBenchmarkInput(tb testing.TB) ([]*template.Tree, WhitespaceOptions) {
+func callSitesBenchmarkInput(tb testing.TB) ([]*htt.Tree, WhitespaceOptions) {
 	tb.Helper()
 	const defines, sites = 50, 5
 	var src, css strings.Builder
@@ -407,9 +408,9 @@ func callSitesBenchmarkInput(tb testing.TB) ([]*template.Tree, WhitespaceOptions
 	for r := range 60 {
 		fmt.Fprintf(&css, ".c%d p{white-space:pre}\n", r)
 	}
-	tree, err := template.ParseTree("bench.gohtml", "bench.gohtml", src.String(), nil, lex.NewOptions())
+	tree, err := htt.ParseTree("bench.gohtml", "bench.gohtml", src.String(), nil, lex.NewOptions())
 	if err != nil {
 		tb.Fatal(err)
 	}
-	return []*template.Tree{tree}, WhitespaceOptions{AuthorCSSKnown: true, Sheets: []Stylesheet{{Filename: "site.css", Text: css.String()}}}
+	return []*htt.Tree{tree}, WhitespaceOptions{AuthorCSSKnown: true, Sheets: []Stylesheet{{Filename: "site.css", Text: css.String()}}}
 }

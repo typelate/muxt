@@ -3,14 +3,14 @@ package selectors
 import (
 	"testing"
 
-	"github.com/typelate/muxt/template"
-	"github.com/typelate/muxt/template/lex"
+	"github.com/typelate/htt"
+	"github.com/typelate/htt/lex"
 )
 
 // mustParse parses src and returns the tree, or fatals if it can't.
-func mustParse(t *testing.T, src string) *template.Tree {
+func mustParse(t *testing.T, src string) *htt.Tree {
 	t.Helper()
-	tree, err := template.ParseTree("t", "t", src, nil, lex.Options{ParseHTML: true})
+	tree, err := htt.ParseTree("t", "t", src, nil, lex.Options{ParseHTML: true})
 	if err != nil {
 		t.Fatalf("ParseTree(%q) error: %v", src, err)
 	}

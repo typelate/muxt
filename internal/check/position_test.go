@@ -5,14 +5,15 @@ import (
 	"go/types"
 	"testing"
 
+	"github.com/typelate/htt"
+
 	"github.com/typelate/muxt/internal/check"
-	"github.com/typelate/muxt/template"
 )
 
 func TestParseNodePosition(t *testing.T) {
 	const src = `{{define "a"}}A{{end}}{{define "b"}}
 {{.X}}{{end}}`
-	tmpl := template.New[*types.Signature]("")
+	tmpl := htt.New[*types.Signature]("")
 	tmpl, err := tmpl.Parse(src)
 	if err != nil {
 		t.Fatal(err)
@@ -22,7 +23,7 @@ func TestParseNodePosition(t *testing.T) {
 	if !ok {
 		t.Fatal("template b not found")
 	}
-	node := template.Node(tree.Root)
+	node := htt.Node(tree.Root)
 
 	t.Run("offset comes from Node.Start", func(t *testing.T) {
 		pos := check.ParseNodePosition(tree, node)
@@ -75,17 +76,17 @@ func TestParseNodePositionOfATemplateCall(t *testing.T) {
 		{name: "block", text: `<p>{{block "x" .}}y{{end}}</p>`, line: 1, column: 12},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			ts, err := template.New[*types.Signature]("t").Parse(`{{define "x"}}{{end}}` + "\n" + tt.text)
+			ts, err := htt.New[*types.Signature]("t").Parse(`{{define "x"}}{{end}}` + "\n" + tt.text)
 			if err != nil {
 				t.Fatal(err)
 			}
 			tree, _ := ts.FindTree("t")
-			var call template.Node
-			template.Walk(tree, func(_ *template.Tree, n template.Node) {
+			var call htt.Node
+			htt.Walk(tree, func(_ *htt.Tree, n htt.Node) {
 				switch n := n.(type) {
-				case *template.TemplateNode:
+				case *htt.TemplateNode:
 					call = n
-				case *template.BlockNode:
+				case *htt.BlockNode:
 					call = n.Call()
 				}
 			})
@@ -103,7 +104,7 @@ func TestParseNodePositionOfATemplateCall(t *testing.T) {
 // TestErrorLocatesATemplateCallAtItsName states that an error at a
 // {{template}} call is located at the name, as text/template placed it.
 func TestErrorLocatesATemplateCallAtItsName(t *testing.T) {
-	ts, err := template.New[*types.Signature]("t").Parse(`{{define "p"}}<p>{{template "missing" .}}</p>{{end}}`)
+	ts, err := htt.New[*types.Signature]("t").Parse(`{{define "p"}}<p>{{template "missing" .}}</p>{{end}}`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -122,7 +123,7 @@ func TestErrorLocatesATemplateCallAtItsName(t *testing.T) {
 // reported there.
 func TestParseNodePositionOfATrimmedRoot(t *testing.T) {
 	const src = "{{- define \"a\" -}}\n\t{{- .X -}}\n{{- end -}}"
-	tmpl, err := template.New[*types.Signature]("").Parse(src)
+	tmpl, err := htt.New[*types.Signature]("").Parse(src)
 	if err != nil {
 		t.Fatal(err)
 	}

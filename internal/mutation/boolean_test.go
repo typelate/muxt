@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/typelate/muxt/template"
+	"github.com/typelate/htt"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -14,13 +14,13 @@ import (
 
 // ifPipe parses `{{if pipeline}}x{{end}}` and returns the template text and
 // the if's pipeline.
-func ifPipe(t *testing.T, pipeline string) (string, *template.PipeNode) {
+func ifPipe(t *testing.T, pipeline string) (string, *htt.PipeNode) {
 	t.Helper()
 	text := `{{if ` + pipeline + `}}x{{end}}`
 	trees, err := asteval.ParseTrees("t", text, "", "", nil, true)
 	require.NoError(t, err)
 	nodes := topLevelNodes(trees["t"])
-	node, ok := nodes[0].(*template.IfNode)
+	node, ok := nodes[0].(*htt.IfNode)
 	require.Truef(t, ok, "first node is %T, want an if", nodes[0])
 	return text, node.Pipe
 }
@@ -28,9 +28,9 @@ func ifPipe(t *testing.T, pipeline string) (string, *template.PipeNode) {
 // topLevelNodes returns the nodes written at the top of a template parsed
 // on its own, which text/template kept in the root list and the copied
 // parser puts in a document fragment inside it.
-func topLevelNodes(tree *template.Tree) []template.Node {
+func topLevelNodes(tree *htt.Tree) []htt.Node {
 	if len(tree.Root.Nodes) == 1 {
-		if fragment, ok := tree.Root.Nodes[0].(*template.HTMLDocumentFragmentNode); ok {
+		if fragment, ok := tree.Root.Nodes[0].(*htt.HTMLDocumentFragmentNode); ok {
 			return fragment.Children
 		}
 	}
@@ -194,7 +194,7 @@ func TestDecisionRefusesWhatItCannotModel(t *testing.T) {
 }
 
 func TestDecisionCommandRefusesACommandWithoutArguments(t *testing.T) {
-	for name, command := range map[string]*template.CommandNode{
+	for name, command := range map[string]*htt.CommandNode{
 		"nil":   nil,
 		"empty": {},
 	} {
@@ -228,12 +228,12 @@ func TestLogicalKind(t *testing.T) {
 }
 
 func TestDecisionCallArity(t *testing.T) {
-	one := []template.Node{&template.BoolNode{True: true}}
-	two := []template.Node{&template.BoolNode{True: true}, &template.BoolNode{}}
+	one := []htt.Node{&htt.BoolNode{True: true}}
+	two := []htt.Node{&htt.BoolNode{True: true}, &htt.BoolNode{}}
 	for _, tt := range []struct {
 		name string
 		kind boolKind
-		args []template.Node
+		args []htt.Node
 		ok   bool
 	}{
 		{name: "not takes one", kind: boolNot, args: one, ok: true},

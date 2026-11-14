@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/typelate/muxt/template"
+	"github.com/typelate/htt"
 )
 
 func TestErrorDetailedError(t *testing.T) {
@@ -30,11 +30,11 @@ func TestErrorDetailedError(t *testing.T) {
 		Cause:     fmt.Errorf("argument 0 has type string expected int"),
 	}
 
-	tree := &template.Tree{
+	tree := &htt.Tree{
 		Name:      "test",
 		ParseName: "test.gohtml",
 	}
-	node := &template.TextNode{Text: []byte("test")}
+	node := &htt.TextNode{Text: []byte("test")}
 
 	e := wrapError(ErrorTypeCallArguments, tree, node, callErr)
 

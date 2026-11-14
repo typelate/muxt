@@ -2,7 +2,7 @@
 // internal/overlay lays this file over $GOROOT/src/html/template, in place
 // of the standard library's own files, so that a test target's
 // html/template is muxt's template engine. Each type is an alias, and each
-// function and constant forwards, to github.com/typelate/muxt/template/html;
+// function and constant forwards, to github.com/typelate/htt/template;
 // FuncMap stays text/template's, as in the standard library.
 //
 // It is compiled here, as a package of its own, only so that the build
@@ -14,7 +14,7 @@ import (
 	"io/fs"
 	"text/template"
 
-	h "github.com/typelate/muxt/template/html"
+	h "github.com/typelate/htt/template"
 )
 
 type (

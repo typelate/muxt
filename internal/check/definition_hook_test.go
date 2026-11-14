@@ -8,8 +8,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/typelate/htt"
+
 	"github.com/typelate/muxt/internal/check"
-	"github.com/typelate/muxt/template"
 )
 
 // subDefinition is where {{define "sub"}}{{.}}{{end}} sits in a template
@@ -41,7 +42,7 @@ func TestGlobalDefinitions(t *testing.T) {
 
 	inspect := func(t *testing.T, text string) []check.Definition {
 		t.Helper()
-		tmpl, err := template.New[*types.Signature]("main").Parse(text)
+		tmpl, err := htt.New[*types.Signature]("main").Parse(text)
 		require.NoError(t, err)
 		pkg := types.NewPackage("example.com/app", "app")
 
@@ -49,7 +50,7 @@ func TestGlobalDefinitions(t *testing.T) {
 		global.Definitions = definitions
 
 		var got []check.Definition
-		global.InspectTemplateNode = func(_ *template.TemplateNode, _ *template.Tree, _ types.Type, def check.Definition) {
+		global.InspectTemplateNode = func(_ *htt.TemplateNode, _ *htt.Tree, _ types.Type, def check.Definition) {
 			got = append(got, def)
 		}
 		tree, ok := tmpl.FindTree("main")
@@ -74,14 +75,14 @@ func TestGlobalDefinitions(t *testing.T) {
 	})
 
 	t.Run("a nil Definitions source reports a zero Definition", func(t *testing.T) {
-		tmpl, err := template.New[*types.Signature]("main").Parse(`{{define "sub"}}{{.}}{{end}}{{template "sub" .}}`)
+		tmpl, err := htt.New[*types.Signature]("main").Parse(`{{define "sub"}}{{.}}{{end}}{{template "sub" .}}`)
 		require.NoError(t, err)
 		pkg := types.NewPackage("example.com/app", "app")
 
 		global := check.NewGlobal(pkg, token.NewFileSet(), tmpl, check.DefaultFunctions(pkg))
 
 		var got []check.Definition
-		global.InspectTemplateNode = func(_ *template.TemplateNode, _ *template.Tree, _ types.Type, def check.Definition) {
+		global.InspectTemplateNode = func(_ *htt.TemplateNode, _ *htt.Tree, _ types.Type, def check.Definition) {
 			got = append(got, def)
 		}
 		tree, ok := tmpl.FindTree("main")

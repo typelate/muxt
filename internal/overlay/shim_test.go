@@ -11,8 +11,9 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/typelate/htt/template"
+
 	"github.com/typelate/muxt/internal/overlay"
-	"github.com/typelate/muxt/template/html"
 )
 
 // TestShimDeclaresHTMLTemplate states that the shim declares every
@@ -61,10 +62,10 @@ func TestShimDeclaresHTMLTemplate(t *testing.T) {
 // aliases has the exported methods html/template's has, by name.
 func TestShimTypesHaveHTMLTemplateMethods(t *testing.T) {
 	for _, tt := range []struct{ std, engine reflect.Type }{
-		{reflect.TypeFor[*stdtemplate.Template](), reflect.TypeFor[*html.Template]()},
-		{reflect.TypeFor[*stdtemplate.Error](), reflect.TypeFor[*html.Error]()},
-		{reflect.TypeFor[stdtemplate.ErrorCode](), reflect.TypeFor[html.ErrorCode]()},
-		{reflect.TypeFor[stdtemplate.HTML](), reflect.TypeFor[html.HTML]()},
+		{reflect.TypeFor[*stdtemplate.Template](), reflect.TypeFor[*template.Template]()},
+		{reflect.TypeFor[*stdtemplate.Error](), reflect.TypeFor[*template.Error]()},
+		{reflect.TypeFor[stdtemplate.ErrorCode](), reflect.TypeFor[template.ErrorCode]()},
+		{reflect.TypeFor[stdtemplate.HTML](), reflect.TypeFor[template.HTML]()},
 	} {
 		want, got := methodNames(tt.std), methodNames(tt.engine)
 		if !slices.Equal(got, want) {

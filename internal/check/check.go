@@ -12,8 +12,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/typelate/muxt/template"
-	"github.com/typelate/muxt/template/lex"
+	"github.com/typelate/htt"
+	"github.com/typelate/htt/lex"
 )
 
 // ErrorType classifies the failure a *Error reports. It lets tools such as
@@ -112,8 +112,8 @@ type Error struct {
 	// Type classifies the failure.
 	Type ErrorType
 
-	Tree *template.Tree
-	Node template.Node
+	Tree *htt.Tree
+	Node htt.Node
 
 	// X is the type most relevant to the failure: the receiver for field or
 	// method lookups, the pipeline result for range, the signature for call
@@ -144,7 +144,7 @@ type Error struct {
 	children []*Error
 }
 
-func newError(errType ErrorType, tree *template.Tree, node template.Node, message string, args ...any) *Error {
+func newError(errType ErrorType, tree *htt.Tree, node htt.Node, message string, args ...any) *Error {
 	e := errorf(errType, message, args...)
 	e.Tree = tree
 	e.Node = node
@@ -179,7 +179,7 @@ func (e *Error) withDecl(pos token.Position) *Error {
 // wrapError locates err at node. When err is already a *Error, its missing
 // location and classification are filled in on a copy; otherwise err becomes
 // the cause of a new leaf error.
-func wrapError(errType ErrorType, tree *template.Tree, node template.Node, err error) *Error {
+func wrapError(errType ErrorType, tree *htt.Tree, node htt.Node, err error) *Error {
 	if e, ok := err.(*Error); ok {
 		located := *e
 		if located.Tree == nil {
@@ -343,8 +343,8 @@ func isSpace(c byte) bool { return c == ' ' || c == '\t' || c == '\n' || c == '\
 // left delimiter where the node starts. The name is the first string in
 // the clause, after the keyword, any trim marker and any spaces or
 // newlines.
-func templateNameStart(node template.Node) (lex.Pos, bool) {
-	n, ok := node.(*template.TemplateNode)
+func templateNameStart(node htt.Node) (lex.Pos, bool) {
+	n, ok := node.(*htt.TemplateNode)
 	if !ok {
 		return 0, false
 	}
@@ -360,8 +360,8 @@ func templateNameStart(node template.Node) (lex.Pos, bool) {
 // parenthesized pipeline: at the first chained field, (.X).Y at .Y, not
 // at the term where the node starts. The fields are written without space
 // between them and end the node.
-func chainFieldStart(node template.Node) (lex.Pos, bool) {
-	n, ok := node.(*template.ChainNode)
+func chainFieldStart(node htt.Node) (lex.Pos, bool) {
+	n, ok := node.(*htt.ChainNode)
 	if !ok {
 		return 0, false
 	}
@@ -377,13 +377,13 @@ func chainFieldStart(node template.Node) (lex.Pos, bool) {
 // where the chain begins, rather than at the node's start. A chain has no
 // space or newline between its segments, so the offset is a column count.
 // Position and EndPosition keep spanning the whole node.
-func chainColumnOffset(node template.Node) int {
+func chainColumnOffset(node htt.Node) int {
 	switch n := node.(type) {
-	case *template.FieldNode:
+	case *htt.FieldNode:
 		if len(n.Ident) > 1 {
 			return len(".") + len(n.Ident[0])
 		}
-	case *template.VariableNode:
+	case *htt.VariableNode:
 		if len(n.Ident) > 1 {
 			return len(n.Ident[0])
 		}
@@ -476,7 +476,7 @@ func (e *Error) walkAll(yield func(*Error) bool) bool {
 // single error: nil when there are none, the error itself when there is one,
 // and an aggregate *Error otherwise. Errors that are not *Error are promoted
 // to leaf errors located at node.
-func joinErrors(tree *template.Tree, node template.Node, errs ...error) error {
+func joinErrors(tree *htt.Tree, node htt.Node, errs ...error) error {
 	var children []*Error
 	for _, err := range errs {
 		if err == nil {
@@ -611,13 +611,13 @@ type Global struct {
 // template, and def locates where that template was defined. A node
 // naming a template that does not exist still reaches the inspector, with
 // a zero def.
-type TemplateNodeInspectorFunc func(node *template.TemplateNode, t *template.Tree, tp types.Type, def Definition)
+type TemplateNodeInspectorFunc func(node *htt.TemplateNode, t *htt.Tree, tp types.Type, def Definition)
 
 // NodeTypeInfo describes a template node's resolved type in the context
 // of one execution path.
 type NodeTypeInfo struct {
-	Tree *template.Tree // the template tree containing Node
-	Node template.Node  // the node whose type was resolved
+	Tree *htt.Tree // the template tree containing Node
+	Node htt.Node  // the node whose type was resolved
 	Type types.Type
 	// Object is the Go field or method a field/chain/variable node
 	// resolves to (its last segment), or nil for nodes that don't name
@@ -761,12 +761,12 @@ func collectExportedFields(st *types.Struct, seen map[string]bool, out *[]Member
 // TreeFinder should wrap https://pkg.go.dev/html/template#Template.Lookup and return the Tree field from the Template
 // If you are using text/template the lookup function from that package should also work.
 type TreeFinder interface {
-	FindTree(name string) (*template.Tree, bool)
+	FindTree(name string) (*htt.Tree, bool)
 }
 
-type FindTreeFunc func(name string) (*template.Tree, bool)
+type FindTreeFunc func(name string) (*htt.Tree, bool)
 
-func (fn FindTreeFunc) FindTree(name string) (*template.Tree, bool) {
+func (fn FindTreeFunc) FindTree(name string) (*htt.Tree, bool) {
 	return fn(name)
 }
 
@@ -784,10 +784,10 @@ func (fn FindDefinitionFunc) FindDefinition(name string) (Definition, bool) {
 }
 
 type CallChecker interface {
-	CheckCall(*Global, string, []template.Node, []types.Type) (types.Type, error)
+	CheckCall(*Global, string, []htt.Node, []types.Type) (types.Type, error)
 }
 
-type TypeNodeMapping map[types.Type][]template.Node
+type TypeNodeMapping map[types.Type][]htt.Node
 
 // Execute type-checks tree against data, the type of the template's root
 // context (dot). It returns nil when the template checks cleanly. Otherwise
@@ -796,7 +796,7 @@ type TypeNodeMapping map[types.Type][]template.Node
 // full tree with Error.All or Unwrap; each leaf carries the ErrorType
 // classification, the template.Tree and template.Node it was found at, and,
 // when relevant, the types.Type being checked.
-func Execute(global *Global, tree *template.Tree, data types.Type) error {
+func Execute(global *Global, tree *htt.Tree, data types.Type) error {
 	// AST-only warning passes run independently of type checking, so they
 	// still report even when the walk below fails.
 	reportUnusedVariables(global, tree)
@@ -807,7 +807,7 @@ func Execute(global *Global, tree *template.Tree, data types.Type) error {
 
 // newTemplateScope returns the scope for walking tree's body with dot,
 // invoked from within the templates in parent.
-func newTemplateScope(global *Global, tree *template.Tree, dot types.Type, parent []templateInvocation) *scope {
+func newTemplateScope(global *Global, tree *htt.Tree, dot types.Type, parent []templateInvocation) *scope {
 	return &scope{
 		global: global,
 		variables: map[string]types.Type{
@@ -845,7 +845,7 @@ type scope struct {
 }
 
 type templateInvocation struct {
-	tree *template.Tree
+	tree *htt.Tree
 	dot  types.Type
 }
 
@@ -861,7 +861,7 @@ func (s *scope) child() *scope {
 
 // invoking reports whether tree is already being checked with an
 // identical dot.
-func (s *scope) invoking(tree *template.Tree, dot types.Type) bool {
+func (s *scope) invoking(tree *htt.Tree, dot types.Type) bool {
 	return slices.ContainsFunc(s.invocations, func(inv templateInvocation) bool {
 		return inv.tree == tree && types.Identical(inv.dot, dot)
 	})
@@ -869,7 +869,7 @@ func (s *scope) invoking(tree *template.Tree, dot types.Type) bool {
 
 // markFailedDecls records the variables a failing pipeline would have
 // declared.
-func (s *scope) markFailedDecls(n *template.PipeNode) {
+func (s *scope) markFailedDecls(n *htt.PipeNode) {
 	for _, decl := range n.Decl {
 		if len(decl.Ident) == 0 {
 			continue
@@ -883,7 +883,7 @@ func (s *scope) markFailedDecls(n *template.PipeNode) {
 
 // walkEach walks nodes in order, collecting every failure rather than
 // stopping at the first.
-func (s *scope) walkEach(tree *template.Tree, dot, prev types.Type, node template.Node, nodes ...template.Node) error {
+func (s *scope) walkEach(tree *htt.Tree, dot, prev types.Type, node htt.Node, nodes ...htt.Node) error {
 	var errs []error
 	for _, child := range nodes {
 		if _, err := s.walk(tree, dot, prev, child); err != nil {
@@ -893,7 +893,7 @@ func (s *scope) walkEach(tree *template.Tree, dot, prev types.Type, node templat
 	return joinErrors(tree, node, errs...)
 }
 
-func (s *scope) walk(tree *template.Tree, dot, prev types.Type, node template.Node) (types.Type, error) {
+func (s *scope) walk(tree *htt.Tree, dot, prev types.Type, node htt.Node) (types.Type, error) {
 	tp, err := s.walkNode(tree, dot, prev, node)
 	return s.emit(tree, node, dot, tp, err)
 }
@@ -903,7 +903,7 @@ func (s *scope) walk(tree *template.Tree, dot, prev types.Type, node template.No
 // (type, error) through unchanged, so it can wrap a resolver's return.
 // Nodes that carry no type of their own (lists, text, control structures)
 // resolve to a nil type and are not reported.
-func (s *scope) emit(tree *template.Tree, node template.Node, dot, tp types.Type, err error) (types.Type, error) {
+func (s *scope) emit(tree *htt.Tree, node htt.Node, dot, tp types.Type, err error) (types.Type, error) {
 	obj := s.lastObject
 	s.lastObject = nil
 	if err == nil && tp != nil && s.global.InspectNode != nil {
@@ -912,64 +912,64 @@ func (s *scope) emit(tree *template.Tree, node template.Node, dot, tp types.Type
 	return tp, err
 }
 
-func (s *scope) walkNode(tree *template.Tree, dot, prev types.Type, node template.Node) (types.Type, error) {
+func (s *scope) walkNode(tree *htt.Tree, dot, prev types.Type, node htt.Node) (types.Type, error) {
 	switch n := node.(type) {
-	case *template.DotNode:
+	case *htt.DotNode:
 		return dot, nil
-	case *template.ListNode:
+	case *htt.ListNode:
 		return nil, s.checkListNode(tree, dot, prev, n)
-	case *template.ActionNode:
+	case *htt.ActionNode:
 		return nil, s.checkActionNode(tree, dot, prev, n)
-	case *template.CommandNode:
+	case *htt.CommandNode:
 		return s.checkCommandNode(tree, dot, prev, n)
-	case *template.FieldNode:
+	case *htt.FieldNode:
 		return s.checkFieldNode(tree, dot, n, nil)
-	case *template.PipeNode:
+	case *htt.PipeNode:
 		return s.checkPipeNode(tree, dot, n)
-	case *template.IfNode:
+	case *htt.IfNode:
 		return nil, s.checkIfNode(tree, dot, n)
-	case *template.RangeNode:
+	case *htt.RangeNode:
 		return nil, s.checkRangeNode(tree, dot, n)
-	case *template.TemplateNode:
+	case *htt.TemplateNode:
 		return nil, s.checkTemplateNode(tree, dot, n)
-	case *template.BoolNode:
+	case *htt.BoolNode:
 		return types.Typ[types.Bool], nil
-	case *template.StringNode:
+	case *htt.StringNode:
 		return types.Typ[types.String], nil
-	case *template.NumberNode:
+	case *htt.NumberNode:
 		return newNumberNodeType(tree, n)
-	case *template.VariableNode:
+	case *htt.VariableNode:
 		return s.checkVariableNode(tree, n, nil)
-	case *template.IdentifierNode:
+	case *htt.IdentifierNode:
 		return s.checkIdentifierNode(tree, n)
-	case *template.TextNode:
+	case *htt.TextNode:
 		return nil, nil
-	case *template.WithNode:
+	case *htt.WithNode:
 		return nil, s.checkWithNode(tree, dot, n)
-	case *template.CommentNode:
+	case *htt.CommentNode:
 		return nil, nil
-	case *template.NilNode:
+	case *htt.NilNode:
 		return types.Typ[types.UntypedNil], nil
-	case *template.ChainNode:
+	case *htt.ChainNode:
 		return s.checkChainNode(tree, dot, prev, n, nil)
-	case *template.BreakNode:
+	case *htt.BreakNode:
 		return nil, nil
-	case *template.ContinueNode:
+	case *htt.ContinueNode:
 		return nil, nil
 	// HTML-specific nodes
-	case *template.HTMLDocumentFragmentNode:
+	case *htt.HTMLDocumentFragmentNode:
 		return nil, s.walkEach(tree, dot, prev, n, n.Children...)
-	case *template.HTMLElementNode:
+	case *htt.HTMLElementNode:
 		return nil, s.walkEach(tree, dot, prev, n, append(slices.Clip(n.Attr), n.Children...)...)
-	case *template.HTMLAttributeNode:
+	case *htt.HTMLAttributeNode:
 		return nil, s.walkEach(tree, dot, prev, n, append(slices.Clip(n.Key), n.Value...)...)
-	case *template.HTMLCommentNode:
+	case *htt.HTMLCommentNode:
 		return nil, s.walkEach(tree, dot, prev, n, n.Children...)
-	case *template.HTMLDoctypeNode:
+	case *htt.HTMLDoctypeNode:
 		return nil, nil
-	case *template.DefineNode:
+	case *htt.DefineNode:
 		return nil, nil
-	case *template.BlockNode:
+	case *htt.BlockNode:
 		return nil, s.checkBlockNode(tree, dot, n)
 	default:
 		return nil, newError(ErrorTypeUnexpectedNode, tree, n, "missing node type check %T", n)
@@ -979,11 +979,11 @@ func (s *scope) walkNode(tree *template.Tree, dot, prev types.Type, node templat
 // checkBlockNode checks a block as text/template runs it: as a
 // {{template}} call of the template it names, which is the block's body
 // unless a later define of that name replaced it.
-func (s *scope) checkBlockNode(tree *template.Tree, dot types.Type, n *template.BlockNode) error {
+func (s *scope) checkBlockNode(tree *htt.Tree, dot types.Type, n *htt.BlockNode) error {
 	return s.checkTemplateNode(tree, dot, n.Call())
 }
 
-func (s *scope) checkChainNode(tree *template.Tree, dot, prev types.Type, n *template.ChainNode, args []types.Type) (types.Type, error) {
+func (s *scope) checkChainNode(tree *htt.Tree, dot, prev types.Type, n *htt.ChainNode, args []types.Type) (types.Type, error) {
 	x, err := s.walk(tree, dot, prev, n.Node)
 	if err != nil {
 		return nil, err
@@ -991,7 +991,7 @@ func (s *scope) checkChainNode(tree *template.Tree, dot, prev types.Type, n *tem
 	return s.checkIdentifiers(tree, x, n, n.Field, args)
 }
 
-func (s *scope) checkVariableNode(tree *template.Tree, n *template.VariableNode, args []types.Type) (types.Type, error) {
+func (s *scope) checkVariableNode(tree *htt.Tree, n *htt.VariableNode, args []types.Type) (types.Type, error) {
 	tp, ok := s.variables[n.Ident[0]]
 	if !ok {
 		e := newError(ErrorTypeVariableNotFound, tree, n, "variable %s not found", n.Ident[0])
@@ -1001,16 +1001,16 @@ func (s *scope) checkVariableNode(tree *template.Tree, n *template.VariableNode,
 	return s.checkIdentifiers(tree, tp, n, n.Ident[1:], args)
 }
 
-func (s *scope) checkListNode(tree *template.Tree, dot, prev types.Type, n *template.ListNode) error {
+func (s *scope) checkListNode(tree *htt.Tree, dot, prev types.Type, n *htt.ListNode) error {
 	return s.walkEach(tree, dot, prev, n, n.Nodes...)
 }
 
-func (s *scope) checkActionNode(tree *template.Tree, dot, prev types.Type, n *template.ActionNode) error {
+func (s *scope) checkActionNode(tree *htt.Tree, dot, prev types.Type, n *htt.ActionNode) error {
 	_, err := s.walk(tree, dot, prev, n.Pipe)
 	return err
 }
 
-func (s *scope) checkPipeNode(tree *template.Tree, dot types.Type, n *template.PipeNode) (types.Type, error) {
+func (s *scope) checkPipeNode(tree *htt.Tree, dot types.Type, n *htt.PipeNode) (types.Type, error) {
 	var result types.Type
 	for _, cmd := range n.Commands {
 		tp, err := s.walk(tree, dot, result, cmd)
@@ -1029,7 +1029,7 @@ func (s *scope) checkPipeNode(tree *template.Tree, dot types.Type, n *template.P
 	return result, nil
 }
 
-func (s *scope) checkIfNode(tree *template.Tree, dot types.Type, n *template.IfNode) error {
+func (s *scope) checkIfNode(tree *htt.Tree, dot types.Type, n *htt.IfNode) error {
 	var errs []error
 	_, pipeErr := s.walk(tree, dot, nil, n.Pipe)
 	if pipeErr != nil {
@@ -1062,7 +1062,7 @@ func (s *scope) checkIfNode(tree *template.Tree, dot types.Type, n *template.IfN
 	return joinErrors(tree, n, errs...)
 }
 
-func (s *scope) checkWithNode(tree *template.Tree, dot types.Type, n *template.WithNode) error {
+func (s *scope) checkWithNode(tree *htt.Tree, dot types.Type, n *htt.WithNode) error {
 	var errs []error
 	child := s.child()
 	x, err := child.walk(tree, dot, nil, n.Pipe)
@@ -1092,7 +1092,7 @@ func (s *scope) checkWithNode(tree *template.Tree, dot types.Type, n *template.W
 	return joinErrors(tree, n, errs...)
 }
 
-func newNumberNodeType(tree *template.Tree, constant *template.NumberNode) (types.Type, error) {
+func newNumberNodeType(tree *htt.Tree, constant *htt.NumberNode) (types.Type, error) {
 	switch {
 	case constant.IsComplex:
 		return types.Typ[types.UntypedComplex], nil
@@ -1123,7 +1123,7 @@ func isHexInt(s string) bool {
 	return len(s) > 2 && s[0] == '0' && (s[1] == 'x' || s[1] == 'X') && !strings.ContainsAny(s, "pP")
 }
 
-func (s *scope) checkTemplateNode(tree *template.Tree, dot types.Type, n *template.TemplateNode) error {
+func (s *scope) checkTemplateNode(tree *htt.Tree, dot types.Type, n *htt.TemplateNode) error {
 	x := dot
 	var errs []error
 	pipeOK := true
@@ -1189,28 +1189,28 @@ func downgradeUntyped(x types.Type) types.Type {
 	}
 }
 
-func (s *scope) checkFieldNode(tree *template.Tree, dot types.Type, n *template.FieldNode, args []types.Type) (types.Type, error) {
+func (s *scope) checkFieldNode(tree *htt.Tree, dot types.Type, n *htt.FieldNode, args []types.Type) (types.Type, error) {
 	return s.checkIdentifiers(tree, dot, n, n.Ident, args)
 }
 
-func (s *scope) checkCommandNode(tree *template.Tree, dot, prev types.Type, cmd *template.CommandNode) (types.Type, error) {
+func (s *scope) checkCommandNode(tree *htt.Tree, dot, prev types.Type, cmd *htt.CommandNode) (types.Type, error) {
 	first := cmd.Args[0]
 	switch n := first.(type) {
-	case *template.FieldNode:
+	case *htt.FieldNode:
 		argTypes, err := s.argumentTypes(tree, dot, prev, cmd.Args[1:])
 		if err != nil {
 			return nil, err
 		}
 		tp, err := s.checkFieldNode(tree, dot, n, argTypes)
 		return s.emit(tree, n, dot, tp, err)
-	case *template.ChainNode:
+	case *htt.ChainNode:
 		argTypes, err := s.argumentTypes(tree, dot, prev, cmd.Args[1:])
 		if err != nil {
 			return nil, err
 		}
 		tp, err := s.checkChainNode(tree, dot, prev, n, argTypes)
 		return s.emit(tree, n, dot, tp, err)
-	case *template.IdentifierNode:
+	case *htt.IdentifierNode:
 		argFn := s.argumentTypes
 		if n.Ident == "and" {
 			argFn = s.argumentTypesGuarded // and short-circuits; guard later operands
@@ -1224,13 +1224,13 @@ func (s *scope) checkCommandNode(tree *template.Tree, dot, prev types.Type, cmd 
 			return nil, wrapError(ErrorTypeUnknown, tree, cmd, err)
 		}
 		return s.emit(tree, n, dot, tp, nil)
-	case *template.PipeNode:
+	case *htt.PipeNode:
 		if err := s.notAFunction(tree, n, cmd.Args, prev); err != nil {
 			return nil, err
 		}
 		tp, err := s.checkPipeNode(tree, dot, n)
 		return s.emit(tree, n, dot, tp, err)
-	case *template.VariableNode:
+	case *htt.VariableNode:
 		argTypes, err := s.argumentTypes(tree, dot, prev, cmd.Args[1:])
 		if err != nil {
 			return nil, err
@@ -1244,15 +1244,15 @@ func (s *scope) checkCommandNode(tree *template.Tree, dot, prev types.Type, cmd 
 	}
 
 	switch n := first.(type) {
-	case *template.BoolNode:
+	case *htt.BoolNode:
 		return types.Typ[types.UntypedBool], nil
-	case *template.StringNode:
+	case *htt.StringNode:
 		return types.Typ[types.UntypedString], nil
-	case *template.NumberNode:
+	case *htt.NumberNode:
 		return newNumberNodeType(tree, n)
-	case *template.DotNode:
+	case *htt.DotNode:
 		return s.emit(tree, n, dot, dot, nil)
-	case *template.NilNode:
+	case *htt.NilNode:
 		return nil, newError(ErrorTypeBadCommand, tree, n, "nil is not a command")
 	default:
 		return nil, newError(ErrorTypeBadCommand, tree, first, "can't evaluate command %q", first)
@@ -1270,7 +1270,7 @@ func (s *scope) addGuard(path string) {
 // treating each field-path operand as non-nil for the operands after it —
 // and short-circuits, so {{if and .User (eq .User.Role "x")}} never
 // dereferences a nil .User (W003).
-func (s *scope) argumentTypesGuarded(tree *template.Tree, dot, prev types.Type, args []template.Node) ([]types.Type, error) {
+func (s *scope) argumentTypesGuarded(tree *htt.Tree, dot, prev types.Type, args []htt.Node) ([]types.Type, error) {
 	child := s.child()
 	argTypes := make([]types.Type, 0, len(args)+1)
 	var errs []error
@@ -1294,7 +1294,7 @@ func (s *scope) argumentTypesGuarded(tree *template.Tree, dot, prev types.Type, 
 	return argTypes, nil
 }
 
-func (s *scope) argumentTypes(tree *template.Tree, dot types.Type, prev types.Type, args []template.Node) ([]types.Type, error) {
+func (s *scope) argumentTypes(tree *htt.Tree, dot types.Type, prev types.Type, args []htt.Node) ([]types.Type, error) {
 	argTypes := make([]types.Type, 0, len(args)+1)
 	var errs []error
 	for _, arg := range args {
@@ -1314,7 +1314,7 @@ func (s *scope) argumentTypes(tree *template.Tree, dot types.Type, prev types.Ty
 	return argTypes, nil
 }
 
-func (s *scope) notAFunction(tree *template.Tree, node template.Node, args []template.Node, final types.Type) error {
+func (s *scope) notAFunction(tree *htt.Tree, node htt.Node, args []htt.Node, final types.Type) error {
 	if len(args) > 1 || final != nil {
 		return newError(ErrorTypeNotAFunction, tree, node, "can't give argument to non-function %s", args[0])
 	}
@@ -1326,7 +1326,7 @@ func (s *scope) notAFunction(tree *template.Tree, node template.Node, args []tem
 // the full type so callers of FormatVerbose can render its structure.
 // types.Type args are rendered with a nil qualifier in the Cause message
 // and re-rendered with the caller's qualifier by DetailedError.
-func (s *scope) identErr(errType ErrorType, tree *template.Tree, n template.Node, ident string, tp types.Type, format string, a ...any) *Error {
+func (s *scope) identErr(errType ErrorType, tree *htt.Tree, n htt.Node, ident string, tp types.Type, format string, a ...any) *Error {
 	render := renderer(format, a...)
 	return wrapError(errType, tree, n, &IdentifierError{
 		Identifier: ident,
@@ -1338,7 +1338,7 @@ func (s *scope) identErr(errType ErrorType, tree *template.Tree, n template.Node
 	}).withX(tp)
 }
 
-func (s *scope) checkIdentifiers(tree *template.Tree, dot types.Type, n template.Node, idents []string, args []types.Type) (types.Type, error) {
+func (s *scope) checkIdentifiers(tree *htt.Tree, dot types.Type, n htt.Node, idents []string, args []types.Type) (types.Type, error) {
 	x := dot
 	warnedInterface := false
 	warnedNil := false
@@ -1493,7 +1493,7 @@ func (s *scope) checkIdentifiers(tree *template.Tree, dot types.Type, n template
 	return x, nil
 }
 
-func (s *scope) checkRangeNode(tree *template.Tree, dot types.Type, n *template.RangeNode) error {
+func (s *scope) checkRangeNode(tree *htt.Tree, dot types.Type, n *htt.RangeNode) error {
 	child := s.child()
 	pipeType, err := child.walk(tree, dot, nil, n.Pipe)
 	if err != nil {
@@ -1623,7 +1623,7 @@ func isIter2(signature *types.Signature) (types.Type, types.Type, bool) {
 	return yp.At(0).Type(), yp.At(1).Type(), true
 }
 
-func (s *scope) checkIdentifierNode(tree *template.Tree, n *template.IdentifierNode) (types.Type, error) {
+func (s *scope) checkIdentifierNode(tree *htt.Tree, n *htt.IdentifierNode) (types.Type, error) {
 	if !strings.HasPrefix(n.Ident, "$") {
 		tp, err := s.global.calls.CheckCall(s.global, n.Ident, nil, nil)
 		if err != nil {

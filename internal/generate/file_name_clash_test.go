@@ -6,8 +6,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/typelate/htt"
+
 	"github.com/typelate/muxt/internal/source"
-	"github.com/typelate/muxt/template"
 )
 
 // TestCheckGeneratedFileNames states which template files clash when each
@@ -23,7 +24,7 @@ func TestCheckGeneratedFileNames(t *testing.T) {
 	definedIn := func(files ...string) source.Package {
 		definitions := make(map[string]source.Definition)
 		for _, file := range files {
-			definitions[file] = source.Definition{Name: file, Package: "example.com/m/fragments", Tree: &template.Tree{Filepath: file}}
+			definitions[file] = source.Definition{Name: file, Package: "example.com/m/fragments", Tree: &htt.Tree{Filepath: file}}
 		}
 		return source.Package{Variables: []source.Variable{{Definitions: definitions}}}
 	}

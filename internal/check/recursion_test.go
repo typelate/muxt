@@ -8,8 +8,9 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/tools/go/packages"
 
+	"github.com/typelate/htt"
+
 	"github.com/typelate/muxt/internal/check"
-	"github.com/typelate/muxt/template"
 )
 
 // recursionNode is the dot for templates that render a tree by invoking
@@ -94,7 +95,7 @@ func TestExecute_recursiveTemplate(t *testing.T) {
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			ts, err := template.New[*types.Signature](tt.template).Parse(tt.source)
+			ts, err := htt.New[*types.Signature](tt.template).Parse(tt.source)
 			require.NoError(t, err)
 			global := check.NewGlobal(testPkg.Types, testPkg.Fset, ts, check.DefaultFunctions(testPkg.Types))
 			tree, ok := ts.FindTree(tt.template)
@@ -128,9 +129,9 @@ func TestExecute_rootTreeNotServedByName(t *testing.T) {
 	testPkg := find(t, loadPkg(), func(p *packages.Package) bool {
 		return p.Name == packageName
 	})
-	root, err := template.New[*types.Signature]("node").Parse(`{{range .Children}}{{template "node" .}}{{end}}`)
+	root, err := htt.New[*types.Signature]("node").Parse(`{{range .Children}}{{template "node" .}}{{end}}`)
 	require.NoError(t, err)
-	served, err := template.New[*types.Signature]("node").Parse(`{{.Missing}}`)
+	served, err := htt.New[*types.Signature]("node").Parse(`{{.Missing}}`)
 	require.NoError(t, err)
 	global := check.NewGlobal(testPkg.Types, testPkg.Fset, served, check.DefaultFunctions(testPkg.Types))
 	dot := testPkg.Types.Scope().Lookup("recursionNode").Type()

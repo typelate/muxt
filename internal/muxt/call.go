@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"slices"
 
-	"github.com/typelate/muxt/template/html"
+	"github.com/typelate/htt/template"
 
 	"github.com/typelate/muxt/internal/asteval"
 	"github.com/typelate/muxt/internal/astgen"
@@ -368,7 +368,7 @@ func packageScopeFunc(pkg *types.Package, fun *ast.Ident) (types.Object, bool) {
 
 // templateNames lists the names in ts's template set, candidates for
 // suggesting a fix to a misspelled template name.
-func templateNames(ts *html.Template) []string {
+func templateNames(ts *template.Template) []string {
 	if ts == nil {
 		return nil
 	}

@@ -4,9 +4,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/typelate/htt"
+	"github.com/typelate/htt/lex"
+
 	"github.com/typelate/muxt/internal/css/csstree"
-	"github.com/typelate/muxt/template"
-	"github.com/typelate/muxt/template/lex"
 )
 
 func TestSpecificity(t *testing.T) {
@@ -77,7 +78,7 @@ func TestSelectorAt(t *testing.T) {
 		{name: "declaration", input: page, cursor: "color"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			tree, err := template.ParseTree("test.gohtml", test.name, test.input, nil, lex.NewOptions())
+			tree, err := htt.ParseTree("test.gohtml", test.name, test.input, nil, lex.NewOptions())
 			if err != nil {
 				t.Fatalf("ParseTree error: %v", err)
 			}
@@ -104,7 +105,7 @@ func TestSelectorAt(t *testing.T) {
 
 func TestStyleDeclarationAtInStyleElement(t *testing.T) {
 	const input = `<style>.a { color: red; margin: 0 }</style>`
-	tree, err := template.ParseTree("test.gohtml", "test", input, nil, lex.NewOptions())
+	tree, err := htt.ParseTree("test.gohtml", "test", input, nil, lex.NewOptions())
 	if err != nil {
 		t.Fatalf("ParseTree error: %v", err)
 	}

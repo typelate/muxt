@@ -7,7 +7,7 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/typelate/muxt/template"
+	"github.com/typelate/htt"
 )
 
 // structFieldHasNonil reports whether the named field of t (a struct, or a
@@ -50,8 +50,8 @@ type Warning struct {
 	Code    string
 	Message string
 
-	Tree *template.Tree
-	Node template.Node
+	Tree *htt.Tree
+	Node htt.Node
 
 	Pos token.Pos
 }
@@ -64,7 +64,7 @@ var emptyInterface = types.NewInterfaceType(nil, nil).Complete()
 // warn reports a template-located warning through Global.InspectWarning when
 // one is set; otherwise it is a no-op, so checking without a warning sink
 // costs nothing.
-func (s *scope) warn(tree *template.Tree, node template.Node, code, format string, args ...any) {
+func (s *scope) warn(tree *htt.Tree, node htt.Node, code, format string, args ...any) {
 	if s.global.InspectWarning == nil {
 		return
 	}
@@ -81,26 +81,26 @@ func (s *scope) warn(tree *template.Tree, node template.Node, code, format strin
 // used anywhere in the template counts as used, so shadowing never yields a
 // false positive — and it ignores {{range}}/{{with}} loop variables, which
 // are commonly partially used. It runs only when a warning sink is set.
-func reportUnusedVariables(g *Global, tree *template.Tree) {
+func reportUnusedVariables(g *Global, tree *htt.Tree) {
 	if g.InspectWarning == nil || tree == nil || tree.Root == nil {
 		return
 	}
-	var decls []*template.VariableNode
+	var decls []*htt.VariableNode
 	used := make(map[string]bool)
 
-	var visitPipe func(p *template.PipeNode, declares bool)
-	visitPipe = func(p *template.PipeNode, declares bool) {
+	var visitPipe func(p *htt.PipeNode, declares bool)
+	visitPipe = func(p *htt.PipeNode, declares bool) {
 		if p == nil {
 			return
 		}
 		for _, cmd := range p.Commands {
 			for _, arg := range cmd.Args {
 				switch a := arg.(type) {
-				case *template.VariableNode:
+				case *htt.VariableNode:
 					if len(a.Ident) > 0 {
 						used[a.Ident[0]] = true
 					}
-				case *template.PipeNode:
+				case *htt.PipeNode:
 					visitPipe(a, false)
 				}
 			}
@@ -114,16 +114,16 @@ func reportUnusedVariables(g *Global, tree *template.Tree) {
 		}
 	}
 
-	var visit func(n template.Node)
-	visit = func(n template.Node) {
+	var visit func(n htt.Node)
+	visit = func(n htt.Node) {
 		switch v := n.(type) {
-		case *template.ListNode:
+		case *htt.ListNode:
 			for _, c := range v.Nodes {
 				visit(c)
 			}
-		case *template.ActionNode:
+		case *htt.ActionNode:
 			visitPipe(v.Pipe, true)
-		case *template.IfNode:
+		case *htt.IfNode:
 			visitPipe(v.Pipe, false)
 			if v.List != nil {
 				visit(v.List)
@@ -131,7 +131,7 @@ func reportUnusedVariables(g *Global, tree *template.Tree) {
 			if v.ElseList != nil {
 				visit(v.ElseList)
 			}
-		case *template.RangeNode:
+		case *htt.RangeNode:
 			visitPipe(v.Pipe, false)
 			if v.List != nil {
 				visit(v.List)
@@ -139,7 +139,7 @@ func reportUnusedVariables(g *Global, tree *template.Tree) {
 			if v.ElseList != nil {
 				visit(v.ElseList)
 			}
-		case *template.WithNode:
+		case *htt.WithNode:
 			visitPipe(v.Pipe, false)
 			if v.List != nil {
 				visit(v.List)
@@ -147,27 +147,27 @@ func reportUnusedVariables(g *Global, tree *template.Tree) {
 			if v.ElseList != nil {
 				visit(v.ElseList)
 			}
-		case *template.TemplateNode:
+		case *htt.TemplateNode:
 			visitPipe(v.Pipe, false)
-		case *template.HTMLDocumentFragmentNode:
+		case *htt.HTMLDocumentFragmentNode:
 			for _, c := range v.Children {
 				visit(c)
 			}
-		case *template.HTMLElementNode:
+		case *htt.HTMLElementNode:
 			for _, a := range v.Attr {
 				visit(a)
 			}
 			for _, c := range v.Children {
 				visit(c)
 			}
-		case *template.HTMLAttributeNode:
+		case *htt.HTMLAttributeNode:
 			for _, k := range v.Key {
 				visit(k)
 			}
 			for _, val := range v.Value {
 				visit(val)
 			}
-		case *template.HTMLCommentNode:
+		case *htt.HTMLCommentNode:
 			for _, c := range v.Children {
 				visit(c)
 			}
@@ -193,7 +193,7 @@ func reportUnusedVariables(g *Global, tree *template.Tree) {
 // guards ".User" too, because and evaluates left to right and stops at the
 // first empty value. A parenthesized condition, {{if (and .User .X)}}, guards as
 // its inlined form does.
-func guardedPath(pipe *template.PipeNode) (string, bool) {
+func guardedPath(pipe *htt.PipeNode) (string, bool) {
 	if pipe == nil {
 		return "", false
 	}
@@ -205,7 +205,7 @@ func guardedPath(pipe *template.PipeNode) (string, bool) {
 	if len(cmd.Args) == 0 {
 		return "", false
 	}
-	if id, ok := cmd.Args[0].(*template.IdentifierNode); ok && id.Ident == "and" && len(cmd.Args) >= 2 {
+	if id, ok := cmd.Args[0].(*htt.IdentifierNode); ok && id.Ident == "and" && len(cmd.Args) >= 2 {
 		return fieldPathOf(cmd.Args[1])
 	}
 	if len(cmd.Args) != 1 {
@@ -216,11 +216,11 @@ func guardedPath(pipe *template.PipeNode) (string, bool) {
 
 // fieldPathOf returns the dot-rooted path of a bare dot or field reference
 // ("" for {{.}}, ".User.Name" for {{.User.Name}}).
-func fieldPathOf(n template.Node) (string, bool) {
+func fieldPathOf(n htt.Node) (string, bool) {
 	switch a := n.(type) {
-	case *template.DotNode:
+	case *htt.DotNode:
 		return "", true
-	case *template.FieldNode:
+	case *htt.FieldNode:
 		return "." + strings.Join(a.Ident, "."), true
 	}
 	return "", false
@@ -231,7 +231,7 @@ func fieldPathOf(n template.Node) (string, bool) {
 // the pipeline is such a literal at all. {{if true}} and {{if (false)}} qualify;
 // anything with a function, field, or declaration does not. ({{if nil}} is
 // already a type error — "nil is not a command" — so it never reaches here.)
-func literalCondition(pipe *template.PipeNode) (truth, isLiteral bool) {
+func literalCondition(pipe *htt.PipeNode) (truth, isLiteral bool) {
 	if pipe == nil || len(pipe.Decl) > 0 {
 		return false, false
 	}
@@ -239,7 +239,7 @@ func literalCondition(pipe *template.PipeNode) (truth, isLiteral bool) {
 	if len(cmds) != 1 || len(cmds[0].Args) != 1 {
 		return false, false
 	}
-	if b, ok := cmds[0].Args[0].(*template.BoolNode); ok {
+	if b, ok := cmds[0].Args[0].(*htt.BoolNode); ok {
 		return b.True, true
 	}
 	return false, false

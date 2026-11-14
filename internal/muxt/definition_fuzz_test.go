@@ -3,7 +3,7 @@ package muxt
 import (
 	"testing"
 
-	"github.com/typelate/muxt/template/html"
+	"github.com/typelate/htt/template"
 
 	"github.com/stretchr/testify/require"
 )
@@ -33,7 +33,7 @@ func FuzzNewDefinition(f *testing.F) {
 	}
 
 	f.Fuzz(func(t *testing.T, name string) {
-		tmpl, err := html.New(name).Parse("")
+		tmpl, err := template.New(name).Parse("")
 		if err != nil {
 			t.Skip()
 		}

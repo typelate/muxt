@@ -14,11 +14,12 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/typelate/htt"
+	"github.com/typelate/htt/lex"
+
 	"github.com/typelate/muxt/internal/diff"
 	"github.com/typelate/muxt/internal/load"
 	"github.com/typelate/muxt/internal/template/format"
-	"github.com/typelate/muxt/template"
-	"github.com/typelate/muxt/template/lex"
 )
 
 const standardInputName = "<standard input>"
@@ -35,7 +36,7 @@ type formatFile struct {
 	key    string // path with symbolic links resolved, to match the files a package embeds
 	dir    string // the directory of the package that embeds the file, else the file's own; "" for standard input, which has none
 	source []byte
-	tree   *template.Tree // nil when the file does not parse
+	tree   *htt.Tree // nil when the file does not parse
 }
 
 // runFormatCommand formats the files config names, or standard input, as
@@ -102,7 +103,7 @@ type formatPackage struct {
 
 type embeddedTemplate struct {
 	key  string
-	tree *template.Tree
+	tree *htt.Tree
 }
 
 func (r *formatRun) report(message string) {
@@ -225,7 +226,7 @@ func (r *formatRun) format(f *formatFile, all []*formatFile) {
 func (r *formatRun) formatSource(f *formatFile, all []*formatFile, keep func(string) bool) (string, error) {
 	pkg := r.packageIn(f.dir, all)
 	contextBroken := pkg.broken
-	var context []*template.Tree
+	var context []*htt.Tree
 	for _, other := range all {
 		if other == f || other.dir != f.dir || pkg.keys[other.key] {
 			continue
@@ -243,7 +244,7 @@ func (r *formatRun) formatSource(f *formatFile, all []*formatFile, keep func(str
 			context = append(context, e.tree)
 		}
 	}
-	var files []*template.Tree
+	var files []*htt.Tree
 	if f.tree != nil {
 		files = append(files, f.tree)
 	}
@@ -297,7 +298,7 @@ func (r *formatRun) findNamesKept(dir string, all []*formatFile) keptNames {
 		return keepAll
 	}
 	var run []*formatFile
-	var runTrees []*template.Tree
+	var runTrees []*htt.Tree
 	inRun := make(map[string]bool)
 	for _, f := range all {
 		if f.dir != dir {
@@ -310,7 +311,7 @@ func (r *formatRun) findNamesKept(dir string, all []*formatFile) keptNames {
 		runTrees = append(runTrees, f.tree)
 		inRun[f.key] = true
 	}
-	var outside []*template.Tree
+	var outside []*htt.Tree
 	for _, e := range pkg.embedded {
 		if !inRun[e.key] {
 			outside = append(outside, e.tree)
@@ -319,9 +320,9 @@ func (r *formatRun) findNamesKept(dir string, all []*formatFile) keptNames {
 	first := keptNames{kept: format.KeptNames(runTrees, outside)}
 	// The names each file would change: those it spells otherwise.
 	changes := make(map[*formatFile]map[string]bool)
-	var formatted []*template.Tree
+	var formatted []*htt.Tree
 	for _, f := range run {
-		names := format.KeptNames(nil, []*template.Tree{f.tree})
+		names := format.KeptNames(nil, []*htt.Tree{f.tree})
 		maps.DeleteFunc(names, func(name string, _ bool) bool { return first.kept[name] })
 		if len(names) == 0 {
 			continue
@@ -353,7 +354,7 @@ func (r *formatRun) findNamesKept(dir string, all []*formatFile) keptNames {
 }
 
 func formatErrorLine(name string, err error) string {
-	var parseErr *template.ParseError
+	var parseErr *htt.ParseError
 	if errors.As(err, &parseErr) {
 		pos := parseErr.Position()
 		return fmt.Sprintf("%s:%d:%d: %v", name, pos.Line, pos.Column, errors.Unwrap(parseErr))
@@ -578,8 +579,8 @@ func resolvedPath(path string) string {
 
 // parseFormatTree parses source as format.Source does, for its links and
 // <style> elements.
-func parseFormatTree(name string, source []byte) (*template.Tree, error) {
-	return template.ParseTree(name, name, string(source), nil, lex.Options{
+func parseFormatTree(name string, source []byte) (*htt.Tree, error) {
+	return htt.ParseTree(name, name, string(source), nil, lex.Options{
 		EmitComment: true,
 		ParseHTML:   true,
 		BreakOK:     true,

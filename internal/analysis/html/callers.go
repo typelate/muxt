@@ -3,15 +3,15 @@ package analysis
 import (
 	"fmt"
 
-	"github.com/typelate/muxt/template"
+	"github.com/typelate/htt"
 )
 
 // Callers walks the AST rooted at tree and returns all TemplateNode call sites
 // grouped by the template name they reference.
-func Callers(tree *template.Tree) map[string][]*template.TemplateNode {
-	result := make(map[string][]*template.TemplateNode)
-	template.Walk(tree, func(_ *template.Tree, n template.Node) {
-		if tmpl, ok := n.(*template.TemplateNode); ok {
+func Callers(tree *htt.Tree) map[string][]*htt.TemplateNode {
+	result := make(map[string][]*htt.TemplateNode)
+	htt.Walk(tree, func(_ *htt.Tree, n htt.Node) {
+		if tmpl, ok := n.(*htt.TemplateNode); ok {
 			result[tmpl.Name] = append(result[tmpl.Name], tmpl)
 		}
 	})
@@ -21,8 +21,8 @@ func Callers(tree *template.Tree) map[string][]*template.TemplateNode {
 // ContextConflict reports a template name that is called from multiple
 // incompatible contexts.
 type ContextConflict struct {
-	Name     string                   // Template name.
-	Contexts []*template.TemplateNode // The conflicting call sites.
+	Name     string              // Template name.
+	Contexts []*htt.TemplateNode // The conflicting call sites.
 }
 
 func (c ContextConflict) Error() string {
@@ -34,7 +34,7 @@ func (c ContextConflict) Error() string {
 // with differing HTMLContext State values. A template called from both "text"
 // and "attr" context, for example, cannot be safely escaped with a single
 // strategy.
-func ContextConflicts(callers map[string][]*template.TemplateNode) []ContextConflict {
+func ContextConflicts(callers map[string][]*htt.TemplateNode) []ContextConflict {
 	var conflicts []ContextConflict
 	for name, nodes := range callers {
 		if len(nodes) < 2 {

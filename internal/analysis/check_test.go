@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/typelate/muxt/template/html"
+	"github.com/typelate/htt/template"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -19,9 +19,9 @@ import (
 // parseTemplates parses text as one template set named "set". Text outside
 // the define clauses is left empty, so the set's own root template is
 // empty and never reported as unused.
-func parseTemplates(t *testing.T, text string) *html.Template {
+func parseTemplates(t *testing.T, text string) *template.Template {
 	t.Helper()
-	ts, err := html.New("set").Parse(text)
+	ts, err := template.New("set").Parse(text)
 	require.NoError(t, err)
 	return ts
 }
@@ -220,7 +220,7 @@ func TestCollectTemplateReferencesFollowsHTMLAndBlocks(t *testing.T) {
 
 // declaredTemplates has a template the set knows by name but that was never
 // parsed, so it has no tree, and one that is referenced but not defined.
-func declaredTemplates(t *testing.T) *html.Template {
+func declaredTemplates(t *testing.T) *template.Template {
 	t.Helper()
 	ts := parseTemplates(t, `{{define "GET / Home()"}}{{template "declared"}}{{template "undefined"}}{{end}}`)
 	ts.New("declared")

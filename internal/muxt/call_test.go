@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/typelate/muxt/template/html"
+	"github.com/typelate/htt/template"
 
 	"github.com/stretchr/testify/require"
 
@@ -529,7 +529,7 @@ func TestArgument(t *testing.T) {
 		}},
 	} {
 		t.Run(tc.Name, func(t *testing.T) {
-			ts := html.Must(html.New("").Parse(tc.Template))
+			ts := template.Must(template.New("").Parse(tc.Template))
 			defs, err := muxt.Definitions(source.Variable{Name: "templates", Set: ts})
 			require.NoError(t, err)
 

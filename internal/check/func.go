@@ -5,7 +5,7 @@ import (
 	"go/types"
 	"maps"
 
-	"github.com/typelate/muxt/template"
+	"github.com/typelate/htt"
 )
 
 type Functions map[string]*types.Signature
@@ -56,7 +56,7 @@ func (functions Functions) Add(m Functions) Functions {
 	return x
 }
 
-func (functions Functions) CheckCall(global *Global, funcIdent string, argNodes []template.Node, argTypes []types.Type) (types.Type, error) {
+func (functions Functions) CheckCall(global *Global, funcIdent string, argNodes []htt.Node, argTypes []types.Type) (types.Type, error) {
 	fn, ok := functions[funcIdent]
 	if !ok {
 		return builtInCheck(global, funcIdent, argNodes, argTypes)
@@ -161,7 +161,7 @@ func findPackageVisited(pkg *types.Package, path string, visited map[*types.Pack
 	return nil, false
 }
 
-func builtInCheck(global *Global, funcIdent string, nodes []template.Node, argTypes []types.Type) (types.Type, error) {
+func builtInCheck(global *Global, funcIdent string, nodes []htt.Node, argTypes []types.Type) (types.Type, error) {
 	// builtinErr attaches the built-in's usage/note for the verbose
 	// render; the message itself matches a plain call-arguments error.
 	builtinErr := func(format string, a ...any) *Error {
@@ -191,7 +191,7 @@ func builtInCheck(global *Global, funcIdent string, nodes []template.Node, argTy
 			return nil, builtinErr("built-in slice expects between 1 and 4 arguments got %d", len(argTypes))
 		}
 		for i := 1; i < len(nodes); i++ {
-			if n, ok := nodes[i].(*template.NumberNode); ok && n.Int64 < 0 {
+			if n, ok := nodes[i].(*htt.NumberNode); ok && n.Int64 < 0 {
 				return nil, builtinErr("index %s out of bound", n.Text)
 			}
 		}

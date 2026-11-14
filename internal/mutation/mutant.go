@@ -5,7 +5,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/typelate/muxt/template"
+	"github.com/typelate/htt"
 
 	"github.com/typelate/muxt/internal/check"
 )
@@ -175,7 +175,7 @@ type enumerator struct {
 // with; this decides only what to do with one.
 func (e *enumerator) variations(a action) {
 	switch a.node.(type) {
-	case *template.ActionNode:
+	case *htt.ActionNode:
 		if zero, typed := zeroLiteral(a.dot, a.pipe, e.functions); typed {
 			e.addPipeline(a, OperatorActionZero, zero)
 		} else {
@@ -184,7 +184,7 @@ func (e *enumerator) variations(a action) {
 		// Emptying the whole action says only that something about it is
 		// watched. Varying its operands says which ones.
 		e.addOperandCombinations(a)
-	case *template.IfNode:
+	case *htt.IfNode:
 		e.addPipeline(a, OperatorIfTrue, "true")
 		e.addPipeline(a, OperatorIfFalse, "false")
 		// A decision written with and, or and not gets one mutant per
@@ -193,11 +193,11 @@ func (e *enumerator) variations(a action) {
 		if !e.addConditions(a) {
 			e.addOperandCombinations(a)
 		}
-	case *template.WithNode:
+	case *htt.WithNode:
 		e.addConstructDrop(a, OperatorWithEmpty)
-	case *template.RangeNode:
+	case *htt.RangeNode:
 		e.addConstructDrop(a, OperatorRangeNever)
-	case *template.TemplateNode, *template.BlockNode:
+	case *htt.TemplateNode, *htt.BlockNode:
 		e.addTemplateDrop(a.region)
 	}
 }
@@ -322,7 +322,7 @@ func (e *enumerator) appendEdits(r region, operator Operator, edits []edit, deta
 // The parser positions a command at its first token, so the first command
 // starts exactly where the value is written. A pipeline always has one: an
 // action with no command does not parse.
-func valueStart(pipe *template.PipeNode) int {
+func valueStart(pipe *htt.PipeNode) int {
 	return int(pipe.Commands[0].Start())
 }
 

@@ -4,39 +4,39 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/typelate/muxt/template"
+	"github.com/typelate/htt"
 )
 
-type Severity = template.Severity
+type Severity = htt.Severity
 
 const (
-	SeverityWarning = template.SeverityWarning
-	SeverityError   = template.SeverityError
+	SeverityWarning = htt.SeverityWarning
+	SeverityError   = htt.SeverityError
 )
 
 type (
-	Diagnostic  = template.Diagnostic
-	Diagnostics = template.Diagnostics
+	Diagnostic  = htt.Diagnostic
+	Diagnostics = htt.Diagnostics
 )
 
 // CheckStructure walks the parsed HTML AST and reports structural issues
 // such as unclosed elements. It returns all diagnostics found.
-func CheckStructure(t *template.Tree) Diagnostics {
+func CheckStructure(t *htt.Tree) Diagnostics {
 	if t == nil || t.Root == nil {
 		return nil
 	}
 	diags := append(Diagnostics(nil), t.Diagnostics...)
-	template.Walk(t, func(_ *template.Tree, n template.Node) {
-		elem, ok := n.(*template.HTMLElementNode)
+	htt.Walk(t, func(_ *htt.Tree, n htt.Node) {
+		elem, ok := n.(*htt.HTMLElementNode)
 		if !ok || elem == nil || elem.Void || elem.Closed ||
-			template.ImpliedEndTagElements[strings.ToLower(elem.TagName)] ||
+			htt.ImpliedEndTagElements[strings.ToLower(elem.TagName)] ||
 			elem.Misnested {
 			return
 		}
 		diags = append(diags, Diagnostic{
 			Pos:      elem.Start(),
 			Severity: SeverityWarning,
-			Code:     template.DiagUnclosedElement,
+			Code:     htt.DiagUnclosedElement,
 			Message:  fmt.Sprintf("element <%s> is not closed", elem.TagName),
 		})
 	})

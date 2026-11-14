@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"strings"
 
-	htmltemplate "github.com/typelate/muxt/template/html"
+	htmltemplate "github.com/typelate/htt/template"
 
 	"github.com/typelate/dom"
 	"golang.org/x/net/html"

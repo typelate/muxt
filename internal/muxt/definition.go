@@ -12,7 +12,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/typelate/muxt/template/html"
+	"github.com/typelate/htt/template"
 
 	"github.com/typelate/muxt/internal/astgen"
 	"github.com/typelate/muxt/internal/source"
@@ -93,7 +93,7 @@ func (def Definition) bySourceThenName(other Definition) int {
 // record the file name as the tree's ParseName; a template defined
 // directly with Parse carries its own name there instead, so a ParseName
 // matching the template name does not identify a file.
-func templateSourceFile(t *html.Template) string {
+func templateSourceFile(t *template.Template) string {
 	if t.Tree == nil {
 		return ""
 	}
@@ -138,7 +138,7 @@ type Definition struct {
 
 	fileSet *token.FileSet
 
-	template *html.Template
+	template *template.Template
 
 	identifier string
 
@@ -237,7 +237,7 @@ func (def Definition) HTTPMethod() string { return strings.ToUpper(strings.TrimS
 
 func (def Definition) DefaultStatusCode() int         { return def.defaultStatusCode }
 func (def Definition) MayRedirect() bool              { return def.canRedirect }
-func (def Definition) Template() *html.Template       { return def.template }
+func (def Definition) Template() *template.Template   { return def.template }
 func (def Definition) FunctionIdentifier() *ast.Ident { return def.fun }
 func (def Definition) CallExpression() *ast.CallExpr  { return cloneCall(def.call) }
 func (def Definition) HasResponseWriterArg() bool     { return def.hasResponseWriterArg }
@@ -307,7 +307,7 @@ func IsRouteDefinitionName(name string) bool {
 	return templateNameMux.MatchString(name)
 }
 
-func newDefinition(t *html.Template) (Definition, error, bool) {
+func newDefinition(t *template.Template) (Definition, error, bool) {
 	def, httpStatusCode, ok := splitDefinitionName(t.Name())
 	if !ok {
 		return Definition{}, nil, false

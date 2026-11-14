@@ -7,8 +7,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/typelate/muxt/template"
-	"github.com/typelate/muxt/template/lex"
+	"github.com/typelate/htt"
+	"github.com/typelate/htt/lex"
 )
 
 // emitter reindents a template (v2 spec §3 items 1–6, 8, 9). It writes
@@ -45,16 +45,16 @@ type emitter struct {
 	src             string
 	base            lex.Pos // the position of src[0]
 	cls             classes
-	opaque          map[template.Node]bool
-	asWrittenDefine map[*template.DefineNode]bool // define bodies left as written
-	verbatim        [][2]int                      // source spans never edited: muxt:fmt regions
-	frozenBranches  map[*template.BranchNode]bool // memo of frozenBranch
-	left, right     string                        // the template delimiters
-	actions         []*actionToken                // in source order (collectActions)
-	printed         []*actionToken                // the actions not left as written
-	unread          bool                          // an action collectActions could not find in src (errActionUnread)
-	unprinted       []string                      // names of the defines, blocks and template calls collectActions did not find a token for
-	renames         map[string]string             // name → canonical name, for the names planRenames changes
+	opaque          map[htt.Node]bool
+	asWrittenDefine map[*htt.DefineNode]bool // define bodies left as written
+	verbatim        [][2]int                 // source spans never edited: muxt:fmt regions
+	frozenBranches  map[*htt.BranchNode]bool // memo of frozenBranch
+	left, right     string                   // the template delimiters
+	actions         []*actionToken           // in source order (collectActions)
+	printed         []*actionToken           // the actions not left as written
+	unread          bool                     // an action collectActions could not find in src (errActionUnread)
+	unprinted       []string                 // names of the defines, blocks and template calls collectActions did not find a token for
+	renames         map[string]string        // name → canonical name, for the names planRenames changes
 	edits           []edit
 }
 
@@ -75,14 +75,14 @@ type openOptional struct {
 
 // newEmitter returns the emitter of root, whose source is src starting
 // at position base, written with the delimiters left and right.
-func newEmitter(src string, base lex.Pos, root *template.ListNode, left, right string, cls classes, asWritten map[*template.DefineNode]bool, dir *directives, names nameRule) *emitter {
+func newEmitter(src string, base lex.Pos, root *htt.ListNode, left, right string, cls classes, asWritten map[*htt.DefineNode]bool, dir *directives, names nameRule) *emitter {
 	e := &emitter{
 		src:             src,
 		base:            base,
 		cls:             cls,
-		opaque:          make(map[template.Node]bool, len(cls.opaque)),
+		opaque:          make(map[htt.Node]bool, len(cls.opaque)),
 		asWrittenDefine: asWritten,
-		frozenBranches:  make(map[*template.BranchNode]bool),
+		frozenBranches:  make(map[*htt.BranchNode]bool),
 		left:            left,
 		right:           right,
 	}
@@ -107,7 +107,7 @@ func newEmitter(src string, base lex.Pos, root *template.ListNode, left, right s
 // emit returns the source of root with its edits applied. The edits
 // cover disjoint runs by construction; an overlap is a formatter bug,
 // reported as an error rather than written.
-func (e *emitter) emit(root *template.ListNode) (string, error) {
+func (e *emitter) emit(root *htt.ListNode) (string, error) {
 	// Nothing closes the root: its last run is the end of the file,
 	// whose last line is kept as written (closeDepth -1).
 	e.list(root, root.Nodes, 0, -1, nil, false, false)
@@ -181,15 +181,15 @@ func (e *emitter) inVerbatim(offset int) bool {
 // as written over several lines) is an island: its first line is as
 // written and its siblings reindent. A {{define}} is a top-level declaration wherever it sits:
 // its opener, body and {{end}} are at column 0 whatever list it is in.
-func (e *emitter) list(key template.Node, children []template.Node, depth, closeDepth int, open []openOptional, frozen, closeAsWritten bool) {
+func (e *emitter) list(key htt.Node, children []htt.Node, depth, closeDepth int, open []openOptional, frozen, closeAsWritten bool) {
 	items, _ := splitChildren(children)
 	own := !frozen && e.frozenList(key, items)
 	for i, item := range items {
-		if el, ok := item.(*template.HTMLElementNode); ok {
+		if el, ok := item.(*htt.HTMLElementNode); ok {
 			depth, open = impliedEnds(strings.ToLower(el.TagName), depth, open)
 		}
 		d := depth
-		_, define := item.(*template.DefineNode)
+		_, define := item.(*htt.DefineNode)
 		if define {
 			d = 0
 		}
@@ -201,12 +201,12 @@ func (e *emitter) list(key template.Node, children []template.Node, depth, close
 		if !island && (define || !frozen && !own) {
 			if g, ok := e.cls.gaps[gapKey{key, i}]; ok {
 				e.reindent(g, d)
-				if c, ok := item.(*template.CommentNode); ok {
+				if c, ok := item.(*htt.CommentNode); ok {
 					e.shiftComment(c, g, d)
 				}
 			}
 		}
-		if _, text := item.(*template.TextNode); text && sub {
+		if _, text := item.(*htt.TextNode); text && sub {
 			continue
 		}
 		e.item(item, d, closeDepth, open, sub && !define, frozen || closeAsWritten)
@@ -221,10 +221,10 @@ func (e *emitter) list(key template.Node, children []template.Node, depth, close
 // a preserved run starting a line of a list whose white-space is
 // unknown, or a multi-line unsure element wherever it starts. Defines
 // do not count: they are not part of the list's layout.
-func (e *emitter) frozenList(key template.Node, items []template.Node) bool {
+func (e *emitter) frozenList(key htt.Node, items []htt.Node) bool {
 	unsure := e.cls.unsure[key]
 	for _, item := range items {
-		if el, ok := item.(*template.HTMLElementNode); ok && e.cls.unsure[el] && e.spansLines(el.Start(), elementEnd(el)) {
+		if el, ok := item.(*htt.HTMLElementNode); ok && e.cls.unsure[el] && e.spansLines(el.Start(), elementEnd(el)) {
 			return true
 		}
 	}
@@ -237,7 +237,7 @@ func (e *emitter) frozenList(key template.Node, items []template.Node) bool {
 		return false
 	}
 	for _, item := range items {
-		if text, ok := item.(*template.TextNode); ok {
+		if text, ok := item.(*htt.TextNode); ok {
 			for _, r := range e.cls.runs[text] {
 				if r.class == runPreserved && startsLine(r) {
 					return true
@@ -252,7 +252,7 @@ func (e *emitter) frozenList(key template.Node, items []template.Node) bool {
 // {{else if}}, is frozen (frozenBody). A frozen branch freezes the
 // branch bodies around it, up to the nearest element, define or block
 // body, where it is an island.
-func (e *emitter) frozenBranch(b *template.BranchNode) bool {
+func (e *emitter) frozenBranch(b *htt.BranchNode) bool {
 	if frozen, ok := e.frozenBranches[b]; ok {
 		return frozen
 	}
@@ -270,7 +270,7 @@ func (e *emitter) frozenBranch(b *template.BranchNode) bool {
 
 // frozenBody reports whether body, a branch's list, is frozen: a frozen
 // list (frozenList) or one holding a frozen branch.
-func (e *emitter) frozenBody(body *template.ListNode) bool {
+func (e *emitter) frozenBody(body *htt.ListNode) bool {
 	if body == nil {
 		return false
 	}
@@ -292,7 +292,7 @@ func startsLine(g gap) bool {
 	return g.text != nil && afterLastBreak(g.text.Text[g.start:g.end]) >= 0
 }
 
-func (e *emitter) gap(key template.Node, i, depth int) {
+func (e *emitter) gap(key htt.Node, i, depth int) {
 	if g, ok := e.cls.gaps[gapKey{key, i}]; ok {
 		e.reindent(g, depth)
 	}
@@ -303,25 +303,25 @@ func (e *emitter) gap(key template.Node, i, depth int) {
 // n's subtree is left as written; afterAsWritten that the run before
 // what follows the list n is in is as written, which an unclosed
 // element's content shares.
-func (e *emitter) item(n template.Node, depth, after int, open []openOptional, frozen, afterAsWritten bool) {
+func (e *emitter) item(n htt.Node, depth, after int, open []openOptional, frozen, afterAsWritten bool) {
 	switch n := n.(type) {
-	case *template.TextNode:
+	case *htt.TextNode:
 		for _, r := range e.cls.runs[n] {
 			e.reindent(r, depth)
 		}
-	case *template.HTMLElementNode:
+	case *htt.HTMLElementNode:
 		e.element(n, depth, after, open, frozen, afterAsWritten)
-	case *template.IfNode:
+	case *htt.IfNode:
 		e.branch(&n.BranchNode, depth, frozen)
-	case *template.WithNode:
+	case *htt.WithNode:
 		e.branch(&n.BranchNode, depth, frozen)
-	case *template.RangeNode:
+	case *htt.RangeNode:
 		e.branch(&n.BranchNode, depth, frozen)
-	case *template.DefineNode:
+	case *htt.DefineNode:
 		if n.Body != nil && !e.asWrittenDefine[n] {
 			e.list(n.Body, n.Body.Nodes, 0, 0, nil, false, false)
 		}
-	case *template.BlockNode:
+	case *htt.BlockNode:
 		if n.Body != nil {
 			e.list(n.Body, n.Body.Nodes, depth, depth, nil, frozen, false)
 		}
@@ -333,7 +333,7 @@ func (e *emitter) item(n template.Node, depth, after int, open []openOptional, f
 // opens sits at b's depth. frozen reports that b is left as written. An
 // {{else}} or {{end}} spanning lines keeps the run before it as
 // written, like a multi-line action (leftWhole).
-func (e *emitter) branch(b *template.BranchNode, depth int, frozen bool) {
+func (e *emitter) branch(b *htt.BranchNode, depth int, frozen bool) {
 	if b.List == nil {
 		return
 	}
@@ -359,7 +359,7 @@ func (e *emitter) branch(b *template.BranchNode, depth int, frozen bool) {
 	e.list(b.ElseList, b.ElseList.Nodes, inner, depth, nil, frozen, endSpans)
 }
 
-func (e *emitter) element(el *template.HTMLElementNode, depth, after int, open []openOptional, frozen, afterAsWritten bool) {
+func (e *emitter) element(el *htt.HTMLElementNode, depth, after int, open []openOptional, frozen, afterAsWritten bool) {
 	if e.opaque[el] {
 		return // as written, start tag included (spec §3 item 4)
 	}
@@ -400,21 +400,21 @@ func (e *emitter) element(el *template.HTMLElementNode, depth, after int, open [
 // left as written too, so it keeps its own columns (spec §3 item 4). An
 // element or define that fits on a line has its line reindented; line
 // breaks inside printed actions do not count (spansLines).
-func (e *emitter) leftWhole(key template.Node, i int, n template.Node, depth int) bool {
+func (e *emitter) leftWhole(key htt.Node, i int, n htt.Node, depth int) bool {
 	switch n := n.(type) {
-	case *template.HTMLElementNode:
+	case *htt.HTMLElementNode:
 		return e.opaque[n] && e.spansLines(n.Start(), elementEnd(n))
-	case *template.DefineNode:
+	case *htt.DefineNode:
 		return e.asWrittenDefine[n] && e.spansLines(n.Start(), n.End()) ||
 			n.Body != nil && e.spansLines(n.Start(), n.Body.Start())
-	case *template.BlockNode:
+	case *htt.BlockNode:
 		return n.Body != nil && e.spansLines(n.Start(), n.Body.Start())
-	case *template.IfNode, *template.WithNode, *template.RangeNode:
+	case *htt.IfNode, *htt.WithNode, *htt.RangeNode:
 		b := branchOf(n)
 		return b.List != nil && e.spansLines(b.Start(), b.List.Start())
-	case *template.ActionNode, *template.TemplateNode, *template.BreakNode, *template.ContinueNode:
+	case *htt.ActionNode, *htt.TemplateNode, *htt.BreakNode, *htt.ContinueNode:
 		return e.spansLines(n.Start(), n.End())
-	case *template.CommentNode:
+	case *htt.CommentNode:
 		g, ok := e.cls.gaps[gapKey{key, i}]
 		if !ok {
 			return false
@@ -431,7 +431,7 @@ func (e *emitter) leftWhole(key template.Node, i int, n template.Node, depth int
 // not blank becomes the new one. The comment is never rendered; only the
 // leading whitespace of its continuation lines changes, so hanging
 // alignment inside it survives.
-func (e *emitter) shiftComment(c *template.CommentNode, g gap, depth int) {
+func (e *emitter) shiftComment(c *htt.CommentNode, g gap, depth int) {
 	shifts, _ := e.commentShifts(c, g, depth)
 	e.edits = append(e.edits, shifts...)
 }
@@ -439,7 +439,7 @@ func (e *emitter) shiftComment(c *template.CommentNode, g gap, depth int) {
 // commentShifts returns the edits shiftComment makes, and false when a
 // continuation line cannot move by exactly the change: it does not start
 // with the old indentation and the new one does not extend it.
-func (e *emitter) commentShifts(c *template.CommentNode, g gap, depth int) ([]edit, bool) {
+func (e *emitter) commentShifts(c *htt.CommentNode, g gap, depth int) ([]edit, bool) {
 	from, to := int(c.Start()-e.base), int(c.End()-e.base)
 	if from < 0 || to > len(e.src) || from > to {
 		return nil, true
@@ -506,14 +506,14 @@ func (e *emitter) spansLines(start, end lex.Pos) bool {
 
 // elementEnd is the end of el's source: its end tag, or for an element
 // the source leaves unclosed, its last descendant.
-func elementEnd(el *template.HTMLElementNode) lex.Pos {
+func elementEnd(el *htt.HTMLElementNode) lex.Pos {
 	end := el.End()
 	if el.Closed || el.Void {
 		return end
 	}
 	if flat := flatten(el.Children); len(flat) > 0 {
 		last := flat[len(flat)-1]
-		if child, ok := last.(*template.HTMLElementNode); ok {
+		if child, ok := last.(*htt.HTMLElementNode); ok {
 			return max(end, elementEnd(child))
 		}
 		return max(end, last.End())
@@ -595,7 +595,7 @@ func (e *emitter) indents(g gap, depth int) (old, indent string, ok bool) {
 // alignment. Runs without a line break, attribute values and the slash
 // are as written. A start tag that is not a list of attributes and
 // actions separated by whitespace is as written.
-func (e *emitter) startTag(el *template.HTMLElementNode, depth int) {
+func (e *emitter) startTag(el *htt.HTMLElementNode, depth int) {
 	from, to := int(el.AttrStart-e.base), int(el.AttrEnd-e.base)
 	if from < 0 || to > len(e.src) || to <= from || e.src[to-1] != '>' {
 		return
@@ -608,7 +608,7 @@ func (e *emitter) startTag(el *template.HTMLElementNode, depth int) {
 	prev := from
 	for _, attr := range el.Attr {
 		switch attr.(type) {
-		case *template.HTMLAttributeNode, *template.ActionNode, *template.TemplateNode:
+		case *htt.HTMLAttributeNode, *htt.ActionNode, *htt.TemplateNode:
 		default:
 			return
 		}

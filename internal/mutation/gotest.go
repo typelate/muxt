@@ -13,8 +13,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/typelate/htt/template"
+
 	"github.com/typelate/muxt/internal/overlay"
-	"github.com/typelate/muxt/template/html"
 )
 
 // goTest runs the project's tests, optionally with extra flags.
@@ -101,8 +102,8 @@ const coverageOutputLimit = 1 << 20
 
 // coverageFlags are the go test flags of the coverage pre-pass: the
 // overlay putting the shim in place of html/template, and the modfile
-// requiring github.com/typelate/muxt, which the shim imports. -mod=mod
-// lets the go command add the sums muxt's requirements need to the
+// requiring github.com/typelate/htt, which the shim imports. -mod=mod
+// lets the go command add the sums htt's requirements need to the
 // modfile's go.sum, never the test target's. -v is required: see coverage.
 func coverageFlags(engine overlay.Files) []string {
 	return []string{"-v", "-mod=mod", "-modfile=" + engine.ModFile, "-overlay=" + engine.Overlay}
@@ -123,7 +124,7 @@ func (t goTest) coverage(ctx context.Context, engine overlay.Files, coverDir str
 	if env == nil {
 		env = os.Environ()
 	}
-	t.env = append(slices.Clip(env), html.CoverEnv+"="+coverDir)
+	t.env = append(slices.Clip(env), template.CoverEnv+"="+coverDir)
 	t.extra = withoutCoverFlags(t.extra)
 	return t.run(ctx, coverageOutputLimit, coverageFlags(engine)...)
 }
@@ -388,7 +389,7 @@ func (o *goTestOutput) Write(p []byte) (int, error) {
 // findMarker looks through p for the first html.CoverDisabledMarker and
 // collects the rest of its line into coverDisabled.
 func (o *goTestOutput) findMarker(p []byte) {
-	marker := []byte(html.CoverDisabledMarker)
+	marker := []byte(template.CoverDisabledMarker)
 	for len(p) > 0 && !o.markerFound {
 		if o.capturing {
 			chunk, _, ended := bytes.Cut(p, []byte("\n"))
@@ -503,8 +504,8 @@ func (o *goTestOutput) String() string {
 // failing mutant would be read as a run that could not happen.
 //
 // -mod and -modfile are refused because the coverage pre-pass sets both:
-// -modfile names a copy of go.mod that requires github.com/typelate/muxt,
-// whose template/html the html/template shim forwards to, and -mod=mod
+// -modfile names a copy of go.mod that requires github.com/typelate/htt,
+// whose template package the html/template shim forwards to, and -mod=mod
 // lets the go command complete that copy's go.sum.
 //
 // -coverpkg is refused when it covers html/template, by name, by a pattern
@@ -522,7 +523,7 @@ func CheckGoTestArgs(args []string) error {
 		case "json":
 			return errors.New("go test flag -json cannot be passed through: muxt reads go test's text output to tell a failed test from a failed build")
 		case "mod", "modfile":
-			return fmt.Errorf("go test flag -%s cannot be passed through: the coverage pre-pass sets -mod=mod and -modfile to require github.com/typelate/muxt, muxt's template engine, in a copy of go.mod", name)
+			return fmt.Errorf("go test flag -%s cannot be passed through: the coverage pre-pass sets -mod=mod and -modfile to require github.com/typelate/htt, muxt's template engine, in a copy of go.mod", name)
 		case "coverpkg":
 			if pattern, ok := coversHTMLTemplate(f.value); ok {
 				return fmt.Errorf("go test flag -coverpkg cannot cover html/template (%q does): muxt replaces html/template with its own template engine to learn which template actions the tests reach; use -coverpkg with your own packages, such as ./... instead", pattern)

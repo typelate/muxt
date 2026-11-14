@@ -3,8 +3,8 @@ package analysis
 import (
 	"testing"
 
-	"github.com/typelate/muxt/template"
-	"github.com/typelate/muxt/template/lex"
+	"github.com/typelate/htt"
+	"github.com/typelate/htt/lex"
 )
 
 func TestCheckStructure(t *testing.T) {
@@ -50,7 +50,7 @@ func TestCheckStructure(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			tmpl, err := template.ParseTree("test.gohtml", test.name, test.input, nil, lex.NewOptions())
+			tmpl, err := htt.ParseTree("test.gohtml", test.name, test.input, nil, lex.NewOptions())
 			if err != nil {
 				t.Fatalf("unexpected parse error: %v", err)
 			}

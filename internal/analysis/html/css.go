@@ -4,7 +4,7 @@ import (
 	"cmp"
 	"slices"
 
-	"github.com/typelate/muxt/template"
+	"github.com/typelate/htt"
 )
 
 // CheckCSS runs every CSS check over the templates trees and the
@@ -12,7 +12,7 @@ import (
 // <style> elements, and sheets), unknown at-rules, CSS no template element
 // can match, and var() references to custom properties nothing declares. A template reached through several trees is reported
 // once. The result is sorted by file, then offset, then code.
-func CheckCSS(trees []*template.Tree, sheets []Stylesheet) []StyleDiagnostic {
+func CheckCSS(trees []*htt.Tree, sheets []Stylesheet) []StyleDiagnostic {
 	var diags []StyleDiagnostic
 	for _, t := range trees {
 		if t == nil || t.Root == nil {

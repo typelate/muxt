@@ -4,17 +4,18 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/typelate/htt"
+
 	"github.com/typelate/muxt/internal/css/csstree"
-	"github.com/typelate/muxt/template"
 )
 
 // CheckStyleElements reports what browsers drop in the <style> elements of
 // t: declarations with unknown properties or invalid values, and unknown
 // at-rules. Declarations in descriptor blocks such as @font-face and @page
 // are not checked.
-func CheckStyleElements(t *template.Tree) Diagnostics {
+func CheckStyleElements(t *htt.Tree) Diagnostics {
 	var diags Diagnostics
-	for _, block := range styleBlocks([]*template.Tree{t}, nil) {
+	for _, block := range styleBlocks([]*htt.Tree{t}, nil) {
 		diags = append(diags, checkStyleBlock(block.css)...)
 	}
 	diags.SortByPos()
@@ -88,7 +89,7 @@ func checkAtruleName(css cssText, rule *csstree.Atrule, diags *Diagnostics) {
 		Pos:      css.pos(start),
 		End:      css.pos(end),
 		Severity: SeverityWarning,
-		Code:     template.DiagUnknownCSSAtRule,
+		Code:     htt.DiagUnknownCSSAtRule,
 		Message:  fmt.Sprintf(msgUnknownCSSAtRule, "@"+rule.Name),
 	})
 }

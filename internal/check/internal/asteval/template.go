@@ -17,9 +17,10 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/typelate/htt"
+	"github.com/typelate/htt/lex"
+
 	"github.com/typelate/muxt/internal/check/internal/astgen"
-	"github.com/typelate/muxt/template"
-	"github.com/typelate/muxt/template/lex"
 )
 
 // TemplateMetadata accumulates metadata during template evaluation.
@@ -176,9 +177,9 @@ func EvaluateTemplateSelector(scope Scope, chain Chain, expression ast.Expr, fun
 				return chain.fail(err)
 			}
 			if isTextTemplatePkgIdent(scope.Info, x) {
-				return chain.next(template.NewText[*types.Signature](templateNames[0]), nil)
+				return chain.next(htt.NewText[*types.Signature](templateNames[0]), nil)
 			}
-			return chain.next(template.New[*types.Signature](templateNames[0]), nil)
+			return chain.next(htt.New[*types.Signature](templateNames[0]), nil)
 		case "ParseFS":
 			filePaths, pkgPath, err := evaluateCallParseFilesArgs(scope, call)
 			if err != nil {
@@ -232,7 +233,7 @@ func EvaluateTemplateSelector(scope Scope, chain Chain, expression ast.Expr, fun
 			// htt.Template doesn't have a New method on instances, so we use AddParseTree
 			// to add a named tree to the existing template set.
 			options := withDelimiters(up.ParseOptions(), upLDelim, upRDelim)
-			newTree, _ := template.ParseTree(templateNames[0], templateNames[0], "", nil, options)
+			newTree, _ := htt.ParseTree(templateNames[0], templateNames[0], "", nil, options)
 			t, err := up.AddParseTree(templateNames[0], newTree)
 			if err != nil {
 				return upChain.fail(err)
@@ -375,7 +376,7 @@ func FindModificationReceiver(expr *ast.CallExpr, typesInfo *types.Info) types.O
 //
 // pkgPath is the import path of the package whose files these are, recorded
 // on each ParsedText; empty means the analyzed package.
-func parseFiles(chain Chain, text bool, fm map[string]any, meta *TemplateMetadata, pkgPath string, filenames ...string) (*template.Template[*types.Signature], error) {
+func parseFiles(chain Chain, text bool, fm map[string]any, meta *TemplateMetadata, pkgPath string, filenames ...string) (*htt.Template[*types.Signature], error) {
 	t, leftDelim, rightDelim := chain.Templates, chain.LeftDelim, chain.RightDelim
 	if len(filenames) == 0 {
 		return nil, fmt.Errorf("template: no files named in call to ParseFiles")
@@ -388,10 +389,10 @@ func parseFiles(chain Chain, text bool, fm map[string]any, meta *TemplateMetadat
 		}
 		s := string(b)
 		if t == nil && text {
-			t = template.NewText[*types.Signature](templateName)
+			t = htt.NewText[*types.Signature](templateName)
 		}
 		if t == nil {
-			t = template.New[*types.Signature](templateName)
+			t = htt.New[*types.Signature](templateName)
 		}
 		if leftDelim != "" || rightDelim != "" {
 			t = t.Delimiters(leftDelim, rightDelim)
@@ -436,10 +437,10 @@ func parseFiles(chain Chain, text bool, fm map[string]any, meta *TemplateMetadat
 		// Parse does exactly this merge; this mirrors it so form-field
 		// validation lookups (template:"..." struct tags naming a {{block}})
 		// resolve the same way here as they do at runtime.
-		treeSet := make(map[string]*template.Tree)
-		tree, err := template.ParseTree(filepath.ToSlash(absoluteFilename), templateName, s, treeSet, options)
+		treeSet := make(map[string]*htt.Tree)
+		tree, err := htt.ParseTree(filepath.ToSlash(absoluteFilename), templateName, s, treeSet, options)
 		if err != nil {
-			var parseErr *template.ParseError
+			var parseErr *htt.ParseError
 			if pkgPath != "" && errors.As(err, &parseErr) {
 				return nil, SharedParseError{Filename: absoluteFilename, Line: parseErr.Position().Line, Err: err}
 			}
@@ -458,7 +459,7 @@ func parseFiles(chain Chain, text bool, fm map[string]any, meta *TemplateMetadat
 		}
 		// The file's own tree, its defines and its blocks, with
 		// text/template's precedence between definitions of one name.
-		for name, dt := range template.DefinedTrees(tree, treeSet) {
+		for name, dt := range htt.DefinedTrees(tree, treeSet) {
 			if _, err = t.AddParseTree(name, dt); err != nil {
 				return nil, err
 			}

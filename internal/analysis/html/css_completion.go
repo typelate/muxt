@@ -5,10 +5,11 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/typelate/htt"
+	"github.com/typelate/htt/lex"
+
 	"github.com/typelate/muxt/internal/css/csstree"
 	"github.com/typelate/muxt/internal/css/csstree/definitionsyntax"
-	"github.com/typelate/muxt/template"
-	"github.com/typelate/muxt/template/lex"
 )
 
 // CSSCompletion is what may be typed at a position in a style attribute or
@@ -27,11 +28,11 @@ type CSSCompletion struct {
 // CSSCompletionAt returns the CSS completion at pos in t: property names
 // where a declaration starts, and the keywords of the property's syntax in
 // its value. Selectors and template actions get no completion.
-func CSSCompletionAt(t *template.Tree, pos lex.Pos) (CSSCompletion, bool) {
+func CSSCompletionAt(t *htt.Tree, pos lex.Pos) (CSSCompletion, bool) {
 	if t == nil || t.Root == nil {
 		return CSSCompletion{}, false
 	}
-	trees := []*template.Tree{t}
+	trees := []*htt.Tree{t}
 	for _, block := range append(styleAttributes(trees), styleBlocks(trees, nil)...) {
 		css := block.css
 		if pos < css.base || pos > css.pos(len(css.text)) {

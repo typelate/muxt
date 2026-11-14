@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/typelate/muxt/template"
-	"github.com/typelate/muxt/template/html"
+	"github.com/typelate/htt"
+	html "github.com/typelate/htt/template"
 )
 
 // checkResponseWriterConflicts rejects a template that asks muxt to set the
@@ -74,9 +74,9 @@ func (e *ResponseWriterTemplateStateError) Error() string {
 
 // findResponseStateCall reports the first TemplateData method a template calls
 // that only has an effect through the response muxt would write.
-func findResponseStateCall(node template.Node, ts *html.Template) (string, bool) {
+func findResponseStateCall(node htt.Node, ts *html.Template) (string, bool) {
 	var found string
-	walkTemplateCommands(node, ts, make(map[string]bool), true, pipeIsTemplateData, func(cmd *template.CommandNode, dotIsTemplateData bool) bool {
+	walkTemplateCommands(node, ts, make(map[string]bool), true, pipeIsTemplateData, func(cmd *htt.CommandNode, dotIsTemplateData bool) bool {
 		method, ok := responseStateCallInCommand(cmd, dotIsTemplateData)
 		if ok {
 			found = method
@@ -88,7 +88,7 @@ func findResponseStateCall(node template.Node, ts *html.Template) (string, bool)
 
 // responseStateCallInCommand names the method when a command calls one that
 // only takes effect through the response muxt writes.
-func responseStateCallInCommand(cmd *template.CommandNode, dotIsTemplateData bool) (string, bool) {
+func responseStateCallInCommand(cmd *htt.CommandNode, dotIsTemplateData bool) (string, bool) {
 	if cmd == nil {
 		return "", false
 	}
@@ -106,23 +106,23 @@ func responseStateCallInCommand(cmd *template.CommandNode, dotIsTemplateData boo
 
 // templateDataNames lists the names an argument selects from TemplateData, and
 // none when it does not start there.
-func templateDataNames(arg template.Node, dotIsTemplateData bool) []string {
+func templateDataNames(arg htt.Node, dotIsTemplateData bool) []string {
 	switch a := arg.(type) {
-	case *template.FieldNode:
+	case *htt.FieldNode:
 		// .StatusCode is only TemplateData's when dot still is.
 		// Inside a with or a range it names a field of whatever was
 		// selected, and reporting that would reject a working route.
 		if dotIsTemplateData {
 			return a.Ident
 		}
-	case *template.VariableNode:
+	case *htt.VariableNode:
 		// $ is the dot the template started with, whatever the
 		// current one is, so $.StatusCode is TemplateData's wherever
 		// it is written.
 		if a.Ident[0] == "$" {
 			return a.Ident[1:]
 		}
-	case *template.ChainNode:
+	case *htt.ChainNode:
 		if chainStartsAtTemplateData(a, dotIsTemplateData) {
 			return a.Field
 		}
@@ -132,13 +132,13 @@ func templateDataNames(arg template.Node, dotIsTemplateData bool) []string {
 
 // chainStartsAtTemplateData reports whether a chained expression is rooted
 // at the TemplateData the handler passed in.
-func chainStartsAtTemplateData(chain *template.ChainNode, dotIsTemplateData bool) bool {
+func chainStartsAtTemplateData(chain *htt.ChainNode, dotIsTemplateData bool) bool {
 	switch node := chain.Node.(type) {
-	case *template.DotNode:
+	case *htt.DotNode:
 		return dotIsTemplateData
-	case *template.VariableNode:
+	case *htt.VariableNode:
 		return len(node.Ident) > 0 && node.Ident[0] == "$"
-	case *template.PipeNode:
+	case *htt.PipeNode:
 		// (.Redirect "/x").Header and the like: the parenthesised
 		// pipeline is walked on its own, so the chain only has to say
 		// whether its own fields are TemplateData's. They are only when
@@ -153,7 +153,7 @@ func chainStartsAtTemplateData(chain *template.ChainNode, dotIsTemplateData bool
 // pipeIsTemplateData reports whether a parenthesised pipeline evaluates to
 // the TemplateData the handler passed in: (.) while dot still is, or ($), or
 // a call of one of its methods that returns it, such as (.Header "X" "y").
-func pipeIsTemplateData(pipe *template.PipeNode, dotIsTemplateData bool) bool {
+func pipeIsTemplateData(pipe *htt.PipeNode, dotIsTemplateData bool) bool {
 	if len(pipe.Decl) > 0 {
 		return false
 	}
@@ -164,9 +164,9 @@ func pipeIsTemplateData(pipe *template.PipeNode, dotIsTemplateData bool) bool {
 	args := cmds[0].Args
 	if len(args) == 1 {
 		switch arg := args[0].(type) {
-		case *template.DotNode:
+		case *htt.DotNode:
 			return dotIsTemplateData
-		case *template.VariableNode:
+		case *htt.VariableNode:
 			if len(arg.Ident) == 1 && arg.Ident[0] == "$" {
 				return true
 			}

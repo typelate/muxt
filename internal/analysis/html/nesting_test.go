@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/typelate/muxt/template"
-	"github.com/typelate/muxt/template/lex"
+	"github.com/typelate/htt"
+	"github.com/typelate/htt/lex"
 )
 
 func TestCheckNesting(t *testing.T) {
@@ -24,7 +24,7 @@ func TestCheckNesting(t *testing.T) {
 		{"button in a ok", `<a href="/x"><button>y</button></a>`, 0, ""},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			tree, err := template.ParseTree("test.gohtml", test.name, test.input, nil, lex.NewOptions())
+			tree, err := htt.ParseTree("test.gohtml", test.name, test.input, nil, lex.NewOptions())
 			if err != nil {
 				t.Fatalf("ParseTree error: %v", err)
 			}
@@ -42,7 +42,7 @@ func TestCheckNesting(t *testing.T) {
 
 func TestCheckNesting_Severity(t *testing.T) {
 	t.Run("nested form is an error", func(t *testing.T) {
-		tree, err := template.ParseTree("test.gohtml", t.Name(), `<form><fieldset><form>x</form></fieldset></form>`, nil, lex.NewOptions())
+		tree, err := htt.ParseTree("test.gohtml", t.Name(), `<form><fieldset><form>x</form></fieldset></form>`, nil, lex.NewOptions())
 		if err != nil {
 			t.Fatalf("ParseTree error: %v", err)
 		}
@@ -57,7 +57,7 @@ func TestCheckNesting_Severity(t *testing.T) {
 	})
 
 	t.Run("conditionally nested form is a warning", func(t *testing.T) {
-		tree, err := template.ParseTree("test.gohtml", t.Name(), `<form>{{if .X}}<form>x</form>{{end}}</form>`, nil, lex.NewOptions())
+		tree, err := htt.ParseTree("test.gohtml", t.Name(), `<form>{{if .X}}<form>x</form>{{end}}</form>`, nil, lex.NewOptions())
 		if err != nil {
 			t.Fatalf("ParseTree error: %v", err)
 		}

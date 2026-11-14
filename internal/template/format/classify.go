@@ -5,9 +5,10 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/typelate/htt"
+	"github.com/typelate/htt/lex"
+
 	analysis "github.com/typelate/muxt/internal/analysis/html"
-	"github.com/typelate/muxt/template"
-	"github.com/typelate/muxt/template/lex"
 )
 
 // gap is the whitespace between two consecutive items of a child list
@@ -15,26 +16,26 @@ import (
 // root) or between a list boundary and its first or last item. text is
 // nil for an empty gap. Whitespace-only text nodes are gaps, not items.
 type gap struct {
-	text       *template.TextNode
+	text       *htt.TextNode
 	start, end int // run bytes within text.Text
 	class      runClass
 }
 
 type gapKey struct {
-	list  template.Node // element, branch node list, define/block body, or tree root list
-	index int           // gap before item index; len(items) is after the last
+	list  htt.Node // element, branch node list, define/block body, or tree root list
+	index int      // gap before item index; len(items) is after the last
 }
 
 type classes struct {
 	gaps   map[gapKey]gap
-	runs   map[*template.TextNode][]gap // runs inside text with content, in order
-	opaque []template.Node              // subtrees emitted from source, outermost only
+	runs   map[*htt.TextNode][]gap // runs inside text with content, in order
+	opaque []htt.Node              // subtrees emitted from source, outermost only
 	// unsure are the opaque elements and the child lists whose
 	// white-space the formatter cannot tell (unknown CSS, missing sheets,
 	// dynamic style or class attributes, unknown call sites), as opposed
 	// to those preserved by nature (pre, script, custom elements, SVG text)
 	// or by known CSS.
-	unsure map[template.Node]bool
+	unsure map[htt.Node]bool
 }
 
 // opaqueTagNames name the elements whose content is emitted from source
@@ -63,21 +64,21 @@ var opaqueTagNames = map[string]bool{
 // matters. When root contains no HTML element the text is not a page, so
 // every run is preserved. Define and block bodies collapse at their top
 // level; classifyModes gives them their call sites' modes.
-func classify(root *template.ListNode, styles analysis.Whitespaces) classes {
+func classify(root *htt.ListNode, styles analysis.Whitespaces) classes {
 	return classifyModes(root, styles, nil)
 }
 
 // classifyModes is classify with the top level of each define and block
 // body in the mode modes holds for its name (callSiteModes), collapse
 // for a name it lacks.
-func classifyModes(root *template.ListNode, styles analysis.Whitespaces, modes map[string]rootMode) classes {
+func classifyModes(root *htt.ListNode, styles analysis.Whitespaces, modes map[string]rootMode) classes {
 	c := &classifier{
 		styles: styles,
 		modes:  modes,
 		out: classes{
 			gaps:   make(map[gapKey]gap),
-			runs:   make(map[*template.TextNode][]gap),
-			unsure: make(map[template.Node]bool),
+			runs:   make(map[*htt.TextNode][]gap),
+			unsure: make(map[htt.Node]bool),
 		},
 	}
 	c.build(root, root.Nodes, nil, false, analysis.WhiteSpaceCollapse, false)
@@ -89,16 +90,16 @@ func classifyModes(root *template.ListNode, styles analysis.Whitespaces, modes m
 
 // listItems returns the items of a gapKey list: its children with
 // document fragments flattened and whitespace-only text left out.
-func listItems(list template.Node) []template.Node {
+func listItems(list htt.Node) []htt.Node {
 	items, _ := splitChildren(childrenOf(list))
 	return items
 }
 
-func childrenOf(list template.Node) []template.Node {
+func childrenOf(list htt.Node) []htt.Node {
 	switch n := list.(type) {
-	case *template.HTMLElementNode:
+	case *htt.HTMLElementNode:
 		return n.Children
-	case *template.ListNode:
+	case *htt.ListNode:
 		return n.Nodes
 	}
 	return nil
@@ -106,16 +107,16 @@ func childrenOf(list template.Node) []template.Node {
 
 // splitChildren flattens document fragments in children and separates
 // items from the whitespace-only text between them.
-func splitChildren(children []template.Node) (items []template.Node, gaps []*template.TextNode) {
-	gaps = []*template.TextNode{nil}
-	var walk func([]template.Node)
-	walk = func(nodes []template.Node) {
+func splitChildren(children []htt.Node) (items []htt.Node, gaps []*htt.TextNode) {
+	gaps = []*htt.TextNode{nil}
+	var walk func([]htt.Node)
+	walk = func(nodes []htt.Node) {
 		for _, n := range nodes {
 			switch n := n.(type) {
-			case *template.HTMLDocumentFragmentNode:
+			case *htt.HTMLDocumentFragmentNode:
 				walk(n.Children)
 				continue
-			case *template.TextNode:
+			case *htt.TextNode:
 				if isRunOnly(n.Text) {
 					if gaps[len(gaps)-1] == nil {
 						gaps[len(gaps)-1] = n
@@ -133,12 +134,12 @@ func splitChildren(children []template.Node) (items []template.Node, gaps []*tem
 
 // childList is a list of items with the gaps between them.
 type childList struct {
-	key    template.Node // the gapKey list
-	items  []template.Node
-	gaps   []*template.TextNode // whitespace-only text per gap, len(items)+1
+	key    htt.Node // the gapKey list
+	items  []htt.Node
+	gaps   []*htt.TextNode // whitespace-only text per gap, len(items)+1
 	mode   analysis.WhiteSpace
-	owner  template.Node // element, branch, define or block; nil for the tree root
-	isElse bool          // the else list of owner
+	owner  htt.Node // element, branch, define or block; nil for the tree root
+	isElse bool     // the else list of owner
 }
 
 type classifier struct {
@@ -152,7 +153,7 @@ type classifier struct {
 // build records the child list of key and, below it, of every element,
 // branch, define and block. inSVG reports that the list is SVG content
 // outside a foreignObject.
-func (c *classifier) build(key template.Node, children []template.Node, owner template.Node, isElse bool, mode analysis.WhiteSpace, inSVG bool) {
+func (c *classifier) build(key htt.Node, children []htt.Node, owner htt.Node, isElse bool, mode analysis.WhiteSpace, inSVG bool) {
 	items, gaps := splitChildren(children)
 	l := &childList{key: key, items: items, gaps: gaps, mode: mode, owner: owner, isElse: isElse}
 	c.order = append(c.order, l)
@@ -161,7 +162,7 @@ func (c *classifier) build(key template.Node, children []template.Node, owner te
 	}
 	for _, item := range items {
 		switch n := item.(type) {
-		case *template.HTMLElementNode:
+		case *htt.HTMLElementNode:
 			c.elements = true
 			tag := strings.ToLower(n.TagName)
 			svg := inSVG && tag != "foreignobject" || tag == "svg"
@@ -173,21 +174,21 @@ func (c *classifier) build(key template.Node, children []template.Node, owner te
 				continue
 			}
 			c.build(n, n.Children, n, false, c.styles[n].WhiteSpace, svg)
-		case *template.IfNode:
+		case *htt.IfNode:
 			c.buildBranch(&n.BranchNode, n, mode, inSVG)
-		case *template.WithNode:
+		case *htt.WithNode:
 			c.buildBranch(&n.BranchNode, n, mode, inSVG)
-		case *template.RangeNode:
+		case *htt.RangeNode:
 			c.buildBranch(&n.BranchNode, n, mode, inSVG)
-		case *template.DefineNode:
+		case *htt.DefineNode:
 			c.build(n.Body, n.Body.Nodes, n, false, c.modes[n.Name].whiteSpace(), false)
-		case *template.BlockNode:
+		case *htt.BlockNode:
 			c.build(n.Body, n.Body.Nodes, n, false, c.modes[n.Name].whiteSpace(), false)
 		}
 	}
 }
 
-func (c *classifier) buildBranch(b *template.BranchNode, owner template.Node, mode analysis.WhiteSpace, inSVG bool) {
+func (c *classifier) buildBranch(b *htt.BranchNode, owner htt.Node, mode analysis.WhiteSpace, inSVG bool) {
 	if b.List != nil {
 		c.build(b.List, b.List.Nodes, owner, false, mode, inSVG)
 	}
@@ -202,7 +203,7 @@ func (c *classifier) buildBranch(b *template.BranchNode, owner template.Node, mo
 // cannot see; an SVG element with
 // text of its own (svg reports that el is SVG content); or an element
 // whose white-space is preserve or unknown.
-func (c *classifier) isOpaque(el *template.HTMLElementNode, svg bool) bool {
+func (c *classifier) isOpaque(el *htt.HTMLElementNode, svg bool) bool {
 	if opaqueByNature(el, svg) {
 		return true
 	}
@@ -213,7 +214,7 @@ func (c *classifier) isOpaque(el *template.HTMLElementNode, svg bool) bool {
 // opaqueByNature reports whether el is written as it is whatever the
 // CSS says (isOpaque): one of opaqueTagNames, a custom element or other
 // shadow host, or SVG content with text of its own.
-func opaqueByNature(el *template.HTMLElementNode, svg bool) bool {
+func opaqueByNature(el *htt.HTMLElementNode, svg bool) bool {
 	tag := strings.ToLower(el.TagName)
 	return opaqueTagNames[tag] || strings.Contains(tag, "-") || isShadowHost(el) || svg && hasText(el)
 }
@@ -222,23 +223,23 @@ func opaqueByNature(el *template.HTMLElementNode, svg bool) bool {
 // an attribute named name, in a template branch too. An attribute whose
 // name is an action, or an action in attribute position, makes the
 // element's white-space unknown already (analysis.ComputeWhitespace).
-func hasAttribute(attrs []template.Node, name string) bool {
+func hasAttribute(attrs []htt.Node, name string) bool {
 	for _, n := range attrs {
 		switch n := n.(type) {
-		case *template.HTMLAttributeNode:
+		case *htt.HTMLAttributeNode:
 			if n.Namespace != "" {
 				continue
 			}
 			var key strings.Builder
 			for _, k := range n.Key {
-				if text, ok := k.(*template.TextNode); ok {
+				if text, ok := k.(*htt.TextNode); ok {
 					key.Write(text.Text)
 				}
 			}
 			if strings.EqualFold(strings.TrimSpace(key.String()), name) {
 				return true
 			}
-		case *template.IfNode, *template.WithNode, *template.RangeNode:
+		case *htt.IfNode, *htt.WithNode, *htt.RangeNode:
 			b := branchOf(n)
 			if b.List != nil && hasAttribute(b.List.Nodes, name) || b.ElseList != nil && hasAttribute(b.ElseList.Nodes, name) {
 				return true
@@ -255,23 +256,23 @@ func hasAttribute(attrs []template.Node, name string) bool {
 // legacy shadowroot). A template without either is an ordinary template:
 // its contents are cloned into unknown places, and the formatter
 // reindents them as collapsing content (WHATWG rulings).
-func isShadowHost(el *template.HTMLElementNode) bool {
+func isShadowHost(el *htt.HTMLElementNode) bool {
 	if hasAttribute(el.Attr, "is") {
 		return true
 	}
-	var visit func(nodes []template.Node) bool
-	visit = func(nodes []template.Node) bool {
+	var visit func(nodes []htt.Node) bool
+	visit = func(nodes []htt.Node) bool {
 		for _, n := range nodes {
 			switch n := n.(type) {
-			case *template.HTMLDocumentFragmentNode:
+			case *htt.HTMLDocumentFragmentNode:
 				if visit(n.Children) {
 					return true
 				}
-			case *template.HTMLElementNode:
+			case *htt.HTMLElementNode:
 				if strings.EqualFold(n.TagName, "template") && (hasAttribute(n.Attr, "shadowrootmode") || hasAttribute(n.Attr, "shadowroot")) {
 					return true
 				}
-			case *template.IfNode, *template.WithNode, *template.RangeNode:
+			case *htt.IfNode, *htt.WithNode, *htt.RangeNode:
 				b := branchOf(n)
 				if b.List != nil && visit(b.List.Nodes) || b.ElseList != nil && visit(b.ElseList.Nodes) {
 					return true
@@ -285,22 +286,22 @@ func isShadowHost(el *template.HTMLElementNode) bool {
 
 // hasText reports whether el has a child, through branches, that may
 // write text: text with content or an action.
-func hasText(el *template.HTMLElementNode) bool {
-	var visit func(nodes []template.Node) bool
-	visit = func(nodes []template.Node) bool {
+func hasText(el *htt.HTMLElementNode) bool {
+	var visit func(nodes []htt.Node) bool
+	visit = func(nodes []htt.Node) bool {
 		for _, n := range nodes {
 			switch n := n.(type) {
-			case *template.HTMLDocumentFragmentNode:
+			case *htt.HTMLDocumentFragmentNode:
 				if visit(n.Children) {
 					return true
 				}
-			case *template.TextNode:
+			case *htt.TextNode:
 				if !isRunOnly(n.Text) {
 					return true
 				}
-			case *template.ActionNode, *template.TemplateNode, *template.BlockNode:
+			case *htt.ActionNode, *htt.TemplateNode, *htt.BlockNode:
 				return true
-			case *template.IfNode, *template.WithNode, *template.RangeNode:
+			case *htt.IfNode, *htt.WithNode, *htt.RangeNode:
 				b := branchOf(n)
 				if b.List != nil && visit(b.List.Nodes) || b.ElseList != nil && visit(b.ElseList.Nodes) {
 					return true
@@ -314,7 +315,7 @@ func hasText(el *template.HTMLElementNode) bool {
 
 func (c *classifier) classifyList(l *childList) {
 	type run struct {
-		text  *template.TextNode
+		text  *htt.TextNode
 		start int
 	}
 	taken := make(map[run]bool) // content text runs used as gaps
@@ -327,7 +328,7 @@ func (c *classifier) classifyList(l *childList) {
 		c.out.gaps[gapKey{l.key, i}] = g
 	}
 	for k, item := range l.items {
-		text, ok := item.(*template.TextNode)
+		text, ok := item.(*htt.TextNode)
 		if !ok {
 			continue
 		}
@@ -357,14 +358,14 @@ func (c *classifier) gapRun(l *childList, i int) (g gap, leftTouch, rightTouch b
 		return gap{text: text, end: len(text.Text)}, true, true
 	}
 	if i > 0 {
-		if text, ok := l.items[i-1].(*template.TextNode); ok {
+		if text, ok := l.items[i-1].(*htt.TextNode); ok {
 			if s := splitRuns(text.Text); s[len(s)-1].space {
 				return gap{text: text, start: s[len(s)-1].start, end: s[len(s)-1].end}, false, true
 			}
 		}
 	}
 	if i < len(l.items) {
-		if text, ok := l.items[i].(*template.TextNode); ok {
+		if text, ok := l.items[i].(*htt.TextNode); ok {
 			if s := splitRuns(text.Text); s[0].space {
 				return gap{text: text, start: s[0].start, end: s[0].end}, true, false
 			}
@@ -397,15 +398,15 @@ func (c *classifier) trimmedAfter(l *childList, i int) bool {
 		return trimsRight(l.items[i-1])
 	}
 	switch n := l.owner.(type) {
-	case *template.IfNode, *template.WithNode, *template.RangeNode:
+	case *htt.IfNode, *htt.WithNode, *htt.RangeNode:
 		b := branchOf(n)
 		if l.isElse {
 			return b.ElseTrimRight
 		}
 		return b.StartTrimRight
-	case *template.DefineNode:
+	case *htt.DefineNode:
 		return n.StartTrimRight
-	case *template.BlockNode:
+	case *htt.BlockNode:
 		return n.StartTrimRight
 	}
 	return false
@@ -417,71 +418,71 @@ func (c *classifier) trimmedBefore(l *childList, i int) bool {
 		return trimsLeft(l.items[i])
 	}
 	switch n := l.owner.(type) {
-	case *template.IfNode, *template.WithNode, *template.RangeNode:
+	case *htt.IfNode, *htt.WithNode, *htt.RangeNode:
 		b := branchOf(n)
 		if !l.isElse && b.ElseList != nil {
 			return b.ElseTrimLeft
 		}
 		return b.EndTrimLeft
-	case *template.DefineNode:
+	case *htt.DefineNode:
 		return n.EndTrimLeft
-	case *template.BlockNode:
+	case *htt.BlockNode:
 		return n.EndTrimLeft
 	}
 	return false
 }
 
-func branchOf(n template.Node) *template.BranchNode {
+func branchOf(n htt.Node) *htt.BranchNode {
 	switch n := n.(type) {
-	case *template.IfNode:
+	case *htt.IfNode:
 		return &n.BranchNode
-	case *template.WithNode:
+	case *htt.WithNode:
 		return &n.BranchNode
-	case *template.RangeNode:
+	case *htt.RangeNode:
 		return &n.BranchNode
 	}
 	return nil
 }
 
-func trimsLeft(n template.Node) bool {
+func trimsLeft(n htt.Node) bool {
 	switch n := n.(type) {
-	case *template.ActionNode:
+	case *htt.ActionNode:
 		return n.TrimLeft
-	case *template.TemplateNode:
+	case *htt.TemplateNode:
 		return n.TrimLeft
-	case *template.CommentNode:
+	case *htt.CommentNode:
 		return n.TrimLeft
-	case *template.BreakNode:
+	case *htt.BreakNode:
 		return n.TrimLeft
-	case *template.ContinueNode:
+	case *htt.ContinueNode:
 		return n.TrimLeft
-	case *template.IfNode, *template.WithNode, *template.RangeNode:
+	case *htt.IfNode, *htt.WithNode, *htt.RangeNode:
 		return branchOf(n).StartTrimLeft
-	case *template.DefineNode:
+	case *htt.DefineNode:
 		return n.StartTrimLeft
-	case *template.BlockNode:
+	case *htt.BlockNode:
 		return n.StartTrimLeft
 	}
 	return false
 }
 
-func trimsRight(n template.Node) bool {
+func trimsRight(n htt.Node) bool {
 	switch n := n.(type) {
-	case *template.ActionNode:
+	case *htt.ActionNode:
 		return n.TrimRight
-	case *template.TemplateNode:
+	case *htt.TemplateNode:
 		return n.TrimRight
-	case *template.CommentNode:
+	case *htt.CommentNode:
 		return n.TrimRight
-	case *template.BreakNode:
+	case *htt.BreakNode:
 		return n.TrimRight
-	case *template.ContinueNode:
+	case *htt.ContinueNode:
 		return n.TrimRight
-	case *template.IfNode, *template.WithNode, *template.RangeNode:
+	case *htt.IfNode, *htt.WithNode, *htt.RangeNode:
 		return branchOf(n).EndTrimRight
-	case *template.DefineNode:
+	case *htt.DefineNode:
 		return n.EndTrimRight
-	case *template.BlockNode:
+	case *htt.BlockNode:
 		return n.EndTrimRight
 	}
 	return false
@@ -517,14 +518,14 @@ var keptInTable = map[string]bool{"script": true, "style": true, "template": tru
 // items are top. text reports that only el's text content moves (a table
 // element whose text is foster-parented), not el.
 type misplacement struct {
-	el, owner *template.HTMLElementNode
+	el, owner *htt.HTMLElementNode
 	text      bool
-	top       []template.Node
+	top       []htt.Node
 }
 
 // whiteSpaceOf is the white-space of el, collapse for nil (the tree root
 // or a define or block body), unknown for an element styles lacks.
-func whiteSpaceOf(styles analysis.Whitespaces, el *template.HTMLElementNode) analysis.WhiteSpace {
+func whiteSpaceOf(styles analysis.Whitespaces, el *htt.HTMLElementNode) analysis.WhiteSpace {
 	if el == nil {
 		return analysis.WhiteSpaceCollapse
 	}
@@ -536,7 +537,7 @@ func whiteSpaceOf(styles analysis.Whitespaces, el *template.HTMLElementNode) ana
 
 // unsure sets the white-space of el to unknown, so the classifier writes
 // it as it is.
-func unsure(styles analysis.Whitespaces, el *template.HTMLElementNode) {
+func unsure(styles analysis.Whitespaces, el *htt.HTMLElementNode) {
 	if ws, ok := styles[el]; ok {
 		ws.WhiteSpace = analysis.WhiteSpaceUnknown
 		styles[el] = ws
@@ -565,15 +566,15 @@ func unsure(styles analysis.Whitespaces, el *template.HTMLElementNode) {
 // unsureParsedElsewhere returns asIs: the runs from that text through the
 // head's end and the head/body boundary are the body's, and the whole
 // tree is written as it is.
-func unsureParsedElsewhere(root *template.ListNode, styles analysis.Whitespaces, context []*template.Tree, moved analysis.MovedMatcher) (asIs bool) {
+func unsureParsedElsewhere(root *htt.ListNode, styles analysis.Whitespaces, context []*htt.Tree, moved analysis.MovedMatcher) (asIs bool) {
 	misplaced, impliesBody := parsedElsewhere(root, styles, context)
 	if impliesBody && !bodiesCollapse(root, styles) {
 		return true
 	}
 	for _, m := range misplaced {
-		var els []*template.HTMLElementNode
+		var els []*htt.HTMLElementNode
 		if !m.text {
-			els = []*template.HTMLElementNode{m.el}
+			els = []*htt.HTMLElementNode{m.el}
 		}
 		if moved.MayChange(els, whiteSpaceOf(styles, m.owner)) {
 			unsure(styles, m.el)
@@ -583,7 +584,7 @@ func unsureParsedElsewhere(root *template.ListNode, styles analysis.Whitespaces,
 			}
 			items, _ := splitChildren(m.top)
 			for _, item := range items {
-				if el, ok := item.(*template.HTMLElementNode); ok {
+				if el, ok := item.(*htt.HTMLElementNode); ok {
 					unsure(styles, el)
 				}
 			}
@@ -598,10 +599,10 @@ func unsureParsedElsewhere(root *template.ListNode, styles analysis.Whitespaces,
 
 // bodiesCollapse reports whether root holds a body element and every one
 // of them certainly collapses white space.
-func bodiesCollapse(root *template.ListNode, styles analysis.Whitespaces) bool {
+func bodiesCollapse(root *htt.ListNode, styles analysis.Whitespaces) bool {
 	found, ok := false, true
-	template.Walk(&template.Tree{Root: root}, func(_ *template.Tree, n template.Node) {
-		if el, isEl := n.(*template.HTMLElementNode); isEl && strings.EqualFold(el.TagName, "body") {
+	htt.Walk(&htt.Tree{Root: root}, func(_ *htt.Tree, n htt.Node) {
+		if el, isEl := n.(*htt.HTMLElementNode); isEl && strings.EqualFold(el.TagName, "body") {
 			found = true
 			ok = ok && whiteSpaceOf(styles, el) == analysis.WhiteSpaceCollapse
 		}
@@ -640,8 +641,8 @@ func bodiesCollapse(root *template.ListNode, styles analysis.Whitespaces) bool {
 // impliesBody reports text, or an action or call that may write text, in
 // a head or in html before a body: the browser closes the head there and
 // implies the body, which owns the runs that follow up to the body tag.
-func parsedElsewhere(root *template.ListNode, styles analysis.Whitespaces, context []*template.Tree) (out []misplacement, impliesBody bool) {
-	collapses := func(el *template.HTMLElementNode) bool {
+func parsedElsewhere(root *htt.ListNode, styles analysis.Whitespaces, context []*htt.Tree) (out []misplacement, impliesBody bool) {
+	collapses := func(el *htt.HTMLElementNode) bool {
 		ws, ok := styles[el]
 		return ok && ws.WhiteSpace == analysis.WhiteSpaceCollapse
 	}
@@ -649,7 +650,7 @@ func parsedElsewhere(root *template.ListNode, styles analysis.Whitespaces, conte
 	// from root and the context trees (the package's other templates):
 	// which one html/template runs depends on parse order, so a call
 	// stands for every one of them.
-	defines := make(map[string][]*template.ListNode)
+	defines := make(map[string][]*htt.ListNode)
 	collectDefines(root.Nodes, defines)
 	for _, tree := range context {
 		if tree != nil && tree.Root != nil {
@@ -661,13 +662,13 @@ func parsedElsewhere(root *template.ListNode, styles analysis.Whitespaces, conte
 	// document's html and body (for a call in the head), or the table's
 	// parent (for a call in a table context), collapse white space.
 	documentCollapses := documentElementsCollapse(root, collapses)
-	tableParent := make(map[*template.HTMLElementNode]*template.HTMLElementNode)
+	tableParent := make(map[*htt.HTMLElementNode]*htt.HTMLElementNode)
 	// calling holds the templates whose body the walk is in, so a
 	// recursive call stops; walked memoizes in-place walks.
 	calling := make(map[string]bool)
 	type walkKey struct {
 		name, parent string
-		parentEl     *template.HTMLElementNode
+		parentEl     *htt.HTMLElementNode
 		doc          documentState
 		calling      string
 	}
@@ -680,11 +681,11 @@ func parsedElsewhere(root *template.ListNode, styles analysis.Whitespaces, conte
 	// chain is the table-context elements from the nearest table down to
 	// the current parent; it is empty outside a table context. parentEl
 	// is the nearest enclosing element, nil at the top of root or a body.
-	var walk func(nodes []template.Node, parent string, parentEl *template.HTMLElementNode, chain []*template.HTMLElementNode)
-	walk = func(nodes []template.Node, parent string, parentEl *template.HTMLElementNode, chain []*template.HTMLElementNode) {
+	var walk func(nodes []htt.Node, parent string, parentEl *htt.HTMLElementNode, chain []*htt.HTMLElementNode)
+	walk = func(nodes []htt.Node, parent string, parentEl *htt.HTMLElementNode, chain []*htt.HTMLElementNode) {
 		// fosterTarget is the element foster-parented content is built
 		// in: the parent of the nearest table.
-		fosterTarget := func() *template.HTMLElementNode {
+		fosterTarget := func() *htt.HTMLElementNode {
 			if len(chain) == 0 {
 				return nil
 			}
@@ -710,7 +711,7 @@ func parsedElsewhere(root *template.ListNode, styles analysis.Whitespaces, conte
 		}
 		// inPlace walks each body template name may run where it is
 		// called, each from the same document state, and keeps every mark.
-		inPlace := func(name string, bodies []*template.ListNode) {
+		inPlace := func(name string, bodies []*htt.ListNode) {
 			names := slices.Sorted(maps.Keys(calling))
 			key := walkKey{name, parent, parentEl, doc, strings.Join(names, "\x00")}
 			if out, ok := walked[key]; ok {
@@ -730,15 +731,15 @@ func parsedElsewhere(root *template.ListNode, styles analysis.Whitespaces, conte
 		}
 		for _, n := range nodes {
 			switch n := n.(type) {
-			case *template.HTMLDocumentFragmentNode:
+			case *htt.HTMLDocumentFragmentNode:
 				walk(n.Children, parent, parentEl, chain)
-			case *template.TextNode:
+			case *htt.TextNode:
 				if !isRunOnly(n.Text) {
 					mayWriteText()
 				}
-			case *template.ActionNode:
+			case *htt.ActionNode:
 				mayWriteText()
-			case *template.TemplateNode:
+			case *htt.TemplateNode:
 				bodies, defined := defines[n.Name]
 				switch {
 				case calling[n.Name]:
@@ -750,7 +751,7 @@ func parsedElsewhere(root *template.ListNode, styles analysis.Whitespaces, conte
 				default:
 					mayWriteText()
 				}
-			case *template.HTMLElementNode:
+			case *htt.HTMLElementNode:
 				tag := strings.ToLower(n.TagName)
 				if !doc.inPlace(tag, parent) {
 					out = append(out, misplacement{el: n, owner: parentEl, top: top})
@@ -767,7 +768,7 @@ func parsedElsewhere(root *template.ListNode, styles analysis.Whitespaces, conte
 					out = append(out, misplacement{el: n, owner: fosterTarget(), top: top})
 					fosterParented()
 				}
-				var inner []*template.HTMLElementNode
+				var inner []*htt.HTMLElementNode
 				if tableContexts[tag] {
 					if tag != "table" {
 						inner = chain
@@ -777,7 +778,7 @@ func parsedElsewhere(root *template.ListNode, styles analysis.Whitespaces, conte
 					inner = append(slices.Clip(inner), n)
 				}
 				walk(n.Children, tag, n, inner)
-			case *template.IfNode, *template.WithNode, *template.RangeNode:
+			case *htt.IfNode, *htt.WithNode, *htt.RangeNode:
 				b := branchOf(n)
 				if b.List != nil {
 					walk(b.List.Nodes, parent, parentEl, chain)
@@ -785,14 +786,14 @@ func parsedElsewhere(root *template.ListNode, styles analysis.Whitespaces, conte
 				if b.ElseList != nil {
 					walk(b.ElseList.Nodes, parent, parentEl, chain)
 				}
-			case *template.DefineNode:
+			case *htt.DefineNode:
 				if n.Body != nil {
 					outer, outerTop := doc, top
 					doc, top = documentState{}, n.Body.Nodes
 					walk(n.Body.Nodes, "", nil, nil)
 					doc, top = outer, outerTop
 				}
-			case *template.BlockNode:
+			case *htt.BlockNode:
 				if n.Body == nil {
 					continue
 				}
@@ -821,22 +822,22 @@ func parsedElsewhere(root *template.ListNode, styles analysis.Whitespaces, conte
 
 // documentElementsCollapse reports whether root holds an html and a body
 // element and every one of them collapses white space.
-func documentElementsCollapse(root *template.ListNode, collapses func(*template.HTMLElementNode) bool) bool {
+func documentElementsCollapse(root *htt.ListNode, collapses func(*htt.HTMLElementNode) bool) bool {
 	found := map[string]bool{}
 	ok := true
-	var visit func(nodes []template.Node)
-	visit = func(nodes []template.Node) {
+	var visit func(nodes []htt.Node)
+	visit = func(nodes []htt.Node) {
 		for _, n := range nodes {
 			switch n := n.(type) {
-			case *template.HTMLDocumentFragmentNode:
+			case *htt.HTMLDocumentFragmentNode:
 				visit(n.Children)
-			case *template.HTMLElementNode:
+			case *htt.HTMLElementNode:
 				if tag := strings.ToLower(n.TagName); tag == "html" || tag == "body" {
 					found[tag] = true
 					ok = ok && collapses(n)
 				}
 				visit(n.Children)
-			case *template.IfNode, *template.WithNode, *template.RangeNode:
+			case *htt.IfNode, *htt.WithNode, *htt.RangeNode:
 				b := branchOf(n)
 				if b.List != nil {
 					visit(b.List.Nodes)
@@ -844,11 +845,11 @@ func documentElementsCollapse(root *template.ListNode, collapses func(*template.
 				if b.ElseList != nil {
 					visit(b.ElseList.Nodes)
 				}
-			case *template.DefineNode:
+			case *htt.DefineNode:
 				if n.Body != nil {
 					visit(n.Body.Nodes)
 				}
-			case *template.BlockNode:
+			case *htt.BlockNode:
 				if n.Body != nil {
 					visit(n.Body.Nodes)
 				}
@@ -951,25 +952,25 @@ var repairedTags = map[string]bool{
 // the template tree: when a white-space rule may match a group's elements
 // (the flagged element included) differently in the browser's tree
 // (moved.MayMatch), the whole group is unsure whatever its white-space.
-func unsureMisnested(root *template.ListNode, styles analysis.Whitespaces, moved analysis.MovedMatcher) (asIs bool) {
-	tree := &template.Tree{Root: root}
+func unsureMisnested(root *htt.ListNode, styles analysis.Whitespaces, moved analysis.MovedMatcher) (asIs bool) {
+	tree := &htt.Tree{Root: root}
 	flagged := make(map[lex.Pos]bool)
 	for _, d := range analysis.CheckStructure(tree) {
 		flagged[d.Pos] = true
 	}
 	// closes maps a list item to the ancestor its start tag closes; the
 	// browser pops every element up to that ancestor.
-	closes := make(map[*template.HTMLElementNode]*template.HTMLElementNode)
+	closes := make(map[*htt.HTMLElementNode]*htt.HTMLElementNode)
 	// asWritten are the tables a nested table closes early: the parser
 	// drops the table parts that follow, so the whole table is opaque.
-	var asWritten []*template.HTMLElementNode
+	var asWritten []*htt.HTMLElementNode
 	// unreadStarts hold a start tag the parser read as text: the
 	// browser holds open an element the template tree does not have.
-	unreadStarts := make(map[*template.TextNode]bool)
+	unreadStarts := make(map[*htt.TextNode]bool)
 	// closesP are the start tags that close a p ancestor (closesParagraph).
-	closesP := make(map[*template.HTMLElementNode]bool)
-	template.WalkPath(tree, func(_ *template.Tree, path []template.Node, n template.Node) {
-		if text, ok := n.(*template.TextNode); ok {
+	closesP := make(map[*htt.HTMLElementNode]bool)
+	htt.WalkPath(tree, func(_ *htt.Tree, path []htt.Node, n htt.Node) {
+		if text, ok := n.(*htt.TextNode); ok {
 			// A tag the parser read as text is an element the
 			// template tree does not have: its parent is misnested,
 			// and, for a start tag, written as it is.
@@ -997,7 +998,7 @@ func unsureMisnested(root *template.ListNode, styles analysis.Whitespaces, moved
 			}
 			return
 		}
-		el, ok := n.(*template.HTMLElementNode)
+		el, ok := n.(*htt.HTMLElementNode)
 		if !ok {
 			return
 		}
@@ -1011,7 +1012,7 @@ func unsureMisnested(root *template.ListNode, styles analysis.Whitespaces, moved
 		if closed, k := closesParagraph(el, path); closed != nil {
 			flagged[el.Start()] = true
 			closesP[el] = true
-			if prev, ok := closes[el]; !ok || slices.Index(path, template.Node(prev)) > k {
+			if prev, ok := closes[el]; !ok || slices.Index(path, htt.Node(prev)) > k {
 				closes[el] = closed
 			}
 			if !el.Closed && preformats(el, styles) {
@@ -1047,7 +1048,7 @@ func unsureMisnested(root *template.ListNode, styles analysis.Whitespaces, moved
 		return false
 	}
 	type reach struct {
-		stop  template.Node // the node the reach ends at; nil is the tree root
+		stop  htt.Node // the node the reach ends at; nil is the tree root
 		owner *ownerGroup
 	}
 	var (
@@ -1059,15 +1060,15 @@ func unsureMisnested(root *template.ListNode, styles analysis.Whitespaces, moved
 	)
 	// mark starts a group with the ancestors of a flagged element (or of
 	// a start tag read as text) up to the node the marking stops at.
-	mark := func(path []template.Node, closed *template.HTMLElementNode) (*ownerGroup, template.Node) {
+	mark := func(path []htt.Node, closed *htt.HTMLElementNode) (*ownerGroup, htt.Node) {
 		g := new(ownerGroup)
 		groups = append(groups, g)
 		stop := markMisnestedAncestors(&g.members, path, closed, styles, flagged)
 		g.add(stop)
 		return g, stop
 	}
-	template.WalkPath(tree, func(_ *template.Tree, path []template.Node, n template.Node) {
-		if text, ok := n.(*template.TextNode); ok && unreadStarts[text] {
+	htt.WalkPath(tree, func(_ *htt.Tree, path []htt.Node, n htt.Node) {
+		if text, ok := n.(*htt.TextNode); ok && unreadStarts[text] {
 			if parent := nearestElement(path); parent != nil && parent.Closed && endTagPops[strings.ToLower(parent.TagName)] && !hasUnreadSpecialTag(text.Text) {
 				return // the parent's end tag closes it; the parent is as written
 			}
@@ -1075,7 +1076,7 @@ func unsureMisnested(root *template.ListNode, styles analysis.Whitespaces, moved
 			held = append(held, reach{stop, g})
 			return
 		}
-		el, ok := n.(*template.HTMLElementNode)
+		el, ok := n.(*htt.HTMLElementNode)
 		if !ok {
 			return
 		}
@@ -1148,18 +1149,18 @@ func hasUnreadSpecialTag(text []byte) bool {
 // any one of them, the tree root (or a define or block body) included
 // when root is set.
 type ownerGroup struct {
-	members []*template.HTMLElementNode
+	members []*htt.HTMLElementNode
 	root    bool
 	// moved are elements the browser builds elsewhere whose own runs
 	// stay theirs: they count for the selectors, not the white-space.
-	moved []*template.HTMLElementNode
+	moved []*htt.HTMLElementNode
 }
 
 // add puts n, where a marking stopped, in g: an element as a member, any
 // other node (the tree root, a define, block, attribute or comment) as
 // the root, which collapses.
-func (g *ownerGroup) add(n template.Node) {
-	if el, ok := n.(*template.HTMLElementNode); ok {
+func (g *ownerGroup) add(n htt.Node) {
+	if el, ok := n.(*htt.HTMLElementNode); ok {
 		g.members = append(g.members, el)
 		return
 	}
@@ -1198,10 +1199,10 @@ func (g *ownerGroup) settle(styles analysis.Whitespaces, moved analysis.MovedMat
 // (nil when it closes none), then on up to the nearest clean block. It
 // returns the node the marking stopped at: that clean block, a define,
 // block, attribute or comment, or nil at the tree root.
-func markMisnestedAncestors(marked *[]*template.HTMLElementNode, path []template.Node, closed *template.HTMLElementNode, styles analysis.Whitespaces, flagged map[lex.Pos]bool) template.Node {
+func markMisnestedAncestors(marked *[]*htt.HTMLElementNode, path []htt.Node, closed *htt.HTMLElementNode, styles analysis.Whitespaces, flagged map[lex.Pos]bool) htt.Node {
 	for i := len(path) - 1; i >= 0; i-- {
 		switch p := path[i].(type) {
-		case *template.HTMLElementNode:
+		case *htt.HTMLElementNode:
 			switch {
 			case closed != nil:
 				// Popped by el's start tag, clean or not.
@@ -1212,7 +1213,7 @@ func markMisnestedAncestors(marked *[]*template.HTMLElementNode, path []template
 				return p
 			}
 			*marked = append(*marked, p)
-		case *template.DefineNode, *template.BlockNode, *template.HTMLAttributeNode, *template.HTMLCommentNode:
+		case *htt.DefineNode, *htt.BlockNode, *htt.HTMLAttributeNode, *htt.HTMLCommentNode:
 			return p
 		}
 	}
@@ -1228,21 +1229,21 @@ func markMisnestedAncestors(marked *[]*template.HTMLElementNode, path []template
 // (HTML §13.2.6.4.7). What follows, up to the nearest clean block, may be
 // el's content or be split by a start tag that closes it
 // (<b><li>0</b><b><li></li> </b>).
-func heldOpen(el *template.HTMLElementNode, path []template.Node) bool {
+func heldOpen(el *htt.HTMLElementNode, path []htt.Node) bool {
 	if el.Closed || el.Void || !specialTags[strings.ToLower(el.TagName)] {
 		return false
 	}
 	for i := len(path) - 1; i >= 0; i-- {
 		switch p := path[i].(type) {
-		case *template.HTMLElementNode:
+		case *htt.HTMLElementNode:
 			tag := strings.ToLower(p.TagName)
-			if template.FormattingElements[tag] {
+			if htt.FormattingElements[tag] {
 				return true
 			}
 			if specialTags[tag] {
 				return false
 			}
-		case *template.DefineNode, *template.BlockNode, *template.HTMLAttributeNode, *template.HTMLCommentNode:
+		case *htt.DefineNode, *htt.BlockNode, *htt.HTMLAttributeNode, *htt.HTMLCommentNode:
 			return false
 		}
 	}
@@ -1250,9 +1251,9 @@ func heldOpen(el *template.HTMLElementNode, path []template.Node) bool {
 }
 
 // nearestElement is the innermost element on path, or nil.
-func nearestElement(path []template.Node) *template.HTMLElementNode {
+func nearestElement(path []htt.Node) *htt.HTMLElementNode {
 	for i := len(path) - 1; i >= 0; i-- {
-		if el, ok := path[i].(*template.HTMLElementNode); ok {
+		if el, ok := path[i].(*htt.HTMLElementNode); ok {
 			return el
 		}
 	}
@@ -1261,14 +1262,14 @@ func nearestElement(path []template.Node) *template.HTMLElementNode {
 
 // inRawText reports whether path is inside a raw text or RCDATA element,
 // a comment or an attribute, where a < is not markup.
-func inRawText(path []template.Node) bool {
+func inRawText(path []htt.Node) bool {
 	for _, n := range path {
 		switch n := n.(type) {
-		case *template.HTMLElementNode:
+		case *htt.HTMLElementNode:
 			if rawTextTags[strings.ToLower(n.TagName)] {
 				return true
 			}
-		case *template.HTMLCommentNode, *template.HTMLAttributeNode:
+		case *htt.HTMLCommentNode, *htt.HTMLAttributeNode:
 			return true
 		}
 	}
@@ -1297,40 +1298,40 @@ var formattingMarkers = map[string]bool{"td": true, "th": true, "caption": true,
 // its reach differently in the browser's tree (moved.MayMatch: the clone
 // is matched where the browser puts it, and the elements after it get a
 // new ancestor), every element in the reach is unsure.
-func unsureReopened(root *template.ListNode, styles analysis.Whitespaces, moved analysis.MovedMatcher) {
-	tree := &template.Tree{Root: root}
+func unsureReopened(root *htt.ListNode, styles analysis.Whitespaces, moved analysis.MovedMatcher) {
+	tree := &htt.Tree{Root: root}
 	type reopened struct {
-		stop     template.Node // where its reach ends; nil is the root
+		stop     htt.Node // where its reach ends; nil is the root
 		mode     analysis.WhiteSpace
-		elements []*template.HTMLElementNode // the formatting element (if any) and its reach
+		elements []*htt.HTMLElementNode // the formatting element (if any) and its reach
 	}
 	var (
 		reaches []*reopened // per unclosed formatting element
-		marked  []*template.HTMLElementNode
+		marked  []*htt.HTMLElementNode
 	)
-	mark := func(r *reopened, el *template.HTMLElementNode) {
+	mark := func(r *reopened, el *htt.HTMLElementNode) {
 		r.elements = append(r.elements, el)
 		if whiteSpaceOf(styles, el) != r.mode {
 			marked = append(marked, el)
 		}
 	}
-	template.WalkPath(tree, func(_ *template.Tree, path []template.Node, n template.Node) {
+	htt.WalkPath(tree, func(_ *htt.Tree, path []htt.Node, n htt.Node) {
 		var mode analysis.WhiteSpace
 		switch n := n.(type) {
-		case *template.TextNode:
+		case *htt.TextNode:
 			// A formatting start tag the parser read as text (<a/x>)
 			// is an unclosed formatting element to the browser.
 			if inRawText(path) || !hasUnreadFormattingTag(n.Text) {
 				return
 			}
 			mode = analysis.WhiteSpaceUnknown
-		case *template.HTMLElementNode:
+		case *htt.HTMLElementNode:
 			for _, r := range reaches {
 				if r.stop == nil || slices.Contains(path, r.stop) {
 					mark(r, n)
 				}
 			}
-			if n.Closed || n.Void || !template.FormattingElements[strings.ToLower(n.TagName)] {
+			if n.Closed || n.Void || !htt.FormattingElements[strings.ToLower(n.TagName)] {
 				return
 			}
 			mode = whiteSpaceOf(styles, n)
@@ -1341,11 +1342,11 @@ func unsureReopened(root *template.ListNode, styles analysis.Whitespaces, moved 
 		r := &reopened{stop: stop, mode: mode}
 		reaches = append(reaches, r)
 		for i := len(path) - 1; i >= 0 && path[i] != stop; i-- {
-			if p, ok := path[i].(*template.HTMLElementNode); ok {
+			if p, ok := path[i].(*htt.HTMLElementNode); ok {
 				mark(r, p)
 			}
 		}
-		if el, ok := n.(*template.HTMLElementNode); ok {
+		if el, ok := n.(*htt.HTMLElementNode); ok {
 			r.elements = append(r.elements, el) // matched where it is reopened
 		}
 	})
@@ -1371,7 +1372,7 @@ func hasUnreadFormattingTag(text []byte) bool {
 		for end < len(text) && !isTagNameEnd(text[end]) {
 			end++
 		}
-		if template.FormattingElements[strings.ToLower(string(text[i+1:end]))] {
+		if htt.FormattingElements[strings.ToLower(string(text[i+1:end]))] {
 			return true
 		}
 	}
@@ -1382,14 +1383,14 @@ func hasUnreadFormattingTag(text []byte) bool {
 // unclosed formatting element: a formatting marker, or a define or block
 // (whose callers are unknown). It returns nil when the reach is the tree
 // root.
-func reachOf(path []template.Node) template.Node {
+func reachOf(path []htt.Node) htt.Node {
 	for i := len(path) - 1; i >= 0; i-- {
 		switch p := path[i].(type) {
-		case *template.HTMLElementNode:
+		case *htt.HTMLElementNode:
 			if formattingMarkers[strings.ToLower(p.TagName)] {
 				return p
 			}
-		case *template.DefineNode, *template.BlockNode:
+		case *htt.DefineNode, *htt.BlockNode:
 			return p
 		}
 	}
@@ -1402,13 +1403,13 @@ func reachOf(path []template.Node) template.Node {
 // li, dd, dt, table, ...) pops the nearest p in button scope, so what
 // follows el in the p, and what follows the p's end tag (</p> then
 // inserts an empty p), is not where the template tree puts it.
-func closesParagraph(el *template.HTMLElementNode, path []template.Node) (*template.HTMLElementNode, int) {
+func closesParagraph(el *htt.HTMLElementNode, path []htt.Node) (*htt.HTMLElementNode, int) {
 	if !closesPTags[strings.ToLower(el.TagName)] {
 		return nil, -1
 	}
 	for i := len(path) - 1; i >= 0; i-- {
 		switch p := path[i].(type) {
-		case *template.HTMLElementNode:
+		case *htt.HTMLElementNode:
 			tag := strings.ToLower(p.TagName)
 			if tag == "p" {
 				return p, i
@@ -1416,7 +1417,7 @@ func closesParagraph(el *template.HTMLElementNode, path []template.Node) (*templ
 			if buttonScopeBarriers[tag] {
 				return nil, -1
 			}
-		case *template.DefineNode, *template.BlockNode, *template.HTMLAttributeNode, *template.HTMLCommentNode:
+		case *htt.DefineNode, *htt.BlockNode, *htt.HTMLAttributeNode, *htt.HTMLCommentNode:
 			return nil, -1
 		}
 	}
@@ -1447,7 +1448,7 @@ var buttonScopeBarriers = map[string]bool{
 // preformats reports whether el's content keeps its whitespace: a
 // preformatted or raw text element, or white-space other than collapse
 // or unknown.
-func preformats(el *template.HTMLElementNode, styles analysis.Whitespaces) bool {
+func preformats(el *htt.HTMLElementNode, styles analysis.Whitespaces) bool {
 	if opaqueTagNames[strings.ToLower(el.TagName)] {
 		return true
 	}
@@ -1468,11 +1469,11 @@ func preformats(el *template.HTMLElementNode, styles analysis.Whitespaces) bool 
 // what follows the branch is its content. It returns nil and false when
 // the nearest closed ancestor's end tag pops the element, or there is
 // none.
-func preformattedReach(path []template.Node) (whole bool, parent *template.HTMLElementNode) {
+func preformattedReach(path []htt.Node) (whole bool, parent *htt.HTMLElementNode) {
 	closedSeen := false
 	for i := len(path) - 1; i >= 0; i-- {
 		switch p := path[i].(type) {
-		case *template.HTMLElementNode:
+		case *htt.HTMLElementNode:
 			if !p.Closed {
 				continue
 			}
@@ -1483,11 +1484,11 @@ func preformattedReach(path []template.Node) (whole bool, parent *template.HTMLE
 				return false, p
 			}
 			closedSeen = true
-		case *template.IfNode, *template.WithNode, *template.RangeNode:
+		case *htt.IfNode, *htt.WithNode, *htt.RangeNode:
 			// The template tree ends it at the branch's end; the
 			// browser, when the branch renders, does not.
 			closedSeen = true
-		case *template.DefineNode, *template.BlockNode:
+		case *htt.DefineNode, *htt.BlockNode:
 			return closedSeen, nil
 		}
 	}
@@ -1501,14 +1502,14 @@ func preformattedReach(path []template.Node) (whole bool, parent *template.HTMLE
 // the element, to be written as it is, or whole when there is none
 // before the tree root or a define or block body. A p does not count: the
 // start tag may have closed it. Branches end nothing.
-func unreadPreformattedReach(path []template.Node) (whole bool, parent *template.HTMLElementNode) {
+func unreadPreformattedReach(path []htt.Node) (whole bool, parent *htt.HTMLElementNode) {
 	for i := len(path) - 1; i >= 0; i-- {
 		switch p := path[i].(type) {
-		case *template.HTMLElementNode:
+		case *htt.HTMLElementNode:
 			if p.Closed && !strings.EqualFold(p.TagName, "p") && endTagPopsAt(p, path[i+1:]) {
 				return false, p
 			}
-		case *template.DefineNode, *template.BlockNode:
+		case *htt.DefineNode, *htt.BlockNode:
 			return true, nil
 		}
 	}
@@ -1534,12 +1535,12 @@ func hasUnreadStartTag(text []byte) bool {
 // end tag looks it up in (HTML §13.2.4.2). The barriers are those of the
 // default scope with the ones of button and list item scope added, which
 // errs toward not popping.
-func endTagPopsAt(el *template.HTMLElementNode, between []template.Node) bool {
+func endTagPopsAt(el *htt.HTMLElementNode, between []htt.Node) bool {
 	if !endTagPops[strings.ToLower(el.TagName)] {
 		return false
 	}
 	for _, n := range between {
-		if e, ok := n.(*template.HTMLElementNode); ok {
+		if e, ok := n.(*htt.HTMLElementNode); ok {
 			tag := strings.ToLower(e.TagName)
 			if buttonScopeBarriers[tag] || tag == "ol" || tag == "ul" {
 				return false
@@ -1551,12 +1552,12 @@ func endTagPopsAt(el *template.HTMLElementNode, between []template.Node) bool {
 
 // elementAbove is the innermost element on path before any define or
 // block, or nil.
-func elementAbove(path []template.Node) *template.HTMLElementNode {
+func elementAbove(path []htt.Node) *htt.HTMLElementNode {
 	for i := len(path) - 1; i >= 0; i-- {
 		switch p := path[i].(type) {
-		case *template.HTMLElementNode:
+		case *htt.HTMLElementNode:
 			return p
-		case *template.DefineNode, *template.BlockNode:
+		case *htt.DefineNode, *htt.BlockNode:
 			return nil
 		}
 	}
@@ -1569,27 +1570,27 @@ func elementAbove(path []template.Node) *template.HTMLElementNode {
 // and there a start tag table pops the open table and starts the new one
 // after it (HTML §13.2.6.4.9), so what follows the nested table is no
 // longer in a table.
-func closesTable(el *template.HTMLElementNode, path []template.Node) *template.HTMLElementNode {
+func closesTable(el *htt.HTMLElementNode, path []htt.Node) *htt.HTMLElementNode {
 	if !strings.EqualFold(el.TagName, "table") {
 		return nil
 	}
 	for i := len(path) - 1; i >= 0; i-- {
 		switch p := path[i].(type) {
-		case *template.HTMLElementNode:
+		case *htt.HTMLElementNode:
 			switch strings.ToLower(p.TagName) {
 			case "table":
 				return p
 			case "td", "th", "caption", "template":
 				return nil
 			}
-		case *template.DefineNode, *template.BlockNode, *template.HTMLAttributeNode, *template.HTMLCommentNode:
+		case *htt.DefineNode, *htt.BlockNode, *htt.HTMLAttributeNode, *htt.HTMLCommentNode:
 			return nil
 		}
 	}
 	return nil
 }
 
-func cleanBlock(el *template.HTMLElementNode, styles analysis.Whitespaces, flagged map[lex.Pos]bool) bool {
+func cleanBlock(el *htt.HTMLElementNode, styles analysis.Whitespaces, flagged map[lex.Pos]bool) bool {
 	ws, ok := styles[el]
 	if !ok || flagged[el.Start()] || repairedTags[strings.ToLower(el.TagName)] {
 		return false
@@ -1603,14 +1604,14 @@ func cleanBlock(el *template.HTMLElementNode, styles analysis.Whitespaces, flagg
 // unless a special element other than address, div or p comes first.
 // analysis.CheckStructure finds only the case where that ancestor is the
 // direct parent.
-func closesListItem(el *template.HTMLElementNode, path []template.Node) *template.HTMLElementNode {
+func closesListItem(el *htt.HTMLElementNode, path []htt.Node) *htt.HTMLElementNode {
 	tag := strings.ToLower(el.TagName)
 	if tag != "li" && tag != "dd" && tag != "dt" {
 		return nil
 	}
 	for i := len(path) - 1; i >= 0; i-- {
 		switch p := path[i].(type) {
-		case *template.HTMLElementNode:
+		case *htt.HTMLElementNode:
 			ancestor := strings.ToLower(p.TagName)
 			switch {
 			case tag == "li" && ancestor == "li",
@@ -1619,7 +1620,7 @@ func closesListItem(el *template.HTMLElementNode, path []template.Node) *templat
 			case specialTags[ancestor] && ancestor != "address" && ancestor != "div" && ancestor != "p":
 				return nil
 			}
-		case *template.DefineNode, *template.BlockNode, *template.HTMLAttributeNode, *template.HTMLCommentNode:
+		case *htt.DefineNode, *htt.BlockNode, *htt.HTMLAttributeNode, *htt.HTMLCommentNode:
 			return nil
 		}
 	}
@@ -1657,13 +1658,13 @@ var specialTags = map[string]bool{
 // in nodes that is not empty (an empty one does not replace another of
 // the same name in html/template), and records names whose bodies are
 // all empty with no body.
-func collectDefines(nodes []template.Node, defines map[string][]*template.ListNode) {
-	record := func(name string, body *template.ListNode) {
+func collectDefines(nodes []htt.Node, defines map[string][]*htt.ListNode) {
+	record := func(name string, body *htt.ListNode) {
 		if body == nil {
 			return
 		}
 		bodies := defines[name]
-		if !template.IsEmptyTree(body) && !slices.Contains(bodies, body) {
+		if !htt.IsEmptyTree(body) && !slices.Contains(bodies, body) {
 			bodies = append(bodies, body)
 		}
 		defines[name] = bodies
@@ -1671,11 +1672,11 @@ func collectDefines(nodes []template.Node, defines map[string][]*template.ListNo
 	}
 	for _, n := range nodes {
 		switch n := n.(type) {
-		case *template.HTMLDocumentFragmentNode:
+		case *htt.HTMLDocumentFragmentNode:
 			collectDefines(n.Children, defines)
-		case *template.HTMLElementNode:
+		case *htt.HTMLElementNode:
 			collectDefines(n.Children, defines)
-		case *template.IfNode, *template.WithNode, *template.RangeNode:
+		case *htt.IfNode, *htt.WithNode, *htt.RangeNode:
 			b := branchOf(n)
 			if b.List != nil {
 				collectDefines(b.List.Nodes, defines)
@@ -1683,9 +1684,9 @@ func collectDefines(nodes []template.Node, defines map[string][]*template.ListNo
 			if b.ElseList != nil {
 				collectDefines(b.ElseList.Nodes, defines)
 			}
-		case *template.DefineNode:
+		case *htt.DefineNode:
 			record(n.Name, n.Body)
-		case *template.BlockNode:
+		case *htt.BlockNode:
 			record(n.Name, n.Body)
 		}
 	}
@@ -1733,17 +1734,17 @@ func (m rootMode) whiteSpace() analysis.WhiteSpace {
 // where it stands, so it governs the defines that override it as well as
 // its own body. Every body takes at least floor: unknown when call
 // sites may be missing (the package's templates could not all be read).
-func callSiteModes(trees []*template.Tree, styles analysis.Whitespaces, floor analysis.WhiteSpace) map[string]rootMode {
+func callSiteModes(trees []*htt.Tree, styles analysis.Whitespaces, floor analysis.WhiteSpace) map[string]rootMode {
 	modes := make(map[string]rootMode)
 	for {
 		w := siteWalk{styles: styles, modes: modes, out: make(map[string]rootMode)}
 		if floor != analysis.WhiteSpaceCollapse {
 			for _, t := range trees {
-				template.Walk(t, func(_ *template.Tree, n template.Node) {
+				htt.Walk(t, func(_ *htt.Tree, n htt.Node) {
 					switch n := n.(type) {
-					case *template.DefineNode:
+					case *htt.DefineNode:
 						w.out[n.Name] = rootMode{ws: floor}
-					case *template.BlockNode:
+					case *htt.BlockNode:
 						w.out[n.Name] = rootMode{ws: floor}
 					}
 				})
@@ -1772,7 +1773,7 @@ func callSiteModes(trees []*template.Tree, styles analysis.Whitespaces, floor an
 type siteContext struct {
 	floor    analysis.WhiteSpace // the least preserving mode a call here has
 	verbatim bool                // a call here is written into an attribute, raw text or RCDATA
-	el       *template.HTMLElementNode
+	el       *htt.HTMLElementNode
 	svg      bool // SVG content outside a foreignObject
 }
 
@@ -1791,7 +1792,7 @@ func (w *siteWalk) site(name string, ctx siteContext) {
 }
 
 // body walks the body of the define or block name from its own top.
-func (w *siteWalk) body(name string, body *template.ListNode) {
+func (w *siteWalk) body(name string, body *htt.ListNode) {
 	if body == nil {
 		return
 	}
@@ -1799,19 +1800,19 @@ func (w *siteWalk) body(name string, body *template.ListNode) {
 	w.walk(body.Nodes, siteContext{floor: m.whiteSpace(), verbatim: m.verbatim})
 }
 
-func (w *siteWalk) walk(nodes []template.Node, ctx siteContext) {
+func (w *siteWalk) walk(nodes []htt.Node, ctx siteContext) {
 	for _, n := range nodes {
 		switch n := n.(type) {
-		case *template.ListNode:
+		case *htt.ListNode:
 			if n != nil {
 				w.walk(n.Nodes, ctx)
 			}
-		case *template.HTMLDocumentFragmentNode:
+		case *htt.HTMLDocumentFragmentNode:
 			w.walk(n.Children, ctx)
-		case *template.HTMLAttributeNode:
+		case *htt.HTMLAttributeNode:
 			w.walk(n.Key, ctx)
 			w.walk(n.Value, ctx)
-		case *template.HTMLElementNode:
+		case *htt.HTMLElementNode:
 			attrs := ctx
 			attrs.verbatim = true
 			w.walk(n.Attr, attrs)
@@ -1826,7 +1827,7 @@ func (w *siteWalk) walk(nodes []template.Node, ctx siteContext) {
 				inner.floor = analysis.WhiteSpaceUnknown
 			}
 			w.walk(n.Children, inner)
-		case *template.IfNode, *template.WithNode, *template.RangeNode:
+		case *htt.IfNode, *htt.WithNode, *htt.RangeNode:
 			b := branchOf(n)
 			if b.List != nil {
 				w.walk(b.List.Nodes, ctx)
@@ -1834,11 +1835,11 @@ func (w *siteWalk) walk(nodes []template.Node, ctx siteContext) {
 			if b.ElseList != nil {
 				w.walk(b.ElseList.Nodes, ctx)
 			}
-		case *template.TemplateNode:
+		case *htt.TemplateNode:
 			w.site(n.Name, ctx)
-		case *template.DefineNode:
+		case *htt.DefineNode:
 			w.body(n.Name, n.Body)
-		case *template.BlockNode:
+		case *htt.BlockNode:
 			w.site(n.Name, ctx)
 			w.body(n.Name, n.Body)
 		}
@@ -1848,25 +1849,25 @@ func (w *siteWalk) walk(nodes []template.Node, ctx siteContext) {
 // raiseBodies raises the white-space of the elements in nodes, which
 // inherit ws, and in the define and block bodies there, which inherit
 // their root modes, to at least that.
-func raiseBodies(nodes []template.Node, ws analysis.WhiteSpace, styles analysis.Whitespaces, modes map[string]rootMode) {
+func raiseBodies(nodes []htt.Node, ws analysis.WhiteSpace, styles analysis.Whitespaces, modes map[string]rootMode) {
 	for _, n := range nodes {
 		switch n := n.(type) {
-		case *template.ListNode:
+		case *htt.ListNode:
 			if n != nil {
 				raiseBodies(n.Nodes, ws, styles, modes)
 			}
-		case *template.HTMLDocumentFragmentNode:
+		case *htt.HTMLDocumentFragmentNode:
 			raiseBodies(n.Children, ws, styles, modes)
-		case *template.HTMLAttributeNode:
+		case *htt.HTMLAttributeNode:
 			raiseBodies(n.Value, ws, styles, modes)
-		case *template.HTMLElementNode:
+		case *htt.HTMLElementNode:
 			if s, ok := styles[n]; ok && s.WhiteSpace < ws {
 				s.WhiteSpace = ws
 				styles[n] = s
 			}
 			raiseBodies(n.Attr, ws, styles, modes)
 			raiseBodies(n.Children, ws, styles, modes)
-		case *template.IfNode, *template.WithNode, *template.RangeNode:
+		case *htt.IfNode, *htt.WithNode, *htt.RangeNode:
 			b := branchOf(n)
 			if b.List != nil {
 				raiseBodies(b.List.Nodes, ws, styles, modes)
@@ -1874,11 +1875,11 @@ func raiseBodies(nodes []template.Node, ws analysis.WhiteSpace, styles analysis.
 			if b.ElseList != nil {
 				raiseBodies(b.ElseList.Nodes, ws, styles, modes)
 			}
-		case *template.DefineNode:
+		case *htt.DefineNode:
 			if n.Body != nil {
 				raiseBodies(n.Body.Nodes, modes[n.Name].whiteSpace(), styles, modes)
 			}
-		case *template.BlockNode:
+		case *htt.BlockNode:
 			if n.Body != nil {
 				raiseBodies(n.Body.Nodes, modes[n.Name].whiteSpace(), styles, modes)
 			}
@@ -1888,9 +1889,9 @@ func raiseBodies(nodes []template.Node, ws analysis.WhiteSpace, styles analysis.
 
 // verbatimDefines adds to bodies the defines in root whose root mode is
 // verbatim: the emitter writes them as they are.
-func verbatimDefines(root *template.ListNode, modes map[string]rootMode, bodies map[*template.DefineNode]bool) {
-	template.Walk(&template.Tree{Root: root}, func(_ *template.Tree, n template.Node) {
-		if d, ok := n.(*template.DefineNode); ok && modes[d.Name].verbatim {
+func verbatimDefines(root *htt.ListNode, modes map[string]rootMode, bodies map[*htt.DefineNode]bool) {
+	htt.Walk(&htt.Tree{Root: root}, func(_ *htt.Tree, n htt.Node) {
+		if d, ok := n.(*htt.DefineNode); ok && modes[d.Name].verbatim {
 			bodies[d] = true
 		}
 	})

@@ -4,24 +4,24 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/typelate/muxt/template"
-	"github.com/typelate/muxt/template/lex"
+	"github.com/typelate/htt"
+	"github.com/typelate/htt/lex"
 )
 
 // pathTo parses input and returns the path to the index-th (0-based)
 // HTMLElementNode whose TagName matches tag, in pre-order.
-func pathTo(t *testing.T, input, tag string, index int) (*template.Tree, []template.Node) {
+func pathTo(t *testing.T, input, tag string, index int) (*htt.Tree, []htt.Node) {
 	t.Helper()
-	tree, err := template.ParseTree("test.gohtml", t.Name(), input, nil, lex.NewOptions())
+	tree, err := htt.ParseTree("test.gohtml", t.Name(), input, nil, lex.NewOptions())
 	if err != nil {
 		t.Fatalf("ParseTree(%q) error: %v", input, err)
 	}
-	var got []template.Node
+	var got []htt.Node
 	matches := 0
-	template.WalkPath(tree, func(_ *template.Tree, path []template.Node, n template.Node) {
-		if el, ok := n.(*template.HTMLElementNode); ok && el.TagName == tag {
+	htt.WalkPath(tree, func(_ *htt.Tree, path []htt.Node, n htt.Node) {
+		if el, ok := n.(*htt.HTMLElementNode); ok && el.TagName == tag {
 			if matches == index && got == nil {
-				got = append([]template.Node(nil), path...) // copy: path is reused
+				got = append([]htt.Node(nil), path...) // copy: path is reused
 			}
 			matches++
 		}

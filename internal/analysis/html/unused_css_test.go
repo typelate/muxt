@@ -5,13 +5,13 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/typelate/muxt/template"
-	"github.com/typelate/muxt/template/lex"
+	"github.com/typelate/htt"
+	"github.com/typelate/htt/lex"
 )
 
 func TestCheckUnusedCSS(t *testing.T) {
 	type want struct {
-		code     template.DiagnosticCode
+		code     htt.DiagnosticCode
 		file     string
 		at       string // source text starting at the diagnostic position
 		contains string // message substring
@@ -29,12 +29,12 @@ func TestCheckUnusedCSS(t *testing.T) {
 		{
 			name:      "rule matches nothing",
 			templates: []string{`<style>.missing { color: red }</style><p class="a"></p>`},
-			want:      []want{{template.DiagUnusedCSSRule, "t0.gohtml", `.missing {`, `no element in the templates matches ".missing"; the rule is unused`}},
+			want:      []want{{htt.DiagUnusedCSSRule, "t0.gohtml", `.missing {`, `no element in the templates matches ".missing"; the rule is unused`}},
 		},
 		{
 			name:      "one selector of a list matches nothing",
 			templates: []string{`<style>.a, .missing {}</style><p class="a"></p>`},
-			want:      []want{{template.DiagUnusedCSSSelector, "t0.gohtml", `.missing {`, `no element in the templates matches ".missing"`}},
+			want:      []want{{htt.DiagUnusedCSSSelector, "t0.gohtml", `.missing {`, `no element in the templates matches ".missing"`}},
 		},
 		{
 			name:      "dynamic class may match",
@@ -47,7 +47,7 @@ func TestCheckUnusedCSS(t *testing.T) {
 		{
 			name:      "rule in a conditional is checked",
 			templates: []string{`<style>{{if .X}}.missing {}{{end}}</style>`},
-			want:      []want{{template.DiagUnusedCSSRule, "t0.gohtml", `.missing {`, `".missing"`}},
+			want:      []want{{htt.DiagUnusedCSSRule, "t0.gohtml", `.missing {`, `".missing"`}},
 		},
 		{
 			name:      "pseudo-elements and pseudo-classes match their element",
@@ -56,7 +56,7 @@ func TestCheckUnusedCSS(t *testing.T) {
 		{
 			name:      "rule in @media is checked",
 			templates: []string{`<style>@media (min-width: 1px) { .missing {} }</style>`},
-			want:      []want{{template.DiagUnusedCSSRule, "t0.gohtml", `.missing {`, `".missing"`}},
+			want:      []want{{htt.DiagUnusedCSSRule, "t0.gohtml", `.missing {`, `".missing"`}},
 		},
 		{
 			name:      "keyframe selectors are not checked",
@@ -65,7 +65,7 @@ func TestCheckUnusedCSS(t *testing.T) {
 		{
 			name:      "descendant combinator in a full document",
 			templates: []string{`<html><body><style>.a .b {}</style><p class="b"></p><div class="a"></div></body></html>`},
-			want:      []want{{template.DiagUnusedCSSRule, "t0.gohtml", `.a .b {`, `".a .b"`}},
+			want:      []want{{htt.DiagUnusedCSSRule, "t0.gohtml", `.a .b {`, `".a .b"`}},
 		},
 		{
 			name: "descendant combinator matching a partial template",
@@ -81,7 +81,7 @@ func TestCheckUnusedCSS(t *testing.T) {
 		{
 			name:      "nested rules",
 			templates: []string{`<style>.a { & .missing {} .b {} }</style><div class="a"><p class="b"></p></div>`},
-			want:      []want{{template.DiagUnusedCSSRule, "t0.gohtml", `& .missing {`, `"& .missing"`}},
+			want:      []want{{htt.DiagUnusedCSSRule, "t0.gohtml", `& .missing {`, `"& .missing"`}},
 		},
 		{
 			name:      "unsupported selector is not checked",
@@ -95,15 +95,15 @@ func TestCheckUnusedCSS(t *testing.T) {
 			name:      "stylesheet file",
 			templates: []string{`<p class="a"></p>`},
 			sheets:    []Stylesheet{{Filename: "app.css", Text: ".a {}\n.missing {}\n"}},
-			want:      []want{{template.DiagUnusedCSSRule, "app.css", `.missing {`, `".missing"`}},
+			want:      []want{{htt.DiagUnusedCSSRule, "app.css", `.missing {`, `".missing"`}},
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			sources := make(map[string]string)
-			var trees []*template.Tree
+			var trees []*htt.Tree
 			for i, text := range test.templates {
 				name := fmt.Sprintf("t%d.gohtml", i)
-				tree, err := template.ParseTree(name, name, text, nil, lex.NewOptions())
+				tree, err := htt.ParseTree(name, name, text, nil, lex.NewOptions())
 				if err != nil {
 					t.Fatalf("ParseTree(%q) error: %v", text, err)
 				}

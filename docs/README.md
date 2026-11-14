@@ -52,7 +52,7 @@ These pages document muxt in four kinds: tutorials, how-to guides, reference and
 - [Type Checking](reference/type-checking.md): what `muxt check` verifies and what it cannot
 - [Template Comments](reference/template-comments.md): which comments reach the response, and why to use `{{/* */}}`
 - [Package Layout](reference/package-layout.md): a full package
-- [Template Engine](reference/template-engine.md): the public `template` packages, versioned with the CLI
+- [Template Engine](reference/template-engine.md): the `github.com/typelate/htt` module muxt uses
 - [Known Issues](reference/known-issues.md): generation errors and their fixes
 
 ## Explanation

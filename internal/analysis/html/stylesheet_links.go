@@ -8,8 +8,9 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/typelate/htt"
+
 	"github.com/typelate/muxt/internal/css/csstree"
-	"github.com/typelate/muxt/template"
 )
 
 // StaticAssets is a URL prefix whose files are read from Files.
@@ -44,14 +45,14 @@ type StaticAssets struct {
 // which is not cascade order: ComputeWhitespace makes a tie between rules
 // of different sheets uncertain (rank.mayBeat), so the order of sheets
 // never decides a property.
-func ResolveStylesheets(trees []*template.Tree, assets []StaticAssets) (sheets []Stylesheet, missing bool, err error) {
+func ResolveStylesheets(trees []*htt.Tree, assets []StaticAssets) (sheets []Stylesheet, missing bool, err error) {
 	r := stylesheetResolver{assets: assets, loaded: make(map[string]int)}
 	for _, t := range trees {
 		if t == nil || t.Root == nil {
 			continue
 		}
-		template.WalkPath(t, func(_ *template.Tree, path []template.Node, n template.Node) {
-			el, ok := n.(*template.HTMLElementNode)
+		htt.WalkPath(t, func(_ *htt.Tree, path []htt.Node, n htt.Node) {
+			el, ok := n.(*htt.HTMLElementNode)
 			if !ok || r.err != nil {
 				return
 			}
@@ -83,11 +84,11 @@ type stylesheetResolver struct {
 
 // link loads the stylesheet el links to; conditional reports that el is
 // somewhere the link may not apply.
-func (r *stylesheetResolver) link(el *template.HTMLElementNode, conditional bool) {
-	var rel, href *template.HTMLAttributeNode
+func (r *stylesheetResolver) link(el *htt.HTMLElementNode, conditional bool) {
+	var rel, href *htt.HTMLAttributeNode
 	for _, n := range el.Attr {
 		switch n := n.(type) {
-		case *template.HTMLAttributeNode:
+		case *htt.HTMLAttributeNode:
 			if n.Namespace != "" {
 				continue
 			}
@@ -103,7 +104,7 @@ func (r *stylesheetResolver) link(el *template.HTMLElementNode, conditional bool
 			case strings.EqualFold(name, "disabled"):
 				conditional = true
 			}
-		case *template.CommentNode:
+		case *htt.CommentNode:
 		default:
 			r.missing = true // an action may add a rel or an href
 			return
@@ -133,7 +134,7 @@ func (r *stylesheetResolver) link(el *template.HTMLElementNode, conditional bool
 }
 
 // href returns the URL reference an href value names.
-func (r *stylesheetResolver) href(value []template.Node) (string, bool) {
+func (r *stylesheetResolver) href(value []htt.Node) (string, bool) {
 	text, action, ok := attrValue(value)
 	if !ok {
 		return "", false
@@ -150,7 +151,7 @@ func (r *stylesheetResolver) href(value []template.Node) (string, bool) {
 }
 
 // pathMethod returns the route whose path method action calls.
-func (r *stylesheetResolver) pathMethod(action *template.ActionNode) (StaticAssets, bool) {
+func (r *stylesheetResolver) pathMethod(action *htt.ActionNode) (StaticAssets, bool) {
 	pipe := action.Pipe
 	if pipe == nil || len(pipe.Decl) > 0 {
 		return StaticAssets{}, false
@@ -161,9 +162,9 @@ func (r *stylesheetResolver) pathMethod(action *template.ActionNode) (StaticAsse
 	}
 	var ident []string
 	switch arg := cmds[0].Args[0].(type) {
-	case *template.FieldNode:
+	case *htt.FieldNode:
 		ident = arg.Ident
-	case *template.VariableNode:
+	case *htt.VariableNode:
 		if len(arg.Ident) == 0 || arg.Ident[0] != "$" {
 			return StaticAssets{}, false
 		}
@@ -309,12 +310,12 @@ func isCondition(condition string) bool {
 // optionalPlace reports whether an element at path may not be in the
 // document: it is in a template branch, or in <template> or <noscript>,
 // whose content does not apply when scripting is on.
-func optionalPlace(path []template.Node) bool {
+func optionalPlace(path []htt.Node) bool {
 	for _, n := range path {
 		if isBranch(n) {
 			return true
 		}
-		if el, ok := n.(*template.HTMLElementNode); ok && (strings.EqualFold(el.TagName, "template") || strings.EqualFold(el.TagName, "noscript")) {
+		if el, ok := n.(*htt.HTMLElementNode); ok && (strings.EqualFold(el.TagName, "template") || strings.EqualFold(el.TagName, "noscript")) {
 			return true
 		}
 	}
@@ -323,9 +324,9 @@ func optionalPlace(path []template.Node) bool {
 
 // conditionalMedia reports whether el has a media attribute that may not
 // match: one that is dynamic, or other than "" and "all".
-func conditionalMedia(el *template.HTMLElementNode) bool {
+func conditionalMedia(el *htt.HTMLElementNode) bool {
 	for _, n := range el.Attr {
-		attr, ok := n.(*template.HTMLAttributeNode)
+		attr, ok := n.(*htt.HTMLAttributeNode)
 		if !ok || attr.Namespace != "" || !strings.EqualFold(staticAttrName(attr), "media") {
 			continue
 		}
@@ -352,14 +353,14 @@ func resolveStylesheetURL(ref, base string) (string, bool) {
 // attrValue returns the text of an attribute value without its quotes and
 // with character references decoded, and the action that leads it, if any.
 // ok is false when the value holds another action.
-func attrValue(value []template.Node) (text string, action *template.ActionNode, ok bool) {
+func attrValue(value []htt.Node) (text string, action *htt.ActionNode, ok bool) {
 	const actionMark = "\x00"
 	var sb strings.Builder
 	for _, n := range value {
 		switch n := n.(type) {
-		case *template.TextNode:
+		case *htt.TextNode:
 			sb.Write(n.Text)
-		case *template.ActionNode:
+		case *htt.ActionNode:
 			if action != nil {
 				return "", nil, false
 			}

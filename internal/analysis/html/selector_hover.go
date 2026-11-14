@@ -4,10 +4,11 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/typelate/htt"
+	"github.com/typelate/htt/lex"
+
 	"github.com/typelate/muxt/internal/css/csstree"
 	"github.com/typelate/muxt/internal/template/selectors"
-	"github.com/typelate/muxt/template"
-	"github.com/typelate/muxt/template/lex"
 )
 
 // Specificity is a selector's specificity: its ID, class, and type
@@ -45,11 +46,11 @@ type SelectorInfo struct {
 
 // SelectorAt returns the selector at pos in a <style> element of t, with
 // its specificity and the elements of t it matches.
-func SelectorAt(t *template.Tree, pos lex.Pos) (SelectorInfo, bool) {
+func SelectorAt(t *htt.Tree, pos lex.Pos) (SelectorInfo, bool) {
 	if t == nil || t.Root == nil {
 		return SelectorInfo{}, false
 	}
-	for _, block := range styleBlocks([]*template.Tree{t}, nil) {
+	for _, block := range styleBlocks([]*htt.Tree{t}, nil) {
 		css := block.css
 		if pos < css.base || pos >= css.pos(len(css.text)) {
 			continue
@@ -66,7 +67,7 @@ func SelectorAt(t *template.Tree, pos lex.Pos) (SelectorInfo, bool) {
 			if pos < css.pos(sel.Loc.Start.Offset) || pos >= css.pos(sel.Loc.End.Offset) {
 				return false
 			}
-			info, found = describeSelector(css, sel, parent, templateRoots([]*template.Tree{t})), true
+			info, found = describeSelector(css, sel, parent, templateRoots([]*htt.Tree{t})), true
 			return true
 		})
 		if found {
@@ -76,7 +77,7 @@ func SelectorAt(t *template.Tree, pos lex.Pos) (SelectorInfo, bool) {
 	return SelectorInfo{}, false
 }
 
-func describeSelector(css cssText, sel *csstree.Selector, parent nestingContext, roots []template.Node) SelectorInfo {
+func describeSelector(css cssText, sel *csstree.Selector, parent nestingContext, roots []htt.Node) SelectorInfo {
 	info := SelectorInfo{
 		Text:        css.source(sel.Loc),
 		Pos:         css.pos(sel.Loc.Start.Offset),

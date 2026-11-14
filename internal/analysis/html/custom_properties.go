@@ -4,8 +4,9 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/typelate/htt"
+
 	"github.com/typelate/muxt/internal/css/csstree"
-	"github.com/typelate/muxt/template"
 )
 
 // CheckCustomProperties reports var() references without a fallback to
@@ -16,7 +17,7 @@ import (
 // not seen. When a template may build a property name (a template action
 // directly before a colon), any custom property may be declared, so nothing
 // is reported.
-func CheckCustomProperties(trees []*template.Tree, sheets []Stylesheet) []StyleDiagnostic {
+func CheckCustomProperties(trees []*htt.Tree, sheets []Stylesheet) []StyleDiagnostic {
 	type reference struct {
 		block styleBlock
 		name  string
@@ -69,7 +70,7 @@ func CheckCustomProperties(trees []*template.Tree, sheets []Stylesheet) []StyleD
 			Pos:      r.block.css.pos(r.loc.Start.Offset),
 			End:      r.block.css.pos(r.loc.End.Offset),
 			Severity: SeverityWarning,
-			Code:     template.DiagUndefinedCSSCustomProperty,
+			Code:     htt.DiagUndefinedCSSCustomProperty,
 			Message:  fmt.Sprintf(msgUndefinedCSSCustomProperty, r.name),
 		}))
 	}

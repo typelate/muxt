@@ -5,8 +5,9 @@ import (
 	"go/types"
 	"testing"
 
+	"github.com/typelate/htt"
+
 	"github.com/typelate/muxt/internal/check"
-	"github.com/typelate/muxt/template"
 )
 
 // TestErrorLocationPrefix states the location and context an error is
@@ -57,7 +58,7 @@ func TestErrorLocationPrefix(t *testing.T) {
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			ts, err := template.New[*types.Signature](tt.setName).Parse(tt.text)
+			ts, err := htt.New[*types.Signature](tt.setName).Parse(tt.text)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -88,7 +89,7 @@ func TestErrorLocationPrefixOfACommand(t *testing.T) {
 		},
 	} {
 		// The undefined function must reach the checker.
-		ts, err := template.New[*types.Signature]("t").SkipFuncCheck().Parse(tt.text)
+		ts, err := htt.New[*types.Signature]("t").SkipFuncCheck().Parse(tt.text)
 		if err != nil {
 			t.Fatal(err)
 		}

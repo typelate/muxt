@@ -15,9 +15,10 @@ import (
 
 	"golang.org/x/tools/txtar"
 
+	"github.com/typelate/htt"
+	"github.com/typelate/htt/lex"
+
 	"github.com/typelate/muxt/internal/template/format/internal/rendering"
-	"github.com/typelate/muxt/template"
-	"github.com/typelate/muxt/template/lex"
 )
 
 // FuzzFormatEquivalent checks that formatting is idempotent and keeps the
@@ -98,7 +99,7 @@ func formatterBug(err error) bool {
 func checkActionShapes(t *testing.T, input, output string) {
 	t.Helper()
 	parse := func(src string) []string {
-		tree, err := template.ParseTree("fuzz.gohtml", "fuzz.gohtml", src, nil, lex.Options{
+		tree, err := htt.ParseTree("fuzz.gohtml", "fuzz.gohtml", src, nil, lex.Options{
 			EmitComment: true,
 			ParseHTML:   true,
 			BreakOK:     true,
@@ -309,7 +310,7 @@ func renderErrorKind(err error) string {
 // unresolvedCalls returns the names src calls with {{template}} that no
 // {{define}} or {{block}} in src defines, in order of first call.
 func unresolvedCalls(src string) []string {
-	tree, err := template.ParseTree("fuzz.gohtml", "fuzz.gohtml", src, nil, lex.Options{
+	tree, err := htt.ParseTree("fuzz.gohtml", "fuzz.gohtml", src, nil, lex.Options{
 		EmitComment: true,
 		ParseHTML:   true,
 		BreakOK:     true,
@@ -320,13 +321,13 @@ func unresolvedCalls(src string) []string {
 	}
 	defined := map[string]bool{"fuzz.gohtml": true}
 	var called []string
-	template.Walk(tree, func(_ *template.Tree, n template.Node) {
+	htt.Walk(tree, func(_ *htt.Tree, n htt.Node) {
 		switch n := n.(type) {
-		case *template.DefineNode:
+		case *htt.DefineNode:
 			defined[n.Name] = true
-		case *template.BlockNode:
+		case *htt.BlockNode:
 			defined[n.Name] = true
-		case *template.TemplateNode:
+		case *htt.TemplateNode:
 			if !slices.Contains(called, n.Name) {
 				called = append(called, n.Name)
 			}

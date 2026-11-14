@@ -4,7 +4,7 @@ import (
 	"go/token"
 	"strings"
 
-	"github.com/typelate/muxt/template"
+	"github.com/typelate/htt"
 )
 
 // DirectiveError is a muxt:fmt comment the formatter cannot apply. The
@@ -42,7 +42,7 @@ type region struct {
 type directives struct {
 	src                   string
 	leftDelim, rightDelim string
-	regions               map[*template.CommentNode]region
+	regions               map[*htt.CommentNode]region
 	// skipGaps are the gaps of a list that lie inside a region.
 	skipGaps map[gapKey]bool
 }
@@ -50,12 +50,12 @@ type directives struct {
 // scanDirectives finds the muxt:fmt comments in root (parsed from src),
 // checks them, and returns the regions they open. It reports the first
 // directive in the source that cannot be applied.
-func scanDirectives(filename, src string, root *template.ListNode, leftDelim, rightDelim string) (*directives, error) {
+func scanDirectives(filename, src string, root *htt.ListNode, leftDelim, rightDelim string) (*directives, error) {
 	s := &directiveScanner{
 		filename: filename,
 		d: &directives{
 			src: src, leftDelim: leftDelim, rightDelim: rightDelim,
-			regions:  make(map[*template.CommentNode]region),
+			regions:  make(map[*htt.CommentNode]region),
 			skipGaps: make(map[gapKey]bool),
 		},
 	}
@@ -72,10 +72,10 @@ type directiveScanner struct {
 
 // flatten returns nodes with document fragments replaced by their
 // children, whitespace-only text included.
-func flatten(nodes []template.Node) []template.Node {
-	var flat []template.Node
+func flatten(nodes []htt.Node) []htt.Node {
+	var flat []htt.Node
 	for _, n := range nodes {
-		if frag, ok := n.(*template.HTMLDocumentFragmentNode); ok {
+		if frag, ok := n.(*htt.HTMLDocumentFragmentNode); ok {
 			flat = append(flat, flatten(frag.Children)...)
 			continue
 		}
@@ -86,8 +86,8 @@ func flatten(nodes []template.Node) []template.Node {
 
 // directiveOf reports the muxt:fmt comment text of n, trimmed: ok is
 // false for any other node.
-func directiveOf(n template.Node) (c *template.CommentNode, text string, ok bool) {
-	c, ok = n.(*template.CommentNode)
+func directiveOf(n htt.Node) (c *htt.CommentNode, text string, ok bool) {
+	c, ok = n.(*htt.CommentNode)
 	if !ok {
 		return nil, "", false
 	}
@@ -109,12 +109,12 @@ func verbOf(text string) string {
 	return ""
 }
 
-func (s *directiveScanner) errorf(c *template.CommentNode, message string) error {
+func (s *directiveScanner) errorf(c *htt.CommentNode, message string) error {
 	return &DirectiveError{Position: s.position(s.d.commentStart(c)), Message: message}
 }
 
 // commentStart is the offset of the left delimiter of c.
-func (d *directives) commentStart(c *template.CommentNode) int {
+func (d *directives) commentStart(c *htt.CommentNode) int {
 	at := int(c.Start()) - len(d.leftDelim)
 	if c.TrimLeft {
 		at -= len("- ")
@@ -123,7 +123,7 @@ func (d *directives) commentStart(c *template.CommentNode) int {
 }
 
 // commentEnd is the offset after the right delimiter of c.
-func (d *directives) commentEnd(c *template.CommentNode) int {
+func (d *directives) commentEnd(c *htt.CommentNode) int {
 	at := int(c.End()) + len(d.rightDelim)
 	if c.TrimRight {
 		at += len(" -")
@@ -140,17 +140,17 @@ func (s *directiveScanner) position(offset int) token.Position {
 
 // spanEnd is the offset after the last byte of n's source, children of
 // an element the source leaves unclosed included.
-func (s *directiveScanner) spanEnd(n template.Node) int {
+func (s *directiveScanner) spanEnd(n htt.Node) int {
 	switch n := n.(type) {
-	case *template.CommentNode:
+	case *htt.CommentNode:
 		return s.d.commentEnd(n)
-	case *template.HTMLElementNode:
+	case *htt.HTMLElementNode:
 		if !n.Closed && !n.Void {
 			if flat := flatten(n.Children); len(flat) > 0 {
 				return max(int(n.End()), s.spanEnd(flat[len(flat)-1]))
 			}
 		}
-	case *template.HTMLDocumentFragmentNode:
+	case *htt.HTMLDocumentFragmentNode:
 		if flat := flatten(n.Children); len(flat) > 0 {
 			return s.spanEnd(flat[len(flat)-1])
 		}
@@ -160,10 +160,10 @@ func (s *directiveScanner) spanEnd(n template.Node) int {
 
 // list checks the directives in the child list key (its children are
 // nodes) and the lists inside it.
-func (s *directiveScanner) list(key template.Node, nodes []template.Node) error {
+func (s *directiveScanner) list(key htt.Node, nodes []htt.Node) error {
 	flat := flatten(nodes)
 	items, _ := splitChildren(nodes)
-	itemIndex := make(map[template.Node]int, len(items))
+	itemIndex := make(map[htt.Node]int, len(items))
 	for i, item := range items {
 		itemIndex[item] = i
 	}
@@ -177,7 +177,7 @@ func (s *directiveScanner) list(key template.Node, nodes []template.Node) error 
 		}
 		return -1
 	}
-	var off *template.CommentNode // the open muxt:fmt off, or nil
+	var off *htt.CommentNode // the open muxt:fmt off, or nil
 	for at, n := range flat {
 		if err := s.inside(n); err != nil {
 			return err
@@ -209,7 +209,7 @@ func (s *directiveScanner) list(key template.Node, nodes []template.Node) error 
 			k := itemIndex[flat[next]]
 			s.d.regions[c] = region{end: s.spanEnd(flat[next]), last: k}
 			s.skipRange(key, itemIndex[c]+1, k)
-			if _, isText := flat[next].(*template.TextNode); isText {
+			if _, isText := flat[next].(*htt.TextNode); isText {
 				// The text's trailing run is the gap after it.
 				s.d.skipGaps[gapKey{key, k + 1}] = true
 			}
@@ -226,12 +226,12 @@ func (s *directiveScanner) list(key template.Node, nodes []template.Node) error 
 
 // nextSibling returns the index in flat of the node after flat[at] that
 // preserve applies to, skipping whitespace and comments, or -1.
-func nextSibling(flat []template.Node, at int) int {
+func nextSibling(flat []htt.Node, at int) int {
 	for i := at + 1; i < len(flat); i++ {
 		switch n := flat[i].(type) {
-		case *template.CommentNode, *template.HTMLCommentNode:
+		case *htt.CommentNode, *htt.HTMLCommentNode:
 			continue
-		case *template.TextNode:
+		case *htt.TextNode:
 			if isRunOnly(n.Text) {
 				continue
 			}
@@ -242,32 +242,32 @@ func nextSibling(flat []template.Node, at int) int {
 }
 
 // inside checks the lists in n.
-func (s *directiveScanner) inside(n template.Node) error {
+func (s *directiveScanner) inside(n htt.Node) error {
 	switch n := n.(type) {
-	case *template.HTMLElementNode:
+	case *htt.HTMLElementNode:
 		return s.list(n, n.Children)
-	case *template.IfNode:
+	case *htt.IfNode:
 		return s.branch(&n.BranchNode)
-	case *template.WithNode:
+	case *htt.WithNode:
 		return s.branch(&n.BranchNode)
-	case *template.RangeNode:
+	case *htt.RangeNode:
 		return s.branch(&n.BranchNode)
-	case *template.DefineNode:
+	case *htt.DefineNode:
 		return s.body(n.Body)
-	case *template.BlockNode:
+	case *htt.BlockNode:
 		return s.body(n.Body)
 	}
 	return nil
 }
 
-func (s *directiveScanner) branch(b *template.BranchNode) error {
+func (s *directiveScanner) branch(b *htt.BranchNode) error {
 	if err := s.body(b.List); err != nil {
 		return err
 	}
 	return s.body(b.ElseList)
 }
 
-func (s *directiveScanner) body(l *template.ListNode) error {
+func (s *directiveScanner) body(l *htt.ListNode) error {
 	if l == nil {
 		return nil
 	}
@@ -275,7 +275,7 @@ func (s *directiveScanner) body(l *template.ListNode) error {
 }
 
 // skipRange marks gaps from through to of key as inside a region.
-func (s *directiveScanner) skipRange(key template.Node, from, to int) {
+func (s *directiveScanner) skipRange(key htt.Node, from, to int) {
 	for i := from; i <= to; i++ {
 		s.d.skipGaps[gapKey{key, i}] = true
 	}
@@ -284,9 +284,9 @@ func (s *directiveScanner) skipRange(key template.Node, from, to int) {
 // startsWithWholeFile reports whether the first thing in the file is a muxt:fmt
 // off that nothing ends (spec §7.2). A muxt:fmt preserve there keeps only
 // the next node, as anywhere else.
-func (d *directives) startsWithWholeFile(root *template.ListNode) bool {
+func (d *directives) startsWithWholeFile(root *htt.ListNode) bool {
 	for _, n := range flatten(root.Nodes) {
-		if text, ok := n.(*template.TextNode); ok && isRunOnly(text.Text) {
+		if text, ok := n.(*htt.TextNode); ok && isRunOnly(text.Text) {
 			continue
 		}
 		c, text, ok := directiveOf(n)

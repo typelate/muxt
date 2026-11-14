@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"runtime/debug"
 	"slices"
 	"strconv"
 	"strings"
@@ -17,8 +18,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/typelate/htt/template"
+
 	"github.com/typelate/muxt/internal/overlay"
-	"github.com/typelate/muxt/template/html"
 )
 
 // loudTest renders the greeting loud from a second package, so its test
@@ -133,7 +135,7 @@ func TestTemplateCoverageReachesAnAttributeInsideABranch(t *testing.T) {
 }
 
 // TestTemplateCoverageWarnsOfARaisedGoLine runs the pre-pass over a module
-// at go 1.24: the engine needs go 1.27, so the go command raises the
+// at go 1.24: htt needs go 1.27, so the go command raises the
 // modfile copy's go line and compiles the module at that language
 // version. The pre-pass says so once and still uses the coverage.
 func TestTemplateCoverageWarnsOfARaisedGoLine(t *testing.T) {
@@ -148,12 +150,39 @@ func TestTemplateCoverageWarnsOfARaisedGoLine(t *testing.T) {
 	got, _, err := templateCoverage(t.Context(), config.toolchain(dir), t.TempDir(), config.goTest(dir).coverage, &warnings)
 	require.NoError(t, err)
 	assert.NotNil(t, got, "the coverage is used; warnings:\n%s", warnings.String())
-	assert.Equal(t, "warning: template coverage was computed at go 1.27 (your go.mod says go 1.24): branches that depend on the older language semantics may be reported unreached\n", warnings.String(), "warnings")
+	assert.Equal(t, "warning: template coverage was computed at go 1.27.0 (your go.mod says go 1.24): branches that depend on the older language semantics may be reported unreached\n", warnings.String(), "warnings")
+}
+
+// TestWarnRaisedGoLine states when a raised go line is worth a warning: a
+// newer language version, not the patch number the go command adds.
+func TestWarnRaisedGoLine(t *testing.T) {
+	for _, tt := range []struct {
+		name, target, used, want string
+	}{
+		{name: "a patch number added", target: "1.27", used: "1.27.0"},
+		{name: "unchanged", target: "1.27.0", used: "1.27.0"},
+		{
+			name: "a newer language version", target: "1.24", used: "1.27.0",
+			want: "warning: template coverage was computed at go 1.27.0 (your go.mod says go 1.24): branches that depend on the older language semantics may be reported unreached\n",
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			engine := overlay.Files{Target: filepath.Join(dir, "target.mod"), ModFile: filepath.Join(dir, "copy.mod")}
+			writeFiles(t, dir, map[string]string{
+				"target.mod": "module m\n\ngo " + tt.target + "\n",
+				"copy.mod":   "module m\n\ngo " + tt.used + "\n",
+			})
+			var warnings strings.Builder
+			warnRaisedGoLine(&warnings, engine)
+			assert.Equal(t, tt.want, warnings.String(), "warnings")
+		})
+	}
 }
 
 // TestTemplateCoverageWarnsOfNewerSharedModules states that a pre-pass in
 // which the go command raised a module both the engine and the test
-// target require, here golang.org/x/net in muxt's own go.mod, warns once,
+// target require, here golang.org/x/net in htt's go.mod, warns once,
 // naming the module and both versions, and still uses the coverage.
 func TestTemplateCoverageWarnsOfNewerSharedModules(t *testing.T) {
 	realGOROOT(t)
@@ -180,7 +209,7 @@ func TestTemplateCoverageWarnsOfNewerSharedModules(t *testing.T) {
 }
 
 // TestTemplateCoverageOffline runs the pre-pass where the go command can
-// fetch nothing: the engine's golang.org/x/net is not in the module cache
+// fetch nothing: htt's golang.org/x/net is not in the module cache
 // and GOPROXY=off. The warning quotes the go command's reason, not a
 // download line, and names no engine gap, since none is to blame.
 func TestTemplateCoverageOffline(t *testing.T) {
@@ -243,8 +272,13 @@ func TestTemplateCoverageRunsTheEngineOverlay(t *testing.T) {
 	got, engine, err := templateCoverage(t.Context(), overlay.Toolchain{}, scratch, run, &warnings)
 	require.NoError(t, err)
 	assert.Equal(t, 1, runs, "go test runs once")
-	assert.Equal(t, "engine from this module", engine, "muxt's own module requires no engine")
-	assert.Empty(t, ran.Version, "the modfile copy of muxt's own go.mod requires nothing")
+	info, ok := debug.ReadBuildInfo()
+	require.True(t, ok, "the test binary has build information")
+	i := slices.IndexFunc(info.Deps, func(m *debug.Module) bool { return m.Path == overlay.Module })
+	require.NotEqual(t, -1, i, "the test binary's build information names htt")
+	built := info.Deps[i].Version
+	assert.Equal(t, built, ran.Version, "the modfile copy requires the htt this binary was built with")
+	assert.Equal(t, "engine github.com/typelate/htt@"+built, engine, "the note names it")
 	assert.Empty(t, warnings.String(), "warnings")
 	assert.Equal(t, coverage{
 		"page": {
@@ -550,7 +584,7 @@ esac
 `
 	goBin := filepath.Join(t.TempDir(), "go")
 	require.NoError(t, os.WriteFile(goBin, []byte(script), 0o755))
-	return overlay.Toolchain{Go: goBin, ModuleDir: muxtDir()}
+	return overlay.Toolchain{Go: goBin}
 }
 
 // realGOROOT skips the test when there is no html/template source to
@@ -596,7 +630,7 @@ func TestCoverageSeesADisabledExport(t *testing.T) {
 
 	out, err := config.goTest(dir).coverage(t.Context(), engine, coverDir)
 	require.NoError(t, err, "the tests pass whatever the export does:\n%s", out.String())
-	assert.True(t, strings.HasPrefix(out.coverDisabled, html.CoverDisabledMarker), "coverDisabled = %q; output:\n%s", out.coverDisabled, out.String())
+	assert.True(t, strings.HasPrefix(out.coverDisabled, template.CoverDisabledMarker), "coverDisabled = %q; output:\n%s", out.coverDisabled, out.String())
 }
 
 // TestRunPlanPreambleCountsThePrePass states that the preamble says the
@@ -620,12 +654,12 @@ func TestRunPlanPreambleCountsThePrePass(t *testing.T) {
 }
 
 // TestRunPlanPreambleNamesTheEngine states that a verbose preamble says
-// which muxt the pre-pass built the engine from, and a quiet one does not.
+// which htt the pre-pass built the engine from, and a quiet one does not.
 func TestRunPlanPreambleNamesTheEngine(t *testing.T) {
 	for _, verbose := range []bool{false, true} {
 		_, p := runnerFixture(t, []bool{true})
 		p.prePass = 2 * time.Second
-		p.engine = "engine github.com/typelate/muxt@v0.19.0"
+		p.engine = "engine github.com/typelate/htt@v0.2.0"
 		var status strings.Builder
 		_, err := runPlan(t.Context(), p, Configuration{Verbose: verbose}, t.TempDir(), &status, suite{
 			baseline: func(context.Context) (string, error) {
@@ -638,7 +672,7 @@ func TestRunPlanPreambleNamesTheEngine(t *testing.T) {
 		require.NoError(t, err)
 		first, _, _ := strings.Cut(status.String(), "\n")
 		if verbose {
-			assert.Contains(t, first, ", coverage pre-pass 2s (engine github.com/typelate/muxt@v0.19.0), ", "verbose preamble %q", first)
+			assert.Contains(t, first, ", coverage pre-pass 2s (engine github.com/typelate/htt@v0.2.0), ", "verbose preamble %q", first)
 		} else {
 			assert.Contains(t, first, ", coverage pre-pass 2s, ", "preamble %q", first)
 		}
@@ -651,11 +685,9 @@ func TestEngineNote(t *testing.T) {
 		files overlay.Files
 		want  string
 	}{
-		{overlay.Files{}, "engine from this module"},
-		{overlay.Files{Version: "v0.19.0"}, "engine github.com/typelate/muxt@v0.19.0"},
-		{overlay.Files{Version: "v0.19.0", ModuleDir: "/src/muxt"}, "engine github.com/typelate/muxt@v0.19.0 => /src/muxt"},
-		{overlay.Files{Version: overlay.PlaceholderVersion, ModuleDir: "/src/muxt"}, "engine github.com/typelate/muxt => /src/muxt"},
-		{overlay.Files{Version: "v0.19.0", TargetVersion: "v0.18.0"}, "engine github.com/typelate/muxt@v0.19.0, not your go.mod's v0.18.0"},
+		{overlay.Files{Version: "v0.2.0"}, "engine github.com/typelate/htt@v0.2.0"},
+		{overlay.Files{Version: "v0.2.0", ModuleDir: "/src/htt"}, "engine github.com/typelate/htt@v0.2.0 => /src/htt"},
+		{overlay.Files{Version: "v0.2.0", TargetVersion: "v0.1.0"}, "engine github.com/typelate/htt@v0.2.0, not your go.mod's v0.1.0"},
 	} {
 		assert.Equal(t, tt.want, engineNote(tt.files), "engineNote(%+v)", tt.files)
 	}

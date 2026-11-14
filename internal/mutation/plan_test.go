@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/typelate/muxt/template"
-	"github.com/typelate/muxt/template/html"
+	"github.com/typelate/htt"
+	html "github.com/typelate/htt/template"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -289,7 +289,7 @@ func TestIndexTreesNamesTheSourceThatDoesNotParse(t *testing.T) {
 }
 
 func TestVerifyReadable(t *testing.T) {
-	treeOf := func(text string) *template.Tree {
+	treeOf := func(text string) *htt.Tree {
 		trees, err := asteval.ParseTrees("page", text, "", "", nil, true)
 		require.NoError(t, err)
 		return trees["page"]
@@ -465,12 +465,12 @@ func TestTemplateFilter(t *testing.T) {
 func TestHasRoot(t *testing.T) {
 	for _, tt := range []struct {
 		name string
-		tree *template.Tree
+		tree *htt.Tree
 		want bool
 	}{
 		{name: "nil tree", tree: nil, want: false},
-		{name: "tree without root", tree: &template.Tree{}, want: false},
-		{name: "tree with root", tree: &template.Tree{Root: &template.ListNode{}}, want: true},
+		{name: "tree without root", tree: &htt.Tree{}, want: false},
+		{name: "tree with root", tree: &htt.Tree{Root: &htt.ListNode{}}, want: true},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			assert.Equal(t, tt.want, hasRoot(tt.tree), "hasRoot(%s)", tt.name)

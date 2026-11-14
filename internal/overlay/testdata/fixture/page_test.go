@@ -21,7 +21,7 @@ func TestExecute(t *testing.T) {
 	if got, want := html.EscapeString("<"), "&lt;"; got != want {
 		t.Errorf("html.EscapeString wrote %s, want %s", got, want)
 	}
-	if got, want := reflect.TypeOf(ts.Tree).Elem().PkgPath(), "github.com/typelate/muxt/template"; got != want {
+	if got, want := reflect.TypeOf(ts.Tree).Elem().PkgPath(), "github.com/typelate/htt"; got != want {
 		t.Errorf("Template.Tree is from %q, want %q: html/template is not the overlaid engine", got, want)
 	}
 }

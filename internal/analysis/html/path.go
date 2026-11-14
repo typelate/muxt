@@ -3,7 +3,7 @@ package analysis
 import (
 	"iter"
 
-	"github.com/typelate/muxt/template"
+	"github.com/typelate/htt"
 )
 
 // Modality describes how control flow qualifies an ancestor
@@ -36,17 +36,17 @@ func worse(a, b Modality) Modality { return max(a, b) }
 // It returns nil inside attribute subtrees, comment bodies, and define
 // bodies (a comment's text is never parsed as content, and a define's
 // element context depends on its call sites).
-func enclosingElement(path []template.Node) (*template.HTMLElementNode, Modality) {
+func enclosingElement(path []htt.Node) (*htt.HTMLElementNode, Modality) {
 	mod := ModalityAlways
 	for i := len(path) - 1; i >= 0; i-- {
 		switch p := path[i].(type) {
-		case *template.HTMLElementNode:
+		case *htt.HTMLElementNode:
 			return p, mod
-		case *template.RangeNode:
+		case *htt.RangeNode:
 			mod = worse(mod, ModalityRepeatedly)
-		case *template.IfNode, *template.WithNode:
+		case *htt.IfNode, *htt.WithNode:
 			mod = worse(mod, ModalityConditionally)
-		case *template.HTMLAttributeNode, *template.DefineNode, *template.HTMLCommentNode:
+		case *htt.HTMLAttributeNode, *htt.DefineNode, *htt.HTMLCommentNode:
 			return nil, mod
 		}
 	}
@@ -56,20 +56,20 @@ func enclosingElement(path []template.Node) (*template.HTMLElementNode, Modality
 // elementAncestors yields HTML element ancestors from nearest to
 // outermost with cumulative modality, stopping where enclosingElement
 // would (attributes, comment bodies, define bodies).
-func elementAncestors(path []template.Node) iter.Seq2[*template.HTMLElementNode, Modality] {
-	return func(yield func(*template.HTMLElementNode, Modality) bool) {
+func elementAncestors(path []htt.Node) iter.Seq2[*htt.HTMLElementNode, Modality] {
+	return func(yield func(*htt.HTMLElementNode, Modality) bool) {
 		mod := ModalityAlways
 		for i := len(path) - 1; i >= 0; i-- {
 			switch p := path[i].(type) {
-			case *template.HTMLElementNode:
+			case *htt.HTMLElementNode:
 				if !yield(p, mod) {
 					return
 				}
-			case *template.RangeNode:
+			case *htt.RangeNode:
 				mod = worse(mod, ModalityRepeatedly)
-			case *template.IfNode, *template.WithNode:
+			case *htt.IfNode, *htt.WithNode:
 				mod = worse(mod, ModalityConditionally)
-			case *template.HTMLAttributeNode, *template.DefineNode, *template.HTMLCommentNode:
+			case *htt.HTMLAttributeNode, *htt.DefineNode, *htt.HTMLCommentNode:
 				return
 			}
 		}

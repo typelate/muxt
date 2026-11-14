@@ -1,4 +1,4 @@
-package html_test
+package overlay_test
 
 import (
 	"bytes"
@@ -88,7 +88,7 @@ func TestC(t *testing.T) {
 	if err := os.Mkdir(coverDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	target, err := overlay.Resolve(t.Context(), overlay.Toolchain{Dir: module, Env: goEnv(), ModuleDir: muxtDir(t)})
+	target, err := overlay.Resolve(t.Context(), overlay.Toolchain{Dir: module, Env: goEnv()})
 	if err != nil {
 		t.Fatalf("overlay.Resolve: %v", err)
 	}
@@ -149,17 +149,6 @@ func goEnv() []string {
 	return append(os.Environ(), "GOWORK=off", "GOTOOLCHAIN=local")
 }
 
-// muxtDir is this repository's directory, which replaces
-// github.com/typelate/muxt in the modfile so that nothing is fetched.
-func muxtDir(t *testing.T) string {
-	t.Helper()
-	out, err := exec.Command("go", "list", "-m", "-f", "{{.Dir}}", "github.com/typelate/muxt").Output()
-	if err != nil {
-		t.Fatalf("go list -m github.com/typelate/muxt: %v", err)
-	}
-	return strings.TrimSpace(string(out))
-}
-
 func runGo(t *testing.T, dir string, env []string, args ...string) {
 	t.Helper()
 	cmd := exec.Command("go", args...)
@@ -170,15 +159,5 @@ func runGo(t *testing.T, dir string, env []string, args ...string) {
 	cmd.Stderr = &out
 	if err := cmd.Run(); err != nil {
 		t.Fatalf("go %s: %v\n%s", strings.Join(args, " "), err, out.Bytes())
-	}
-}
-
-func writeFile(t *testing.T, name, content string) {
-	t.Helper()
-	if err := os.MkdirAll(filepath.Dir(name), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(name, []byte(content), 0o644); err != nil {
-		t.Fatal(err)
 	}
 }

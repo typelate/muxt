@@ -4,15 +4,15 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/typelate/muxt/template/lex"
+	"github.com/typelate/htt/lex"
 
-	"github.com/typelate/muxt/template"
+	"github.com/typelate/htt"
 )
 
 // pipelineText renders a pipeline's commands as written. muxt's parser
 // ends a PipeNode at the action's right delimiter, so PipeNode.String
 // includes the "}}" that upstream's text/template/parse leaves out.
-func pipelineText(p *template.PipeNode) string {
+func pipelineText(p *htt.PipeNode) string {
 	cmds := make([]string, 0, len(p.Commands))
 	for _, c := range p.Commands {
 		cmds = append(cmds, c.String())

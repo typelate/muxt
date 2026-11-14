@@ -4,13 +4,13 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/typelate/muxt/template"
-	"github.com/typelate/muxt/template/lex"
+	"github.com/typelate/htt"
+	"github.com/typelate/htt/lex"
 )
 
 func TestCheckStyleElements(t *testing.T) {
 	type want struct {
-		code     template.DiagnosticCode
+		code     htt.DiagnosticCode
 		at       string // source text starting at the diagnostic position
 		contains string // message substring
 	}
@@ -22,45 +22,45 @@ func TestCheckStyleElements(t *testing.T) {
 		{
 			name:  "unknown property",
 			input: `<style>.a { colr: red }</style>`,
-			want:  []want{{template.DiagUnknownCSSProperty, `colr: red`, `unknown CSS property "colr"`}},
+			want:  []want{{htt.DiagUnknownCSSProperty, `colr: red`, `unknown CSS property "colr"`}},
 		},
 		{
 			name:  "invalid value",
 			input: `<style>.a { margin: 10px foo }</style>`,
-			want:  []want{{template.DiagInvalidCSSValue, `foo }`, `"10px foo" is not a valid value for CSS property "margin"`}},
+			want:  []want{{htt.DiagInvalidCSSValue, `foo }`, `"10px foo" is not a valid value for CSS property "margin"`}},
 		},
 		{
 			name:  "rule in @media",
 			input: `<style>@media (min-width: 1px) { .a { colr: red } }</style>`,
-			want:  []want{{template.DiagUnknownCSSProperty, `colr: red`, `"colr"`}},
+			want:  []want{{htt.DiagUnknownCSSProperty, `colr: red`, `"colr"`}},
 		},
 		{
 			name:  "nested rule",
 			input: `<style>.a { color: red; .b { colr: red } }</style>`,
-			want:  []want{{template.DiagUnknownCSSProperty, `colr: red`, `"colr"`}},
+			want:  []want{{htt.DiagUnknownCSSProperty, `colr: red`, `"colr"`}},
 		},
 		{
 			name:  "declaration in @media nested in a rule",
 			input: `<style>.a { @media (min-width: 1px) { colr: red } }</style>`,
-			want:  []want{{template.DiagUnknownCSSProperty, `colr: red`, `"colr"`}},
+			want:  []want{{htt.DiagUnknownCSSProperty, `colr: red`, `"colr"`}},
 		},
 		{name: "@font-face descriptors are not properties", input: `<style>@font-face { font-family: X; src: url(x.woff2) }</style>`},
 		{name: "@page descriptors are not properties", input: `<style>@page { margin: 1cm; size: A4 }</style>`},
 		{
 			name:  "unknown at-rule",
 			input: `<style>@medai screen { .a { color: red } }</style>`,
-			want:  []want{{template.DiagUnknownCSSAtRule, `@medai`, `unknown CSS at-rule "@medai"`}},
+			want:  []want{{htt.DiagUnknownCSSAtRule, `@medai`, `unknown CSS at-rule "@medai"`}},
 		},
 		{name: "vendor-prefixed at-rule", input: `<style>@-moz-document url-prefix() { .a { color: red } }</style>`},
 		{name: "declaration with a template action", input: `<style>.a { color: {{.C}} }</style>`},
 		{
 			name:  "rule in a conditional",
 			input: `<style>{{if .X}}.a { colr: red }{{end}}</style>`,
-			want:  []want{{template.DiagUnknownCSSProperty, `colr: red`, `"colr"`}},
+			want:  []want{{htt.DiagUnknownCSSProperty, `colr: red`, `"colr"`}},
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			tree, err := template.ParseTree("test.gohtml", test.name, test.input, nil, lex.NewOptions())
+			tree, err := htt.ParseTree("test.gohtml", test.name, test.input, nil, lex.NewOptions())
 			if err != nil {
 				t.Fatalf("ParseTree error: %v", err)
 			}
@@ -98,8 +98,8 @@ func TestCheckStylesheet(t *testing.T) {
 		t.Fatalf("CheckStylesheet = %d diagnostics %v, want 1", len(diags), diags)
 	}
 	d := diags[0]
-	if d.Code != template.DiagUnknownCSSProperty {
-		t.Errorf("code = %q, want %q", d.Code, template.DiagUnknownCSSProperty)
+	if d.Code != htt.DiagUnknownCSSProperty {
+		t.Errorf("code = %q, want %q", d.Code, htt.DiagUnknownCSSProperty)
 	}
 	if got := d.Position; got.Filename != "app.css" || got.Line != 2 || got.Column != 3 {
 		t.Errorf("position = %s, want app.css:2:3", got)

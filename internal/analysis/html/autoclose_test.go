@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/typelate/muxt/template"
-	"github.com/typelate/muxt/template/lex"
+	"github.com/typelate/htt"
+	"github.com/typelate/htt/lex"
 )
 
 func TestCheckAutoClose(t *testing.T) {
@@ -25,7 +25,7 @@ func TestCheckAutoClose(t *testing.T) {
 		{"conditional div in p", `<p>{{if .X}}<div>b</div>{{end}}</p>`, 1, "in some branches"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			tree, err := template.ParseTree("test.gohtml", test.name, test.input, nil, lex.NewOptions())
+			tree, err := htt.ParseTree("test.gohtml", test.name, test.input, nil, lex.NewOptions())
 			if err != nil {
 				t.Fatalf("ParseTree error: %v", err)
 			}

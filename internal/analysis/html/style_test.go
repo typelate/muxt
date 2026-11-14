@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/typelate/muxt/template"
-	"github.com/typelate/muxt/template/lex"
+	"github.com/typelate/htt"
+	"github.com/typelate/htt/lex"
 )
 
 func TestStyleDeclarationAt(t *testing.T) {
@@ -36,7 +36,7 @@ func TestStyleDeclarationAt(t *testing.T) {
 		{name: "outside a style attribute", input: `<p title="color: red">x</p>`, cursor: "red"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			tree, err := template.ParseTree("test.gohtml", test.name, test.input, nil, lex.NewOptions())
+			tree, err := htt.ParseTree("test.gohtml", test.name, test.input, nil, lex.NewOptions())
 			if err != nil {
 				t.Fatalf("ParseTree error: %v", err)
 			}
@@ -72,7 +72,7 @@ func TestStyleDeclarationAt(t *testing.T) {
 
 func TestCheckStyleAttributes(t *testing.T) {
 	type want struct {
-		code     template.DiagnosticCode
+		code     htt.DiagnosticCode
 		at       string // source text starting at the diagnostic position
 		contains string // message substring
 	}
@@ -84,18 +84,18 @@ func TestCheckStyleAttributes(t *testing.T) {
 		{
 			name:  "unknown property",
 			input: `<p style="colr: red"></p>`,
-			want:  []want{{template.DiagUnknownCSSProperty, `colr: red`, `unknown CSS property "colr"`}},
+			want:  []want{{htt.DiagUnknownCSSProperty, `colr: red`, `unknown CSS property "colr"`}},
 		},
 		{
 			name:  "value does not match the property syntax",
 			input: `<p style="margin: 10px foo"></p>`,
-			want:  []want{{template.DiagInvalidCSSValue, `foo"`, `"10px foo" is not a valid value for CSS property "margin"; want <'margin-top'>{1,4}`}},
+			want:  []want{{htt.DiagInvalidCSSValue, `foo"`, `"10px foo" is not a valid value for CSS property "margin"; want <'margin-top'>{1,4}`}},
 		},
 		{name: "declaration with a template action is not checked", input: `<p style="color: {{.C}}; margin: 0"></p>`},
 		{
 			name:  "static declaration next to a dynamic one is checked",
 			input: `<p style="color: {{.C}}; colr: red"></p>`,
-			want:  []want{{template.DiagUnknownCSSProperty, `colr: red`, `unknown CSS property "colr"`}},
+			want:  []want{{htt.DiagUnknownCSSProperty, `colr: red`, `unknown CSS property "colr"`}},
 		},
 		{name: "whole value is dynamic", input: `<p style="{{.S}}"></p>`},
 		{name: "custom property and var()", input: `<p style="--gap: 1rem; gap: var(--gap)"></p>`},
@@ -104,16 +104,16 @@ func TestCheckStyleAttributes(t *testing.T) {
 		{
 			name:  "conditional style attribute",
 			input: `<p {{if .X}}style="colr: red"{{end}}></p>`,
-			want:  []want{{template.DiagUnknownCSSProperty, `colr: red`, `unknown CSS property "colr"`}},
+			want:  []want{{htt.DiagUnknownCSSProperty, `colr: red`, `unknown CSS property "colr"`}},
 		},
 		{
 			name:  "style attribute name is case-insensitive",
 			input: `<p STYLE="colr: red"></p>`,
-			want:  []want{{template.DiagUnknownCSSProperty, `colr: red`, `unknown CSS property "colr"`}},
+			want:  []want{{htt.DiagUnknownCSSProperty, `colr: red`, `unknown CSS property "colr"`}},
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			tree, err := template.ParseTree("test.gohtml", test.name, test.input, nil, lex.NewOptions())
+			tree, err := htt.ParseTree("test.gohtml", test.name, test.input, nil, lex.NewOptions())
 			if err != nil {
 				t.Fatalf("ParseTree error: %v", err)
 			}

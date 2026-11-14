@@ -9,9 +9,10 @@ import (
 	texttemplate "text/template"
 	textparse "text/template/parse"
 
+	"github.com/typelate/htt"
+	"github.com/typelate/htt/lex"
+
 	"github.com/typelate/muxt/internal/template/format/internal/rendering"
-	"github.com/typelate/muxt/template"
-	"github.com/typelate/muxt/template/lex"
 )
 
 // TestActionFormat pins how the formatter prints action interiors (spec
@@ -373,7 +374,7 @@ func emptyText(n textparse.Node) {
 
 func parseShapes(t *testing.T, src, left, right string) []string {
 	t.Helper()
-	tree, err := template.ParseTree("t.gohtml", "t.gohtml", src, nil, lex.Options{
+	tree, err := htt.ParseTree("t.gohtml", "t.gohtml", src, nil, lex.Options{
 		EmitComment: true,
 		ParseHTML:   true,
 		BreakOK:     true,
@@ -418,7 +419,7 @@ func TestActionShapes(t *testing.T) {
 // TestActionUnread checks that an action the emitter cannot find in its
 // source is reported, not silently left as written.
 func TestActionUnread(t *testing.T) {
-	tree, err := template.ParseTree("t", "t", "<p>{{ .X }}</p>", nil, lex.Options{EmitComment: true, ParseHTML: true})
+	tree, err := htt.ParseTree("t", "t", "<p>{{ .X }}</p>", nil, lex.Options{EmitComment: true, ParseHTML: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -431,7 +432,7 @@ func TestActionUnread(t *testing.T) {
 // TestDefinedNames pins the count Source's guard compares: distinct
 // define and block names.
 func TestDefinedNames(t *testing.T) {
-	tree, err := template.ParseTree("t", "t", `{{define "a"}}{{end}}{{block "b" .}}{{end}}{{define "a"}}{{end}}`, nil, lex.Options{EmitComment: true, ParseHTML: true})
+	tree, err := htt.ParseTree("t", "t", `{{define "a"}}{{end}}{{block "b" .}}{{end}}{{define "a"}}{{end}}`, nil, lex.Options{EmitComment: true, ParseHTML: true})
 	if err != nil {
 		t.Fatal(err)
 	}

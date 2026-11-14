@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"go/version"
 	"io"
 	"os"
 	"path/filepath"
@@ -40,7 +41,7 @@ func (c Configuration) toolchain(dir string) overlay.Toolchain {
 
 // templateCoverage runs the coverage pre-pass: the tests once, unmutated,
 // with muxt's template engine laid over html/template, and returns the
-// union of the blocks every test binary reports executing, and which muxt
+// union of the blocks every test binary reports executing, and which htt
 // module the engine came from, as engineNote says it, empty when no go
 // test ran. It writes under scratch, the run's own directory, which the
 // caller removes.
@@ -107,20 +108,12 @@ func templateCoverage(ctx context.Context, tc overlay.Toolchain, scratch string,
 	return cov, engineNote(engine), nil
 }
 
-// engineNote says which github.com/typelate/muxt the pre-pass built the
+// engineNote says which github.com/typelate/htt the pre-pass built the
 // engine from, for the verbose preamble: the version the modfile copy
 // requires, the directory replacing it, and the test target's own
-// requirement when the copy overrode it. A placeholder version, which a
-// development build of muxt is required at, says nothing, so it is left
-// out.
+// requirement when the copy overrode it.
 func engineNote(engine overlay.Files) string {
-	if engine.Version == "" {
-		return "engine from this module"
-	}
-	note := "engine " + overlay.Module
-	if engine.Version != overlay.PlaceholderVersion {
-		note += "@" + engine.Version
-	}
+	note := "engine " + overlay.Module + "@" + engine.Version
 	if engine.ModuleDir != "" {
 		note += " => " + engine.ModuleDir
 	}
@@ -143,7 +136,7 @@ func warnRaisedGoLine(warn io.Writer, engine overlay.Files) {
 	switch {
 	case err != nil:
 		_, _ = fmt.Fprintf(warn, "warning: cannot tell the go line template coverage was computed at: %v\n", err)
-	case used != target:
+	case version.Lang("go"+used) != version.Lang("go"+target):
 		_, _ = fmt.Fprintf(warn, "warning: template coverage was computed at go %s (your go.mod says go %s): branches that depend on the older language semantics may be reported unreached\n", used, target)
 	}
 }

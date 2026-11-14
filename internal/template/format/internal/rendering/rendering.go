@@ -15,9 +15,10 @@ import (
 	"golang.org/x/net/html"
 	"golang.org/x/net/html/atom"
 
+	"github.com/typelate/htt"
+	"github.com/typelate/htt/lex"
+
 	analysis "github.com/typelate/muxt/internal/analysis/html"
-	"github.com/typelate/muxt/template"
-	"github.com/typelate/muxt/template/lex"
 )
 
 // Context is the element a rendered fragment is parsed in.
@@ -228,15 +229,15 @@ func classify(nodes []*html.Node, sheets []analysis.Stylesheet) (map[*html.Node]
 	}
 	options := lex.NewOptions()
 	options.LeftDelim, options.RightDelim = "\x00{", "}\x00"
-	tree, err := template.ParseTree("rendered.html", "rendered", sb.String(), nil, options)
+	tree, err := htt.ParseTree("rendered.html", "rendered", sb.String(), nil, options)
 	if err != nil {
 		return nil, fmt.Errorf("parsing rendered HTML as a template: %w", err)
 	}
-	computed := analysis.ComputeWhitespace([]*template.Tree{tree}, analysis.WhitespaceOptions{Sheets: sheets, AuthorCSSKnown: true})
+	computed := analysis.ComputeWhitespace([]*htt.Tree{tree}, analysis.WhitespaceOptions{Sheets: sheets, AuthorCSSKnown: true})
 
-	var elements []*template.HTMLElementNode
-	template.Walk(tree, func(_ *template.Tree, n template.Node) {
-		if el, ok := n.(*template.HTMLElementNode); ok {
+	var elements []*htt.HTMLElementNode
+	htt.Walk(tree, func(_ *htt.Tree, n htt.Node) {
+		if el, ok := n.(*htt.HTMLElementNode); ok {
 			elements = append(elements, el)
 		}
 	})

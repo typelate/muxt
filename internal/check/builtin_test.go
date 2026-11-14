@@ -9,8 +9,9 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/tools/go/packages"
 
+	"github.com/typelate/htt"
+
 	"github.com/typelate/muxt/internal/check"
-	"github.com/typelate/muxt/template"
 )
 
 var _ check.VerboseErrorer = (*check.BuiltinError)(nil)
@@ -68,7 +69,7 @@ func TestComparisonBuiltinArgCounts(t *testing.T) {
 		types.NewField(0, testPkg.Types, "N", types.Typ[types.Int], false),
 	}, nil)
 	checkTemplate := func(src string) error {
-		tp, err := template.New[*types.Signature]("main").Parse(src)
+		tp, err := htt.New[*types.Signature]("main").Parse(src)
 		require.NoError(t, err)
 		global := check.NewGlobal(testPkg.Types, testPkg.Fset, tp, check.DefaultFunctions(testPkg.Types))
 		tree, ok := tp.FindTree("main")
@@ -104,7 +105,7 @@ func TestBuiltInCheckReturnsBuiltinError(t *testing.T) {
 	testPkg := find(t, loadPkg(), func(p *packages.Package) bool {
 		return p.Name == packageName
 	})
-	tmpl, err := template.New[*types.Signature]("main").Parse("{{len .N}}")
+	tmpl, err := htt.New[*types.Signature]("main").Parse("{{len .N}}")
 	require.NoError(t, err)
 	dt := types.NewStruct([]*types.Var{
 		types.NewField(0, testPkg.Types, "N", types.Typ[types.Int], false),

@@ -9,16 +9,17 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/typelate/htt"
+	"github.com/typelate/htt/lex"
+
 	analysis "github.com/typelate/muxt/internal/analysis/html"
 	"github.com/typelate/muxt/internal/template/format"
 	"github.com/typelate/muxt/internal/template/format/internal/rendering"
-	"github.com/typelate/muxt/template"
-	"github.com/typelate/muxt/template/lex"
 )
 
-func parse(t *testing.T, input string) template.Node {
+func parse(t *testing.T, input string) htt.Node {
 	t.Helper()
-	tree, err := template.ParseTree("test", "test", input, nil, lex.NewOptions())
+	tree, err := htt.ParseTree("test", "test", input, nil, lex.NewOptions())
 	require.NoError(t, err)
 	return tree.Root
 }
@@ -61,7 +62,7 @@ func TestCustomDelimiters(t *testing.T) {
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			tree, err := template.ParseTree("test", "test", tt.input, nil, lex.Options{
+			tree, err := htt.ParseTree("test", "test", tt.input, nil, lex.Options{
 				EmitComment: true,
 				ParseHTML:   true,
 				LeftDelim:   tt.left,

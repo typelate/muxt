@@ -16,10 +16,11 @@ import (
 	"text/template"
 
 	"github.com/stretchr/testify/require"
-	"github.com/typelate/muxt/internal/check"
-	htt "github.com/typelate/muxt/template"
-	"github.com/typelate/muxt/template/lex"
+	htt "github.com/typelate/htt"
+	"github.com/typelate/htt/lex"
 	"golang.org/x/tools/go/packages"
+
+	"github.com/typelate/muxt/internal/check"
 )
 
 // bigInt and bigUint are hex string representing numbers either side

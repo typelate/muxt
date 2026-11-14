@@ -3,7 +3,7 @@ package selectors
 import (
 	"strings"
 
-	"github.com/typelate/muxt/template"
+	"github.com/typelate/htt"
 )
 
 // maybePseudo is an interactive/runtime pseudo-class (:hover, :checked, ...)
@@ -11,8 +11,8 @@ import (
 // runtime, so it yields TritMaybe.
 type maybePseudo struct{}
 
-func (maybePseudo) match(n template.Node) Trit {
-	if _, ok := n.(*template.HTMLElementNode); !ok {
+func (maybePseudo) match(n htt.Node) Trit {
+	if _, ok := n.(*htt.HTMLElementNode); !ok {
 		return TritNo
 	}
 	return TritMaybe
@@ -33,8 +33,8 @@ type pseudoNot struct {
 	inner matcher
 }
 
-func (p pseudoNot) match(n template.Node) Trit {
-	if _, ok := n.(*template.HTMLElementNode); !ok {
+func (p pseudoNot) match(n htt.Node) Trit {
+	if _, ok := n.(*htt.HTMLElementNode); !ok {
 		return TritNo
 	}
 	return p.inner.match(n).Not()
@@ -47,8 +47,8 @@ type isPseudo struct {
 	inner matcher
 }
 
-func (s isPseudo) match(n template.Node) Trit {
-	if _, ok := n.(*template.HTMLElementNode); !ok {
+func (s isPseudo) match(n htt.Node) Trit {
+	if _, ok := n.(*htt.HTMLElementNode); !ok {
 		return TritNo
 	}
 	return s.inner.match(n)
@@ -57,8 +57,8 @@ func (s isPseudo) match(n template.Node) Trit {
 // firstChild is the :first-child pseudo-class.
 type firstChild struct{}
 
-func (firstChild) match(n template.Node) Trit {
-	if _, ok := n.(*template.HTMLElementNode); !ok {
+func (firstChild) match(n htt.Node) Trit {
+	if _, ok := n.(*htt.HTMLElementNode); !ok {
 		return TritNo
 	}
 	return noSiblingCertainty(precedingSiblings(n))
@@ -67,8 +67,8 @@ func (firstChild) match(n template.Node) Trit {
 // lastChild is the :last-child pseudo-class.
 type lastChild struct{}
 
-func (lastChild) match(n template.Node) Trit {
-	if _, ok := n.(*template.HTMLElementNode); !ok {
+func (lastChild) match(n htt.Node) Trit {
+	if _, ok := n.(*htt.HTMLElementNode); !ok {
 		return TritNo
 	}
 	return noSiblingCertainty(followingSiblings(n))
@@ -93,21 +93,21 @@ func noSiblingCertainty(sibs []siblingElement) Trit {
 // non-whitespace text. Comments are ignored; dynamic content yields Maybe.
 type empty struct{}
 
-func (empty) match(n template.Node) Trit {
-	el, ok := n.(*template.HTMLElementNode)
+func (empty) match(n htt.Node) Trit {
+	el, ok := n.(*htt.HTMLElementNode)
 	if !ok {
 		return TritNo
 	}
 	sawDynamic := false
 	for _, c := range el.Children {
 		switch x := c.(type) {
-		case *template.HTMLElementNode:
+		case *htt.HTMLElementNode:
 			return TritNo
-		case *template.TextNode:
+		case *htt.TextNode:
 			if strings.TrimSpace(string(x.Text)) != "" {
 				return TritNo
 			}
-		case *template.HTMLCommentNode, *template.CommentNode:
+		case *htt.HTMLCommentNode, *htt.CommentNode:
 			// comments do not affect emptiness
 		default:
 			// actions and control flow may render content at runtime
@@ -122,14 +122,14 @@ func (empty) match(n template.Node) Trit {
 
 // followingSiblings returns the element siblings after n in its container,
 // flattening template control flow.
-func followingSiblings(n template.Node) []siblingElement {
+func followingSiblings(n htt.Node) []siblingElement {
 	container := elementContainer(n)
 	if container == nil {
 		return nil
 	}
 	sibs := flattenedSiblings(container)
 	for i, s := range sibs {
-		if template.Node(s.el) == n {
+		if htt.Node(s.el) == n {
 			return sibs[i+1:]
 		}
 	}
@@ -139,8 +139,8 @@ func followingSiblings(n template.Node) []siblingElement {
 // root is the :root pseudo-class: an element with no element parent.
 type root struct{}
 
-func (root) match(n template.Node) Trit {
-	if _, ok := n.(*template.HTMLElementNode); !ok {
+func (root) match(n htt.Node) Trit {
+	if _, ok := n.(*htt.HTMLElementNode); !ok {
 		return TritNo
 	}
 	if parentElement(n) == nil {
@@ -152,8 +152,8 @@ func (root) match(n template.Node) Trit {
 // onlyChild is the :only-child pseudo-class.
 type onlyChild struct{}
 
-func (onlyChild) match(n template.Node) Trit {
-	if _, ok := n.(*template.HTMLElementNode); !ok {
+func (onlyChild) match(n htt.Node) Trit {
+	if _, ok := n.(*htt.HTMLElementNode); !ok {
 		return TritNo
 	}
 	return noSiblingCertainty(precedingSiblings(n)).And(noSiblingCertainty(followingSiblings(n)))
@@ -165,8 +165,8 @@ type nthChild struct {
 	fromEnd bool
 }
 
-func (s nthChild) match(n template.Node) Trit {
-	if _, ok := n.(*template.HTMLElementNode); !ok {
+func (s nthChild) match(n htt.Node) Trit {
+	if _, ok := n.(*htt.HTMLElementNode); !ok {
 		return TritNo
 	}
 	sibs := precedingSiblings(n)
@@ -202,8 +202,8 @@ type nthOfType struct {
 	fromEnd bool
 }
 
-func (s nthOfType) match(n template.Node) Trit {
-	el, ok := n.(*template.HTMLElementNode)
+func (s nthOfType) match(n htt.Node) Trit {
+	el, ok := n.(*htt.HTMLElementNode)
 	if !ok {
 		return TritNo
 	}
@@ -245,8 +245,8 @@ type hasPseudo struct {
 	rel  matcher
 }
 
-func (s hasPseudo) match(n template.Node) Trit {
-	el, ok := n.(*template.HTMLElementNode)
+func (s hasPseudo) match(n htt.Node) Trit {
+	el, ok := n.(*htt.HTMLElementNode)
 	if !ok {
 		return TritNo
 	}
@@ -259,7 +259,7 @@ func (s hasPseudo) match(n template.Node) Trit {
 		return s.overSiblingElements(followingSiblings(n))
 	default: // descendant
 		result := TritNo
-		walkChildren(el, false, func(cand *template.HTMLElementNode, conditional bool) bool {
+		walkChildren(el, false, func(cand *htt.HTMLElementNode, conditional bool) bool {
 			m := s.rel.match(cand)
 			if conditional {
 				m = m.And(TritMaybe)
@@ -313,6 +313,6 @@ func (s hasPseudo) hasAdjacent(sibs []siblingElement) Trit {
 
 // childElements returns the direct element children of el, flattening control
 // flow (conditional children are marked).
-func childElements(el *template.HTMLElementNode) []siblingElement {
+func childElements(el *htt.HTMLElementNode) []siblingElement {
 	return flattenedSiblings(el)
 }

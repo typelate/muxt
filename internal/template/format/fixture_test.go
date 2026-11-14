@@ -17,10 +17,11 @@ import (
 
 	"golang.org/x/tools/txtar"
 
+	"github.com/typelate/htt"
+	"github.com/typelate/htt/lex"
+
 	analysis "github.com/typelate/muxt/internal/analysis/html"
 	"github.com/typelate/muxt/internal/template/format/internal/rendering"
-	"github.com/typelate/muxt/template"
-	"github.com/typelate/muxt/template/lex"
 )
 
 var update = flag.Bool("update", false, "rewrite format.gohtml in testdata fixtures with the formatter's output")
@@ -31,7 +32,7 @@ var update = flag.Bool("update", false, "rewrite format.gohtml in testdata fixtu
 // is preserved or unknown under sheets). Spans are in source order and do
 // not overlap.
 func opaqueRegions(src string, sheets []analysis.Stylesheet) [][2]int {
-	tree, err := template.ParseTree("opaque", "opaque", src, nil, lex.Options{
+	tree, err := htt.ParseTree("opaque", "opaque", src, nil, lex.Options{
 		EmitComment: true,
 		ParseHTML:   true,
 		BreakOK:     true,
@@ -40,13 +41,13 @@ func opaqueRegions(src string, sheets []analysis.Stylesheet) [][2]int {
 	if err != nil {
 		return nil
 	}
-	styles := analysis.ComputeWhitespace([]*template.Tree{tree}, analysis.WhitespaceOptions{
+	styles := analysis.ComputeWhitespace([]*htt.Tree{tree}, analysis.WhitespaceOptions{
 		Sheets:         sheets,
 		AuthorCSSKnown: true,
 	})
 	var regions [][2]int
 	for _, n := range classify(tree.Root, styles).opaque {
-		el, ok := n.(*template.HTMLElementNode)
+		el, ok := n.(*htt.HTMLElementNode)
 		if !ok {
 			continue
 		}
@@ -305,7 +306,7 @@ func TestWPTFormatting(t *testing.T) {
 // hasBranch reports whether src contains an {{if}}, {{with}} or {{range}},
 // whose arms render only under data that selects them.
 func hasBranch(src string) bool {
-	tree, err := template.ParseTree("input.gohtml", "input.gohtml", src, nil, lex.Options{
+	tree, err := htt.ParseTree("input.gohtml", "input.gohtml", src, nil, lex.Options{
 		EmitComment: true,
 		ParseHTML:   true,
 		BreakOK:     true,
@@ -315,9 +316,9 @@ func hasBranch(src string) bool {
 		return false
 	}
 	found := false
-	template.Walk(tree, func(_ *template.Tree, n template.Node) {
+	htt.Walk(tree, func(_ *htt.Tree, n htt.Node) {
 		switch n.(type) {
-		case *template.IfNode, *template.WithNode, *template.RangeNode:
+		case *htt.IfNode, *htt.WithNode, *htt.RangeNode:
 			found = true
 		}
 	})
@@ -400,7 +401,7 @@ func checkOpaqueRegions(t *testing.T, name, input, output string, sheets []analy
 // offsets into src stay valid. A src that does not parse is returned as
 // it is.
 func maskActions(src string) string {
-	tree, err := template.ParseTree("mask", "mask", src, nil, lex.Options{
+	tree, err := htt.ParseTree("mask", "mask", src, nil, lex.Options{
 		EmitComment: true,
 		ParseHTML:   true,
 		BreakOK:     true,
@@ -533,7 +534,7 @@ func oracleCallerDefine(c rendering.Caller) string {
 // defineCallers lists the top-level render (an empty Source) plus the
 // synthetic callers of each {{define}} in src.
 func defineCallers(src string) ([]rendering.Caller, error) {
-	tree, err := template.ParseTree("input.gohtml", "input.gohtml", src, nil, lex.Options{
+	tree, err := htt.ParseTree("input.gohtml", "input.gohtml", src, nil, lex.Options{
 		EmitComment: true,
 		ParseHTML:   true,
 		BreakOK:     true,
@@ -545,17 +546,17 @@ func defineCallers(src string) ([]rendering.Caller, error) {
 	callers := []rendering.Caller{{Name: "top", Context: rendering.Body}}
 	var defines []string
 	firstElement := make(map[string]string)
-	template.WalkPath(tree, func(_ *template.Tree, path []template.Node, n template.Node) {
-		if d, ok := n.(*template.DefineNode); ok {
+	htt.WalkPath(tree, func(_ *htt.Tree, path []htt.Node, n htt.Node) {
+		if d, ok := n.(*htt.DefineNode); ok {
 			defines = append(defines, d.Name)
 			return
 		}
-		el, ok := n.(*template.HTMLElementNode)
+		el, ok := n.(*htt.HTMLElementNode)
 		if !ok {
 			return
 		}
 		for _, p := range path {
-			if d, ok := p.(*template.DefineNode); ok {
+			if d, ok := p.(*htt.DefineNode); ok {
 				if _, seen := firstElement[d.Name]; !seen {
 					firstElement[d.Name] = strings.ToLower(el.TagName)
 				}
@@ -600,7 +601,7 @@ func render(src, callerSrc string, data map[string]any) (string, error) {
 // preserve ask the formatter to copy unchanged, in source order, without
 // those inside another.
 func directiveRegions(src string) [][2]int {
-	tree, err := template.ParseTree("directives", "directives", src, nil, lex.Options{
+	tree, err := htt.ParseTree("directives", "directives", src, nil, lex.Options{
 		EmitComment: true,
 		ParseHTML:   true,
 		BreakOK:     true,

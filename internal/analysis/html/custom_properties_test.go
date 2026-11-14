@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/typelate/muxt/template"
-	"github.com/typelate/muxt/template/lex"
+	"github.com/typelate/htt"
+	"github.com/typelate/htt/lex"
 )
 
 func TestCheckCustomProperties(t *testing.T) {
@@ -76,10 +76,10 @@ func TestCheckCustomProperties(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			sources := make(map[string]string)
-			var trees []*template.Tree
+			var trees []*htt.Tree
 			for i, text := range test.templates {
 				name := fmt.Sprintf("t%d.gohtml", i)
-				tree, err := template.ParseTree(name, name, text, nil, lex.NewOptions())
+				tree, err := htt.ParseTree(name, name, text, nil, lex.NewOptions())
 				if err != nil {
 					t.Fatalf("ParseTree(%q) error: %v", text, err)
 				}
@@ -97,8 +97,8 @@ func TestCheckCustomProperties(t *testing.T) {
 			}
 			for i, w := range test.want {
 				d := diags[i]
-				if d.Code != template.DiagUndefinedCSSCustomProperty {
-					t.Errorf("diagnostic %d code = %q, want %q", i, d.Code, template.DiagUndefinedCSSCustomProperty)
+				if d.Code != htt.DiagUndefinedCSSCustomProperty {
+					t.Errorf("diagnostic %d code = %q, want %q", i, d.Code, htt.DiagUndefinedCSSCustomProperty)
 				}
 				if d.Severity != SeverityWarning {
 					t.Errorf("diagnostic %d severity = %v, want %v", i, d.Severity, SeverityWarning)

@@ -18,8 +18,9 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/tools/go/packages"
 
+	"github.com/typelate/htt"
+
 	"github.com/typelate/muxt/internal/check"
-	"github.com/typelate/muxt/template"
 )
 
 const packageName = "check_test"
@@ -909,7 +910,7 @@ func TestTree(t *testing.T) {
 				sourceFunctions[name] = sig
 			}
 
-			tmpl := template.New[*types.Signature]("template").SkipFuncCheck() // unknown functions reach the checker
+			tmpl := htt.New[*types.Signature]("template").SkipFuncCheck() // unknown functions reach the checker
 			tmpl = tmpl.Functions(sourceFunctions)
 			tmpl, parseErr := tmpl.Parse(tt.Template)
 			require.NoError(t, parseErr)
@@ -933,7 +934,7 @@ func TestTree(t *testing.T) {
 		obj, _, _ := types.LookupFieldOrMethod(fooer, false, testPkg.Types, "Foo")
 		require.NotNil(t, obj)
 
-		tmpl := template.New[*types.Signature]("")
+		tmpl := htt.New[*types.Signature]("")
 		tmpl, err := tmpl.Parse(`{{.Foo}}`)
 		require.NoError(t, err)
 		global := check.NewGlobal(testPkg.Types, testPkg.Fset, nil, nil)
@@ -946,7 +947,7 @@ func TestTree(t *testing.T) {
 		obj, _, _ := types.LookupFieldOrMethod(fooer, false, testPkg.Types, "Foo")
 		require.NotNil(t, obj)
 
-		tmpl := template.New[*types.Signature]("")
+		tmpl := htt.New[*types.Signature]("")
 		tmpl, err := tmpl.Parse(`{{.Foo}}`)
 		require.NoError(t, err)
 		global := check.NewGlobal(testPkg.Types, testPkg.Fset, nil, nil)
@@ -959,7 +960,7 @@ func TestTemplateNodeTypeHook(t *testing.T) {
 		return p.Name == packageName
 	})
 
-	tmpl := template.New[*types.Signature]("main")
+	tmpl := htt.New[*types.Signature]("main")
 	tmpl, err := tmpl.Parse(`{{define "sub"}}{{.Field}}{{end}}{{template "sub" .Data}}`)
 	require.NoError(t, err)
 
@@ -989,7 +990,7 @@ func TestTemplateNodeTypeHook(t *testing.T) {
 	)
 
 	var hookCalls []HookCall
-	global.InspectTemplateNode = func(node *template.TemplateNode, t *template.Tree, tp types.Type, _ check.Definition) {
+	global.InspectTemplateNode = func(node *htt.TemplateNode, t *htt.Tree, tp types.Type, _ check.Definition) {
 		hookCalls = append(hookCalls, HookCall{
 			treeName:   t.Name,
 			nodeName:   node.Name,
@@ -1017,7 +1018,7 @@ func TestNodeTypeHook(t *testing.T) {
 		return p.Name == packageName
 	})
 
-	tmpl := template.New[*types.Signature]("main")
+	tmpl := htt.New[*types.Signature]("main")
 	// "sub" is invoked from two call sites with different dot types: .Data
 	// (whose Field is string) and .Other (whose Field is int).
 	tmpl, err := tmpl.Parse(`{{.Data}}{{define "sub"}}{{.Field}}{{end}}{{template "sub" .Data}}{{template "sub" .Other}}`)
@@ -1055,7 +1056,7 @@ func TestNodeTypeHook(t *testing.T) {
 
 	// The .Data field access in "main" resolves to the inner struct.
 	dataField := find(t, infos, func(i check.NodeTypeInfo) bool {
-		_, ok := i.Node.(*template.FieldNode)
+		_, ok := i.Node.(*htt.FieldNode)
 		return ok && i.Tree.Name == "main" && i.Type != nil &&
 			strings.Contains(i.Type.String(), "struct{") && strings.Contains(i.Type.String(), "string")
 	})
@@ -1069,7 +1070,7 @@ func TestNodeTypeHook(t *testing.T) {
 	// builds on.
 	var subFieldTypes []string
 	for _, i := range infos {
-		if _, ok := i.Node.(*template.FieldNode); ok && i.Tree.Name == "sub" && i.Type != nil {
+		if _, ok := i.Node.(*htt.FieldNode); ok && i.Tree.Name == "sub" && i.Type != nil {
 			subFieldTypes = append(subFieldTypes, i.Type.String())
 		}
 	}
@@ -1079,7 +1080,7 @@ func TestNodeTypeHook(t *testing.T) {
 	// The field node also carries the Go object it resolves to (for
 	// go-to-definition), and only field nodes do.
 	dataObj := find(t, infos, func(i check.NodeTypeInfo) bool {
-		fn, ok := i.Node.(*template.FieldNode)
+		fn, ok := i.Node.(*htt.FieldNode)
 		return ok && i.Tree.Name == "main" && len(fn.Ident) > 0 && fn.Ident[len(fn.Ident)-1] == "Data"
 	})
 	require.NotNil(t, dataObj.Object, "field node should carry its resolved object")
@@ -1093,7 +1094,7 @@ func TestNodeTypeHookMapIndexHasNoObject(t *testing.T) {
 		return p.Name == packageName
 	})
 
-	tmpl := template.New[*types.Signature]("main")
+	tmpl := htt.New[*types.Signature]("main")
 	tmpl, err := tmpl.Parse(`{{.M.Key}}`)
 	require.NoError(t, err)
 
@@ -1115,7 +1116,7 @@ func TestNodeTypeHookMapIndexHasNoObject(t *testing.T) {
 	// node must carry no Object — otherwise go-to-definition would wrongly
 	// jump to M's definition.
 	fieldInfo := find(t, infos, func(i check.NodeTypeInfo) bool {
-		fn, ok := i.Node.(*template.FieldNode)
+		fn, ok := i.Node.(*htt.FieldNode)
 		return ok && len(fn.Ident) == 2 && fn.Ident[0] == "M" && fn.Ident[1] == "Key"
 	})
 	assert.Equal(t, "int", fieldInfo.Type.String())
@@ -1155,7 +1156,7 @@ func TestBareDotEmitsDotType(t *testing.T) {
 	testPkg := find(t, loadPkg(), func(p *packages.Package) bool {
 		return p.Name == packageName
 	})
-	tmpl, err := template.New[*types.Signature]("main").Parse(`{{.}}`)
+	tmpl, err := htt.New[*types.Signature]("main").Parse(`{{.}}`)
 	require.NoError(t, err)
 	dt := types.NewStruct([]*types.Var{
 		types.NewField(0, testPkg.Types, "Name", types.Typ[types.String], false),
@@ -1171,7 +1172,7 @@ func TestBareDotEmitsDotType(t *testing.T) {
 	// {{.}} emits a DotNode carrying the dot type, so a completion probe can
 	// read the dot's members for the first selector segment.
 	dotInfo := find(t, infos, func(i check.NodeTypeInfo) bool {
-		_, ok := i.Node.(*template.DotNode)
+		_, ok := i.Node.(*htt.DotNode)
 		return ok
 	})
 	require.NotNil(t, dotInfo.Type)
@@ -1185,7 +1186,7 @@ func TestNodeTypeHookEmitsVars(t *testing.T) {
 	testPkg := find(t, loadPkg(), func(p *packages.Package) bool {
 		return p.Name == packageName
 	})
-	tmpl, err := template.New[*types.Signature]("main").Parse(
+	tmpl, err := htt.New[*types.Signature]("main").Parse(
 		`{{range $i, $v := .Items}}{{$v}}{{end}}`,
 	)
 	require.NoError(t, err)
@@ -1204,7 +1205,7 @@ func TestNodeTypeHookEmitsVars(t *testing.T) {
 	// The {{$v}} inside the range body carries the range's loop variables in
 	// scope, so variable completion there offers $i (int) and $v (string).
 	vInfo := find(t, infos, func(i check.NodeTypeInfo) bool {
-		v, ok := i.Node.(*template.VariableNode)
+		v, ok := i.Node.(*htt.VariableNode)
 		return ok && len(v.Ident) > 0 && v.Ident[0] == "$v"
 	})
 	require.NotNil(t, vInfo.Vars)
@@ -1220,7 +1221,7 @@ func TestNodeTypeVarsSnapshotIsFrozen(t *testing.T) {
 	// $a is declared, then referenced, then $b is declared. The {{$a}}
 	// reference must not see $b — its Vars snapshot is frozen at emit and
 	// must not pick up a variable declared later in the same list.
-	tmpl, err := template.New[*types.Signature]("main").Parse(
+	tmpl, err := htt.New[*types.Signature]("main").Parse(
 		`{{$a := .Name}}{{$a}}{{$b := .Name}}{{$b}}`,
 	)
 	require.NoError(t, err)
@@ -1237,7 +1238,7 @@ func TestNodeTypeVarsSnapshotIsFrozen(t *testing.T) {
 
 	varRef := func(name string) check.NodeTypeInfo {
 		return find(t, infos, func(i check.NodeTypeInfo) bool {
-			v, ok := i.Node.(*template.VariableNode)
+			v, ok := i.Node.(*htt.VariableNode)
 			return ok && len(v.Ident) > 0 && v.Ident[0] == name
 		})
 	}
@@ -1253,7 +1254,7 @@ func TestErrorPositionAndUnwrap(t *testing.T) {
 	testPkg := find(t, loadPkg(), func(p *packages.Package) bool {
 		return p.Name == packageName
 	})
-	tmpl, err := template.New[*types.Signature]("main").Parse("x{{.Missing}}y")
+	tmpl, err := htt.New[*types.Signature]("main").Parse("x{{.Missing}}y")
 	require.NoError(t, err)
 	dt := types.NewStruct([]*types.Var{
 		types.NewField(0, testPkg.Types, "Name", types.Typ[types.String], false),
@@ -1375,7 +1376,7 @@ func TestErrorUnwrap(t *testing.T) {
 
 	sourceFunctions := check.DefaultFunctions(testPkg.Types)
 
-	tmpl := template.New[*types.Signature]("template")
+	tmpl := htt.New[*types.Signature]("template")
 	tmpl = tmpl.Functions(sourceFunctions)
 	tmpl, err := tmpl.Parse(`{{.MissingField}}`)
 	require.NoError(t, err)
@@ -1395,10 +1396,10 @@ func TestErrorUnwrap(t *testing.T) {
 }
 
 func TestFindTreeFunc(t *testing.T) {
-	tree1 := &template.Tree{Name: "hello"}
-	tree2 := &template.Tree{Name: "world"}
+	tree1 := &htt.Tree{Name: "hello"}
+	tree2 := &htt.Tree{Name: "world"}
 
-	lookup := check.FindTreeFunc(func(name string) (*template.Tree, bool) {
+	lookup := check.FindTreeFunc(func(name string) (*htt.Tree, bool) {
 		switch name {
 		case "hello":
 			return tree1, true
@@ -1513,7 +1514,7 @@ func TestIdentifierNodeBuiltins(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tmpl := template.New[*types.Signature]("template").SkipFuncCheck() // unknown functions reach the checker
+			tmpl := htt.New[*types.Signature]("template").SkipFuncCheck() // unknown functions reach the checker
 			tmpl = tmpl.Functions(sourceFunctions)
 			tmpl, parseErr := tmpl.Parse(tt.template)
 			require.NoError(t, parseErr)

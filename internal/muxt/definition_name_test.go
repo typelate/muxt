@@ -3,7 +3,7 @@ package muxt
 import (
 	"testing"
 
-	"github.com/typelate/muxt/template/html"
+	"github.com/typelate/htt/template"
 
 	"github.com/stretchr/testify/require"
 )
@@ -89,7 +89,7 @@ func TestTemplate_generateEndpointPatternIdentifier(t *testing.T) {
 		},
 	} {
 		t.Run(tt.Out, func(t *testing.T) {
-			pat, err, match := newDefinition(html.Must(html.New(tt.In).Parse(``)))
+			pat, err, match := newDefinition(template.Must(template.New(tt.In).Parse(``)))
 			require.True(t, match)
 			require.NoError(t, err)
 			require.Equal(t, tt.Out, pat.generateEndpointPatternIdentifier(nil))
@@ -110,7 +110,7 @@ func TestTemplate_generateEndpointPatternIdentifier(t *testing.T) {
 // gets.
 func TestStaticAssetsPathIdentifier(t *testing.T) {
 	callLess := func(prefix string) string {
-		def, err, match := newDefinition(html.Must(html.New("GET " + prefix).Parse(``)))
+		def, err, match := newDefinition(template.Must(template.New("GET " + prefix).Parse(``)))
 		require.True(t, match)
 		require.NoError(t, err)
 		defs := []Definition{def}

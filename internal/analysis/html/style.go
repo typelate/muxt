@@ -5,21 +5,22 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/typelate/htt"
+	"github.com/typelate/htt/lex"
+
 	"github.com/typelate/muxt/internal/css/csstree"
-	"github.com/typelate/muxt/template"
-	"github.com/typelate/muxt/template/lex"
 )
 
 // CheckStyleAttributes reports style attribute declarations that browsers
 // drop: unknown properties and values that do not match the property's
 // syntax. Declarations built with template actions are not checked.
-func CheckStyleAttributes(t *template.Tree) Diagnostics {
+func CheckStyleAttributes(t *htt.Tree) Diagnostics {
 	if t == nil || t.Root == nil {
 		return nil
 	}
 	var diags Diagnostics
-	template.Walk(t, func(_ *template.Tree, n template.Node) {
-		attr, ok := n.(*template.HTMLAttributeNode)
+	htt.Walk(t, func(_ *htt.Tree, n htt.Node) {
+		attr, ok := n.(*htt.HTMLAttributeNode)
 		if !ok || len(attr.Value) == 0 || !strings.EqualFold(staticAttrName(attr), "style") {
 			return
 		}
@@ -55,11 +56,11 @@ type StyleDeclaration struct {
 
 // StyleDeclarationAt returns the declaration at pos in a style attribute or
 // in a style rule of a <style> element.
-func StyleDeclarationAt(t *template.Tree, pos lex.Pos) (StyleDeclaration, bool) {
+func StyleDeclarationAt(t *htt.Tree, pos lex.Pos) (StyleDeclaration, bool) {
 	if t == nil || t.Root == nil {
 		return StyleDeclaration{}, false
 	}
-	for _, block := range append(styleAttributes([]*template.Tree{t}), styleBlocks([]*template.Tree{t}, nil)...) {
+	for _, block := range append(styleAttributes([]*htt.Tree{t}), styleBlocks([]*htt.Tree{t}, nil)...) {
 		css := block.css
 		if pos < css.base || pos >= css.pos(len(css.text)) {
 			continue
@@ -152,10 +153,10 @@ func declarationAt(css cssText, list *csstree.List[csstree.Node], listEnd int, p
 
 // staticAttrName returns the attribute name when every part of it is static
 // text, and "" otherwise.
-func staticAttrName(attr *template.HTMLAttributeNode) string {
+func staticAttrName(attr *htt.HTMLAttributeNode) string {
 	var sb strings.Builder
 	for _, k := range attr.Key {
-		text, ok := k.(*template.TextNode)
+		text, ok := k.(*htt.TextNode)
 		if !ok {
 			return ""
 		}
@@ -206,7 +207,7 @@ func checkDeclarationList(css cssText, list *csstree.List[csstree.Node], end int
 				Pos:      css.pos(decl.Loc.Start.Offset),
 				End:      css.pos(decl.Loc.End.Offset),
 				Severity: SeverityWarning,
-				Code:     template.DiagUnknownCSSProperty,
+				Code:     htt.DiagUnknownCSSProperty,
 				Message:  fmt.Sprintf(msgUnknownCSSProperty, decl.Property),
 			})
 		case errors.As(result.Error, &mismatch):
@@ -218,7 +219,7 @@ func checkDeclarationList(css cssText, list *csstree.List[csstree.Node], end int
 				Pos:      css.pos(start),
 				End:      css.pos(end),
 				Severity: SeverityWarning,
-				Code:     template.DiagInvalidCSSValue,
+				Code:     htt.DiagInvalidCSSValue,
 				Message:  fmt.Sprintf(msgInvalidCSSValue, mismatch.CSS, decl.Property, mismatch.Syntax),
 			})
 		}
@@ -266,12 +267,12 @@ type span struct{ start, end int }
 
 // templateCSS builds the CSS text spanning nodes, which are consecutive
 // parts of an attribute value or the children of a raw-text element.
-func templateCSS(nodes []template.Node) cssText {
+func templateCSS(nodes []htt.Node) cssText {
 	base, end := nodes[0].Start(), nodes[len(nodes)-1].End()
 	buf := []byte(strings.Repeat(" ", int(end-base)))
 	static := make([]bool, len(buf))
 	for _, n := range nodes {
-		eachText(n, func(text *template.TextNode) {
+		eachText(n, func(text *htt.TextNode) {
 			offset := int(text.Start() - base)
 			copy(buf[offset:], text.String())
 			for i := offset; i < int(text.End()-base); i++ {
@@ -301,24 +302,24 @@ func templateCSS(nodes []template.Node) cssText {
 
 // eachText calls fn for each text node in n, including text in the branches
 // of if, range, and with actions.
-func eachText(n template.Node, fn func(*template.TextNode)) {
+func eachText(n htt.Node, fn func(*htt.TextNode)) {
 	switch n := n.(type) {
-	case *template.TextNode:
+	case *htt.TextNode:
 		fn(n)
-	case *template.ListNode:
+	case *htt.ListNode:
 		for _, c := range n.Nodes {
 			eachText(c, fn)
 		}
-	case *template.IfNode:
+	case *htt.IfNode:
 		eachBranchText(n.List, n.ElseList, fn)
-	case *template.RangeNode:
+	case *htt.RangeNode:
 		eachBranchText(n.List, n.ElseList, fn)
-	case *template.WithNode:
+	case *htt.WithNode:
 		eachBranchText(n.List, n.ElseList, fn)
 	}
 }
 
-func eachBranchText(list, elseList *template.ListNode, fn func(*template.TextNode)) {
+func eachBranchText(list, elseList *htt.ListNode, fn func(*htt.TextNode)) {
 	if list != nil {
 		eachText(list, fn)
 	}

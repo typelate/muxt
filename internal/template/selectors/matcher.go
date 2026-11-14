@@ -3,7 +3,7 @@ package selectors
 import (
 	"strings"
 
-	"github.com/typelate/muxt/template"
+	"github.com/typelate/htt"
 )
 
 // selectorList is a comma-separated group of selectors; an element matches
@@ -12,7 +12,7 @@ type selectorList struct {
 	alternatives []matcher
 }
 
-func (l selectorList) match(n template.Node) Trit {
+func (l selectorList) match(n htt.Node) Trit {
 	result := TritNo
 	for _, a := range l.alternatives {
 		result = result.Or(a.match(n))
@@ -29,7 +29,7 @@ type compoundSelector struct {
 	simples []matcher
 }
 
-func (c compoundSelector) match(n template.Node) Trit {
+func (c compoundSelector) match(n htt.Node) Trit {
 	result := TritYes
 	for _, s := range c.simples {
 		result = result.And(s.match(n))
@@ -45,8 +45,8 @@ type typeSelector struct {
 	tag string
 }
 
-func (t typeSelector) match(n template.Node) Trit {
-	el, ok := n.(*template.HTMLElementNode)
+func (t typeSelector) match(n htt.Node) Trit {
+	el, ok := n.(*htt.HTMLElementNode)
 	if !ok {
 		return TritNo
 	}
@@ -59,8 +59,8 @@ func (t typeSelector) match(n template.Node) Trit {
 // universalSelector (*) matches any element.
 type universalSelector struct{}
 
-func (universalSelector) match(n template.Node) Trit {
-	if _, ok := n.(*template.HTMLElementNode); ok {
+func (universalSelector) match(n htt.Node) Trit {
+	if _, ok := n.(*htt.HTMLElementNode); ok {
 		return TritYes
 	}
 	return TritNo
@@ -71,8 +71,8 @@ type idSelector struct {
 	id string
 }
 
-func (s idSelector) match(n template.Node) Trit {
-	el, ok := n.(*template.HTMLElementNode)
+func (s idSelector) match(n htt.Node) Trit {
+	el, ok := n.(*htt.HTMLElementNode)
 	if !ok {
 		return TritNo
 	}
@@ -96,8 +96,8 @@ type classSelector struct {
 	class string
 }
 
-func (s classSelector) match(n template.Node) Trit {
-	el, ok := n.(*template.HTMLElementNode)
+func (s classSelector) match(n htt.Node) Trit {
+	el, ok := n.(*htt.HTMLElementNode)
 	if !ok {
 		return TritNo
 	}
@@ -142,8 +142,8 @@ type attrSelector struct {
 	ci   bool // case-insensitive ([name=value i])
 }
 
-func (s attrSelector) match(n template.Node) Trit {
-	el, ok := n.(*template.HTMLElementNode)
+func (s attrSelector) match(n htt.Node) Trit {
+	el, ok := n.(*htt.HTMLElementNode)
 	if !ok {
 		return TritNo
 	}
@@ -198,10 +198,10 @@ func attrOpMatches(op attrOp, val, want string, ci bool) bool {
 // name is present, Maybe when the element carries attributes whose names
 // cannot be determined statically (dynamic keys, or template control flow in
 // attribute position), and No when the attribute is definitely absent.
-func findAttr(el *template.HTMLElementNode, name string) (*template.HTMLAttributeNode, Trit) {
+func findAttr(el *htt.HTMLElementNode, name string) (*htt.HTMLAttributeNode, Trit) {
 	uncertain := false
 	for _, a := range el.Attr {
-		attr, ok := a.(*template.HTMLAttributeNode)
+		attr, ok := a.(*htt.HTMLAttributeNode)
 		if !ok {
 			// ActionNode / IfNode / RangeNode in attribute position: the set of
 			// attributes is not statically known.
@@ -228,10 +228,10 @@ func findAttr(el *template.HTMLElementNode, name string) (*template.HTMLAttribut
 
 // staticText concatenates the text of nodes when every node is a static
 // TextNode. It returns ok=false if any node is dynamic (e.g. an ActionNode).
-func staticText(nodes []template.Node) (string, bool) {
+func staticText(nodes []htt.Node) (string, bool) {
 	var sb strings.Builder
 	for _, n := range nodes {
-		t, ok := n.(*template.TextNode)
+		t, ok := n.(*htt.TextNode)
 		if !ok {
 			return "", false
 		}
@@ -250,10 +250,10 @@ type valuePart struct {
 
 // attrValueParts returns the attribute value as a sequence of static and
 // dynamic parts, with the surrounding quote delimiters removed.
-func attrValueParts(attr *template.HTMLAttributeNode) []valuePart {
+func attrValueParts(attr *htt.HTMLAttributeNode) []valuePart {
 	parts := make([]valuePart, 0, len(attr.Value))
 	for _, v := range attr.Value {
-		if t, ok := v.(*template.TextNode); ok {
+		if t, ok := v.(*htt.TextNode); ok {
 			parts = append(parts, valuePart{text: string(t.Text)})
 		} else {
 			parts = append(parts, valuePart{dynamic: true})

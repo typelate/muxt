@@ -9,8 +9,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/typelate/htt"
+
 	"github.com/typelate/muxt/internal/check"
-	"github.com/typelate/muxt/template"
 )
 
 // formatDefinition renders a definition the way upstream's
@@ -155,10 +156,10 @@ func handleIndex(w http.ResponseWriter, r *http.Request) {
 
 	var got []string
 	err := check.Package(pkg,
-		func(_ *ast.CallExpr, _ *template.Tree, _ types.Type, def check.Definition) {
+		func(_ *ast.CallExpr, _ *htt.Tree, _ types.Type, def check.Definition) {
 			got = append(got, formatDefinition(t, dir, def))
 		},
-		func(_ *template.TemplateNode, _ *template.Tree, _ types.Type, def check.Definition) {
+		func(_ *htt.TemplateNode, _ *htt.Tree, _ types.Type, def check.Definition) {
 			got = append(got, formatDefinition(t, dir, def))
 		},
 	)
@@ -183,7 +184,7 @@ func packageCallDefinitions(t *testing.T, files map[string]string) ([]string, er
 	dir = filepath.Dir(pkg.GoFiles[0])
 
 	var got []string
-	err := check.Package(pkg, func(_ *ast.CallExpr, _ *template.Tree, _ types.Type, def check.Definition) {
+	err := check.Package(pkg, func(_ *ast.CallExpr, _ *htt.Tree, _ types.Type, def check.Definition) {
 		got = append(got, formatDefinition(t, dir, def))
 	}, nil)
 	return got, err

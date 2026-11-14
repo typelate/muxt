@@ -10,11 +10,12 @@ import (
 
 	"golang.org/x/tools/go/packages"
 
+	"github.com/typelate/htt"
+	htttemplate "github.com/typelate/htt/template"
+
 	"github.com/typelate/muxt/internal/check/internal/asteval"
 	"github.com/typelate/muxt/internal/check/internal/astgen"
 	muxtsource "github.com/typelate/muxt/internal/source"
-	"github.com/typelate/muxt/template"
-	htttemplate "github.com/typelate/muxt/template/html"
 )
 
 // VariableNotFoundError is the error for a templates variable the package does
@@ -133,7 +134,7 @@ func LoadTemplates(pkg *packages.Package, templatesVariable string, imports map[
 type Templates struct {
 	pkg         *packages.Package
 	variable    types.Object
-	templates   *template.Template[*types.Signature]
+	templates   *htt.Template[*types.Signature]
 	functions   Functions
 	collected   Functions
 	definitions definitionSet
@@ -148,7 +149,7 @@ func (t *Templates) Overrides() []muxtsource.Override {
 
 // Set returns the evaluated template set; use its Names, Lookup, and
 // FindTree to inspect the templates the chain parsed.
-func (t *Templates) Set() *template.Template[*types.Signature] {
+func (t *Templates) Set() *htt.Template[*types.Signature] {
 	return t.templates
 }
 
@@ -166,7 +167,7 @@ func (t *Templates) CollectedFunctions() Functions {
 }
 
 // FindTree returns the parse tree for the named template in the set.
-func (t *Templates) FindTree(name string) (*template.Tree, bool) {
+func (t *Templates) FindTree(name string) (*htt.Tree, bool) {
 	return t.templates.FindTree(name)
 }
 
@@ -227,7 +228,7 @@ func (t *Templates) HTML() (*htttemplate.Template, bool) {
 // text/template value; ok is false when it holds an html/template value.
 // The fork parses both kinds into the same set type, so this is the set
 // Set returns, gated on the variable's type.
-func (t *Templates) Text() (*template.Template[*types.Signature], bool) {
+func (t *Templates) Text() (*htt.Template[*types.Signature], bool) {
 	if t.templates == nil || t.templatePackagePath() != "text/template" {
 		return nil, false
 	}
@@ -290,7 +291,7 @@ func (t *Templates) ExecuteTemplateCalls() iter.Seq[Entry] {
 				if !ok {
 					return true
 				}
-				var tree *template.Tree
+				var tree *htt.Tree
 				if looked := t.templates.Lookup(templateName); looked != nil {
 					tree = looked.Tree()
 				}

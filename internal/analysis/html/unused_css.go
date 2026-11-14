@@ -6,9 +6,10 @@ import (
 	"go/token"
 	"strings"
 
+	"github.com/typelate/htt"
+
 	"github.com/typelate/muxt/internal/css/csstree"
 	"github.com/typelate/muxt/internal/template/selectors"
-	"github.com/typelate/muxt/template"
 )
 
 // Stylesheet is CSS from a file the templates use, such as an embedded .css
@@ -27,7 +28,7 @@ type Stylesheet struct {
 type StyleDiagnostic struct {
 	Position token.Position // Offset is a byte offset; Line and Column are 1-based
 	Severity Severity
-	Code     template.DiagnosticCode
+	Code     htt.DiagnosticCode
 	Message  string
 }
 
@@ -43,7 +44,7 @@ type StyleDiagnostic struct {
 // or :has() count as used whenever their subject matches, since siblings and
 // descendants may come from other templates. Classes added by scripts are not
 // seen.
-func CheckUnusedCSS(trees []*template.Tree, sheets []Stylesheet) []StyleDiagnostic {
+func CheckUnusedCSS(trees []*htt.Tree, sheets []Stylesheet) []StyleDiagnostic {
 	roots := templateRoots(trees)
 	var diags []StyleDiagnostic
 	for _, block := range styleBlocks(trees, sheets) {
@@ -56,10 +57,10 @@ func CheckUnusedCSS(trees []*template.Tree, sheets []Stylesheet) []StyleDiagnost
 
 // templateRoots returns the roots of trees and of the define and block bodies
 // in them: selector queries do not descend into define and block bodies.
-func templateRoots(trees []*template.Tree) []template.Node {
-	var roots []template.Node
-	seen := make(map[template.Node]bool)
-	add := func(n template.Node) {
+func templateRoots(trees []*htt.Tree) []htt.Node {
+	var roots []htt.Node
+	seen := make(map[htt.Node]bool)
+	add := func(n htt.Node) {
 		if n == nil || seen[n] {
 			return
 		}
@@ -71,13 +72,13 @@ func templateRoots(trees []*template.Tree) []template.Node {
 			continue
 		}
 		add(t.Root)
-		template.Walk(t, func(_ *template.Tree, n template.Node) {
+		htt.Walk(t, func(_ *htt.Tree, n htt.Node) {
 			switch n := n.(type) {
-			case *template.DefineNode:
+			case *htt.DefineNode:
 				if n.Body != nil {
 					add(n.Body)
 				}
-			case *template.BlockNode:
+			case *htt.BlockNode:
 				if n.Body != nil {
 					add(n.Body)
 				}
@@ -87,7 +88,7 @@ func templateRoots(trees []*template.Tree) []template.Node {
 	return roots
 }
 
-func unusedSelectors(css cssText, roots []template.Node) Diagnostics {
+func unusedSelectors(css cssText, roots []htt.Node) Diagnostics {
 	sheet, ok := parseStylesheet(css)
 	if !ok {
 		return nil
@@ -120,7 +121,7 @@ var groupingAtRules = map[string]bool{
 
 // checkRules checks the style rules in list. parent is the selector list the
 // rules are nested in, already resolved, or "" at the top level.
-func checkRules(css cssText, list *csstree.List[csstree.Node], parent string, roots []template.Node, findings *Diagnostics) {
+func checkRules(css cssText, list *csstree.List[csstree.Node], parent string, roots []htt.Node, findings *Diagnostics) {
 	for item := list.Head(); item != nil; item = item.Next {
 		switch n := item.Data.(type) {
 		case *csstree.Atrule:
@@ -133,7 +134,7 @@ func checkRules(css cssText, list *csstree.List[csstree.Node], parent string, ro
 	}
 }
 
-func checkRule(css cssText, rule *csstree.Rule, parent string, roots []template.Node, findings *Diagnostics) {
+func checkRule(css cssText, rule *csstree.Rule, parent string, roots []htt.Node, findings *Diagnostics) {
 	list, ok := rule.Prelude.(*csstree.SelectorList)
 	if !ok || list.Loc == nil || css.dynamic(list.Loc.Start.Offset, preludeEnd(rule)) {
 		return
@@ -163,7 +164,7 @@ func checkRule(css cssText, rule *csstree.Rule, parent string, roots []template.
 			Pos:      css.pos(list.Loc.Start.Offset),
 			End:      css.pos(list.Loc.End.Offset),
 			Severity: SeverityWarning,
-			Code:     template.DiagUnusedCSSRule,
+			Code:     htt.DiagUnusedCSSRule,
 			Message:  fmt.Sprintf(msgUnusedCSSRule, css.source(list.Loc)),
 		})
 	} else {
@@ -172,7 +173,7 @@ func checkRule(css cssText, rule *csstree.Rule, parent string, roots []template.
 				Pos:      css.pos(sel.Loc.Start.Offset),
 				End:      css.pos(sel.Loc.End.Offset),
 				Severity: SeverityWarning,
-				Code:     template.DiagUnusedCSSSelector,
+				Code:     htt.DiagUnusedCSSSelector,
 				Message:  fmt.Sprintf(msgUnusedCSSSelector, css.source(sel.Loc)),
 			})
 		}
@@ -255,12 +256,12 @@ const (
 // selectorUse reports whether an element in roots can match query, falling
 // back to subject when the elements query relates the subject to may come
 // from other templates.
-func selectorUse(query, subject string, roots []template.Node) selectorUseResult {
+func selectorUse(query, subject string, roots []htt.Node) selectorUseResult {
 	sel, err := selectors.Compile(query)
 	if err != nil {
 		return selectorUnknown
 	}
-	if anyMatch(sel, roots, func(*template.HTMLElementNode) bool { return true }) {
+	if anyMatch(sel, roots, func(*htt.HTMLElementNode) bool { return true }) {
 		return selectorUsed
 	}
 	if subject == query {
@@ -271,7 +272,7 @@ func selectorUse(query, subject string, roots []template.Node) selectorUseResult
 		return selectorUnknown
 	}
 	outsideTemplate := strings.ContainsAny(query, "+~") || strings.Contains(strings.ToLower(query), ":has(")
-	if anyMatch(subjectSel, roots, func(el *template.HTMLElementNode) bool { return outsideTemplate || !inDocument(el) }) {
+	if anyMatch(subjectSel, roots, func(el *htt.HTMLElementNode) bool { return outsideTemplate || !inDocument(el) }) {
 		return selectorUsed
 	}
 	return selectorUnused
@@ -279,7 +280,7 @@ func selectorUse(query, subject string, roots []template.Node) selectorUseResult
 
 // anyMatch reports whether sel may match an element in roots for which keep
 // returns true.
-func anyMatch(sel selectors.Selector, roots []template.Node, keep func(*template.HTMLElementNode) bool) bool {
+func anyMatch(sel selectors.Selector, roots []htt.Node, keep func(*htt.HTMLElementNode) bool) bool {
 	for _, root := range roots {
 		for el := range sel.QuerySelectorAll(root) {
 			if keep(el) {
@@ -292,10 +293,10 @@ func anyMatch(sel selectors.Selector, roots []template.Node, keep func(*template
 
 // inDocument reports whether el has a lexical <html> ancestor, so all of its
 // ancestors are in the same template.
-func inDocument(el *template.HTMLElementNode) bool {
-	type parented interface{ Parent() template.Node }
-	for n := template.Node(el); n != nil; {
-		if e, ok := n.(*template.HTMLElementNode); ok && strings.EqualFold(e.TagName, "html") {
+func inDocument(el *htt.HTMLElementNode) bool {
+	type parented interface{ Parent() htt.Node }
+	for n := htt.Node(el); n != nil; {
+		if e, ok := n.(*htt.HTMLElementNode); ok && strings.EqualFold(e.TagName, "html") {
 			return true
 		}
 		p, ok := n.(parented)

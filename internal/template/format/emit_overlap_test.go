@@ -4,8 +4,8 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/typelate/muxt/template"
-	"github.com/typelate/muxt/template/lex"
+	"github.com/typelate/htt"
+	"github.com/typelate/htt/lex"
 )
 
 // withTestEdits seeds the emitter with edits, as a formatter bug might.
@@ -25,7 +25,7 @@ func TestOverlappingEdits(t *testing.T) {
 		t.Errorf("Source(%q) with overlapping edits = %q, %v; want \"\", errOverlappingEdits", src, out, err)
 	}
 
-	tree, err := template.ParseTree("overlap.gohtml", "overlap.gohtml", src, nil, lex.Options{
+	tree, err := htt.ParseTree("overlap.gohtml", "overlap.gohtml", src, nil, lex.Options{
 		EmitComment: true,
 		ParseHTML:   true,
 		BreakOK:     true,

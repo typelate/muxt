@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/typelate/muxt/template"
-	muxthtml "github.com/typelate/muxt/template/html"
+	"github.com/typelate/htt"
+	muxthtml "github.com/typelate/htt/template"
 )
 
 // stdlibOutcome is what the standard library's html/template does with a
@@ -310,8 +310,8 @@ func checkComments(t *testing.T, input string, roots []string) []string {
 	return lines
 }
 
-func setTrees(set *muxthtml.Template) map[string]*template.Tree {
-	trees := make(map[string]*template.Tree)
+func setTrees(set *muxthtml.Template) map[string]*htt.Tree {
+	trees := make(map[string]*htt.Tree)
 	for _, t := range set.Templates() {
 		if t.Tree != nil {
 			trees[t.Name()] = t.Tree

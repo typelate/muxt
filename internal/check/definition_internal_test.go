@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/typelate/muxt/template/lex"
+	"github.com/typelate/htt/lex"
 )
 
 // formatDefSpan renders every coordinate a Span carries as

@@ -3,8 +3,8 @@ package muxt
 import (
 	"go/ast"
 
-	"github.com/typelate/muxt/template"
-	"github.com/typelate/muxt/template/html"
+	"github.com/typelate/htt"
+	html "github.com/typelate/htt/template"
 )
 
 // responseStateMethods finds the methods a package declares on its
@@ -158,9 +158,9 @@ func ResponseStatusWarnings(defs []Definition, files []*ast.File, templateDataTy
 
 // findUserResponseStateCall names the first method in methods that a
 // template calls on the TemplateData the handler passed in.
-func findUserResponseStateCall(node template.Node, ts *html.Template, methods map[string]string) (string, bool) {
+func findUserResponseStateCall(node htt.Node, ts *html.Template, methods map[string]string) (string, bool) {
 	var found string
-	walkTemplateCommands(node, ts, make(map[string]bool), true, pipeIsTemplateData, func(cmd *template.CommandNode, dotIsTemplateData bool) bool {
+	walkTemplateCommands(node, ts, make(map[string]bool), true, pipeIsTemplateData, func(cmd *htt.CommandNode, dotIsTemplateData bool) bool {
 		for _, arg := range cmd.Args {
 			names := templateDataNames(arg, dotIsTemplateData)
 			if len(names) == 0 {

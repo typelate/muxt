@@ -3,8 +3,9 @@ package selectors_test
 import (
 	"testing"
 
+	"github.com/typelate/htt"
+
 	"github.com/typelate/muxt/internal/template/selectors"
-	"github.com/typelate/muxt/template"
 )
 
 func TestSelectorMatch_CompoundAndList(t *testing.T) {
@@ -18,7 +19,7 @@ func TestSelectorMatch_CompoundAndList(t *testing.T) {
 	for _, tt := range []struct {
 		name     string
 		selector string
-		node     *template.HTMLElementNode
+		node     *htt.HTMLElementNode
 		want     selectors.Trit
 	}{
 		// compound: every simple must match the same element (AND)

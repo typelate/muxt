@@ -12,7 +12,7 @@ The parser removes a Go template comment, so nothing inside it runs or reaches t
 
 An HTML comment is markup. In text, `html/template` strips `<!-- c -->` from the response, but the actions inside it still run: `<!-- {{.X}} -->` writes nothing and still evaluates `.X`, and an error from it fails the render. A route that renders a fragment for htmx puts its output straight into the page, so a comment that leaks shows up there.
 
-Generated handlers render with `html/template`. muxt's own template engine treats comments the same way ([template/state.go](../../template/state.go), [template/escape.go](../../template/escape.go)). [`muxt check`](commands/check.md) reports the shapes listed under edge cases that the page would show, and [`muxt fmt`](commands/fmt.md) leaves them as written.
+Generated handlers render with `html/template`. muxt's own template engine treats comments the same way (`state.go` and `escape.go` of `github.com/typelate/htt`). [`muxt check`](commands/check.md) reports the shapes listed under edge cases that the page would show, and [`muxt fmt`](commands/fmt.md) leaves them as written.
 
 ## Edge cases
 

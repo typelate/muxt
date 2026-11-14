@@ -4,7 +4,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/typelate/muxt/template"
+	"github.com/typelate/htt"
 )
 
 // OperatorCondition forces one condition of a boolean decision, leaving
@@ -47,18 +47,18 @@ type boolNode struct {
 // call, a comparison, a pipeline of several commands -- because a
 // half-understood decision would produce mutants that claim more than
 // they test.
-func decision(text string, pipe *template.PipeNode) (*boolNode, bool) {
+func decision(text string, pipe *htt.PipeNode) (*boolNode, bool) {
 	if pipe == nil || len(pipe.Commands) != 1 {
 		return nil, false
 	}
 	return decisionCommand(text, pipe.Commands[0])
 }
 
-func decisionCommand(text string, command *template.CommandNode) (*boolNode, bool) {
+func decisionCommand(text string, command *htt.CommandNode) (*boolNode, bool) {
 	if command == nil || len(command.Args) == 0 {
 		return nil, false
 	}
-	if ident, ok := command.Args[0].(*template.IdentifierNode); ok {
+	if ident, ok := command.Args[0].(*htt.IdentifierNode); ok {
 		kind, ok := logicalKind(ident.Ident)
 		if !ok {
 			return nil, false
@@ -84,7 +84,7 @@ func logicalKind(function string) (boolKind, bool) {
 	}
 }
 
-func decisionCall(kind boolKind, text string, args []template.Node) (*boolNode, bool) {
+func decisionCall(kind boolKind, text string, args []htt.Node) (*boolNode, bool) {
 	if len(args) == 0 || (kind == boolNot && len(args) != 1) {
 		return nil, false
 	}
@@ -99,13 +99,13 @@ func decisionCall(kind boolKind, text string, args []template.Node) (*boolNode, 
 	return &boolNode{kind: kind, kids: kids}, true
 }
 
-func decisionArg(text string, arg template.Node) (*boolNode, bool) {
+func decisionArg(text string, arg htt.Node) (*boolNode, bool) {
 	switch node := arg.(type) {
-	case *template.PipeNode:
+	case *htt.PipeNode:
 		return decision(text, node)
-	case *template.BoolNode:
+	case *htt.BoolNode:
 		return &boolNode{kind: boolConst, value: node.True}, true
-	case *template.FieldNode, *template.VariableNode, *template.DotNode:
+	case *htt.FieldNode, *htt.VariableNode, *htt.DotNode:
 		var found []operand
 		appendOperand(&found, text, arg, nil)
 		if len(found) != 1 {

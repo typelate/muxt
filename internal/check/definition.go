@@ -9,9 +9,10 @@ import (
 	"strconv"
 	"unicode/utf8"
 
+	"github.com/typelate/htt"
+	"github.com/typelate/htt/lex"
+
 	muxtsource "github.com/typelate/muxt/internal/source"
-	"github.com/typelate/muxt/template"
-	"github.com/typelate/muxt/template/lex"
 )
 
 // Ported from upstream typelate/check v0.8.3 definition.go (eda3f3e..0f33449).
@@ -66,7 +67,7 @@ type Definition struct {
 	// checker walks, saving a caller a second lookup. It is nil in a
 	// zero Definition, and for a definition the template set does not
 	// know it is a reparse of the source the definition was written in.
-	Tree *template.Tree
+	Tree *htt.Tree
 
 	// Package is the import path of the package whose files the
 	// definition was read from, empty for the analyzed package.
@@ -76,7 +77,7 @@ type Definition struct {
 	// template it defines, and is nil for every other definition. A
 	// block clause cannot be written without one, so its presence is
 	// what tells a block from a define.
-	blockPipeline *template.PipeNode
+	blockPipeline *htt.PipeNode
 }
 
 // IsBlock reports whether a block clause defined this template, rather
@@ -86,7 +87,7 @@ func (d Definition) IsBlock() bool { return d.blockPipeline != nil }
 // BlockPipeline returns the pipeline the block clause passes to the
 // template it defines, or nil when the template was not defined by a
 // block clause.
-func (d Definition) BlockPipeline() *template.PipeNode { return d.blockPipeline }
+func (d Definition) BlockPipeline() *htt.PipeNode { return d.blockPipeline }
 
 // definitionSet resolves a template name to the definition that survived
 // being defined more than once.
@@ -234,7 +235,7 @@ func displaces(prev, next Definition) bool {
 	if prev.Tree == nil || next.Tree == nil {
 		return true
 	}
-	return !template.IsEmptyTree(next.Tree.Root)
+	return !htt.IsEmptyTree(next.Tree.Root)
 }
 
 // definitionsIn returns a Definition for every template that a template
@@ -325,8 +326,8 @@ func definitions(src source, rootName, text string, options lex.Options) []Defin
 // parsedDefinition is what the parser contributes to one definition: the
 // tree its body becomes and, for a block clause, the pipeline it passes.
 type parsedDefinition struct {
-	tree     *template.Tree
-	pipeline *template.PipeNode
+	tree     *htt.Tree
+	pipeline *htt.PipeNode
 }
 
 // parseTrees reparses text to recover each defined template's own parse
@@ -344,9 +345,9 @@ type parsedDefinition struct {
 // (Template.ParseOptions, with the call's delimiters), so the text parses
 // here as it did there: as text for a text/template set, and with break
 // and continue keywords only where the set allowed them.
-func parseTrees(rootName, text string, options lex.Options) (*template.Tree, map[int]parsedDefinition) {
-	treeSet := make(map[string]*template.Tree)
-	root, err := template.ParseTree(rootName, rootName, text, treeSet, options)
+func parseTrees(rootName, text string, options lex.Options) (*htt.Tree, map[int]parsedDefinition) {
+	treeSet := make(map[string]*htt.Tree)
+	root, err := htt.ParseTree(rootName, rootName, text, treeSet, options)
 	if err != nil {
 		return nil, nil
 	}
@@ -354,19 +355,19 @@ func parseTrees(rootName, text string, options lex.Options) (*template.Tree, map
 	// nested in another definition's body is only registered in treeSet.
 	// Both share the clause's body list, which pairs a tree back up with
 	// its node.
-	byBody := make(map[*template.ListNode]*template.Tree)
-	for _, tree := range template.Extract(root) {
+	byBody := make(map[*htt.ListNode]*htt.Tree)
+	for _, tree := range htt.Extract(root) {
 		byBody[tree.Root] = tree
 	}
 	for _, tree := range treeSet {
 		byBody[tree.Root] = tree
 	}
 	parsed := make(map[int]parsedDefinition)
-	template.Walk(root, func(_ *template.Tree, n template.Node) {
+	htt.Walk(root, func(_ *htt.Tree, n htt.Node) {
 		switch n := n.(type) {
-		case *template.DefineNode:
+		case *htt.DefineNode:
 			parsed[int(n.Start())] = parsedDefinition{tree: byBody[n.Body]}
-		case *template.BlockNode:
+		case *htt.BlockNode:
 			parsed[int(n.Start())] = parsedDefinition{tree: byBody[n.Body], pipeline: n.Pipe}
 		}
 	})

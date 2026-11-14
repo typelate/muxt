@@ -9,8 +9,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/typelate/htt"
+
 	"github.com/typelate/muxt/internal/check"
-	"github.com/typelate/muxt/template"
 )
 
 func TestError_DetailedError(t *testing.T) {
@@ -43,7 +44,7 @@ func TestError_DetailedError(t *testing.T) {
 
 	execute := func(t *testing.T, text string, data types.Type) *check.Error {
 		t.Helper()
-		tmpl, err := template.New[*types.Signature]("detail.gohtml").Parse(text)
+		tmpl, err := htt.New[*types.Signature]("detail.gohtml").Parse(text)
 		require.NoError(t, err)
 		global := check.NewGlobal(pkg, token.NewFileSet(), tmpl, check.Functions{})
 		checkErr := check.Execute(global, tmpl.Tree(), data)
@@ -411,7 +412,7 @@ func TestExecute_error_classification(t *testing.T) {
 		},
 	} {
 		t.Run(tt.Name, func(t *testing.T) {
-			tmpl, err := template.New[*types.Signature]("classify.gohtml").Parse(tt.Template)
+			tmpl, err := htt.New[*types.Signature]("classify.gohtml").Parse(tt.Template)
 			require.NoError(t, err)
 
 			global := check.NewGlobal(pkg, token.NewFileSet(), tmpl, check.Functions{})
@@ -431,11 +432,11 @@ func TestExecute_error_classification(t *testing.T) {
 	t.Run("unknown function", func(t *testing.T) {
 		// With the parser's function check skipped, as upstream's
 		// parse.SkipFuncCheck does, an unknown function reaches the checker.
-		tmpl, err := template.New[*types.Signature]("unknown-func.gohtml").SkipFuncCheck().Parse(`{{foo}}`)
+		tmpl, err := htt.New[*types.Signature]("unknown-func.gohtml").SkipFuncCheck().Parse(`{{foo}}`)
 		require.NoError(t, err)
 		tree := tmpl.Tree()
 
-		global := check.NewGlobal(pkg, token.NewFileSet(), check.FindTreeFunc(func(string) (*template.Tree, bool) {
+		global := check.NewGlobal(pkg, token.NewFileSet(), check.FindTreeFunc(func(string) (*htt.Tree, bool) {
 			return nil, false
 		}), check.Functions{})
 		checkErr := check.Execute(global, tree, emptyStruct)
@@ -445,7 +446,7 @@ func TestExecute_error_classification(t *testing.T) {
 	})
 
 	t.Run("aggregate", func(t *testing.T) {
-		tmpl, err := template.New[*types.Signature]("classify.gohtml").Parse(`{{.A}}{{.B}}`)
+		tmpl, err := htt.New[*types.Signature]("classify.gohtml").Parse(`{{.A}}{{.B}}`)
 		require.NoError(t, err)
 
 		global := check.NewGlobal(pkg, token.NewFileSet(), tmpl, check.Functions{})
@@ -472,7 +473,7 @@ func TestError_Decl(t *testing.T) {
 		types.NewTypeName(declPos, pkg, "Page", nil),
 		types.NewStruct(nil, nil), nil)
 
-	tmpl, err := template.New[*types.Signature]("decl.gohtml").Parse(`{{.Missing}}`)
+	tmpl, err := htt.New[*types.Signature]("decl.gohtml").Parse(`{{.Missing}}`)
 	require.NoError(t, err)
 	global := check.NewGlobal(pkg, fset, tmpl, check.Functions{})
 	checkErr := check.Execute(global, tmpl.Tree(), pageNamed)
@@ -486,7 +487,7 @@ func TestExecute_secondary_errors(t *testing.T) {
 	pkg := types.NewPackage("example.com/web", "web")
 	emptyStruct := types.NewStruct(nil, nil)
 
-	tmpl, err := template.New[*types.Signature]("secondary.gohtml").Parse(`{{$x := .Missing}}{{$x}}`)
+	tmpl, err := htt.New[*types.Signature]("secondary.gohtml").Parse(`{{$x := .Missing}}{{$x}}`)
 	require.NoError(t, err)
 	global := check.NewGlobal(pkg, token.NewFileSet(), tmpl, check.Functions{})
 	checkErr := check.Execute(global, tmpl.Tree(), emptyStruct)
@@ -602,7 +603,7 @@ func TestExecute_multiple_errors(t *testing.T) {
 		},
 	} {
 		t.Run(tt.Name, func(t *testing.T) {
-			tmpl, err := template.New[*types.Signature]("multi.gohtml").Parse(tt.Template)
+			tmpl, err := htt.New[*types.Signature]("multi.gohtml").Parse(tt.Template)
 			require.NoError(t, err)
 
 			global := check.NewGlobal(pkg, token.NewFileSet(), tmpl, check.Functions{})
@@ -655,7 +656,7 @@ func TestError_locationMatchesTextTemplate(t *testing.T) {
 		},
 	} {
 		t.Run(tt.Name, func(t *testing.T) {
-			tmpl, err := template.New[*types.Signature]("location.gohtml").Parse(tt.Template)
+			tmpl, err := htt.New[*types.Signature]("location.gohtml").Parse(tt.Template)
 			require.NoError(t, err)
 			global := check.NewGlobal(pkg, token.NewFileSet(), tmpl, check.Functions{})
 
@@ -674,7 +675,7 @@ func TestExecute_interfaceFieldAccess(t *testing.T) {
 	data := types.NewStruct([]*types.Var{
 		types.NewField(token.NoPos, pkg, "Result", types.Universe.Lookup("any").Type(), false),
 	}, nil)
-	tmpl, err := template.New[*types.Signature]("iface.gohtml").Parse(`{{.Result.Name}}`)
+	tmpl, err := htt.New[*types.Signature]("iface.gohtml").Parse(`{{.Result.Name}}`)
 	require.NoError(t, err)
 
 	t.Run("an error by default", func(t *testing.T) {

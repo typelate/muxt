@@ -8,8 +8,9 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/tools/go/packages"
 
+	"github.com/typelate/htt"
+
 	"github.com/typelate/muxt/internal/check"
-	"github.com/typelate/muxt/template"
 )
 
 func TestPrintfFormatChecking(t *testing.T) {
@@ -25,7 +26,7 @@ func TestPrintfFormatChecking(t *testing.T) {
 	}, nil)
 
 	checkTemplate := func(src string) error {
-		tp, err := template.New[*types.Signature]("main").Parse(src)
+		tp, err := htt.New[*types.Signature]("main").Parse(src)
 		require.NoError(t, err)
 		global := check.NewGlobal(testPkg.Types, testPkg.Fset, tp, check.DefaultFunctions(testPkg.Types))
 		tree, ok := tp.FindTree("main")

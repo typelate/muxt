@@ -16,7 +16,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/tools/txtar"
 
-	"github.com/typelate/muxt/template"
+	"github.com/typelate/htt"
 )
 
 // createTestDir extracts a txtar fixture into a scratch directory.
@@ -35,7 +35,7 @@ func createTestDir(t *testing.T, filename string) string {
 // tolerating type errors, since the fixtures deliberately mix invalid
 // constructions — then evaluates the named template variable the way the
 // package resolves a template construction chain.
-func evalTemplates(t *testing.T, dir, varName string, embedFiles ...string) (*template.Template[*types.Signature], error) {
+func evalTemplates(t *testing.T, dir, varName string, embedFiles ...string) (*htt.Template[*types.Signature], error) {
 	t.Helper()
 	matches, err := filepath.Glob(filepath.Join(dir, "*.go"))
 	require.NoError(t, err)
@@ -89,7 +89,7 @@ func evalTemplates(t *testing.T, dir, varName string, embedFiles ...string) (*te
 
 // templateNames lists the names of every template in the evaluated set,
 // sorted.
-func templateNames(t *testing.T, ts *template.Template[*types.Signature]) []string {
+func templateNames(t *testing.T, ts *htt.Template[*types.Signature]) []string {
 	t.Helper()
 	require.NotNil(t, ts)
 	names := ts.Names()
@@ -97,7 +97,7 @@ func templateNames(t *testing.T, ts *template.Template[*types.Signature]) []stri
 	return names
 }
 
-func lookup(t *testing.T, ts *template.Template[*types.Signature], name string) *template.Template[*types.Signature] {
+func lookup(t *testing.T, ts *htt.Template[*types.Signature], name string) *htt.Template[*types.Signature] {
 	t.Helper()
 	require.NotNil(t, ts)
 	return ts.Lookup(name)

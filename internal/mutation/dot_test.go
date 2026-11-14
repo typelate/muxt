@@ -5,10 +5,11 @@ import (
 	"go/types"
 	"testing"
 
-	"github.com/typelate/muxt/template"
+	"github.com/typelate/htt"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"github.com/typelate/muxt/internal/check"
 
 	"github.com/typelate/muxt/internal/asteval"
@@ -20,7 +21,7 @@ func TestRangeDot(t *testing.T) {
 	item := dataType(t, pageSource, "Item")
 	trees, err := asteval.ParseTrees("t", `{{range .}}{{end}}`, "", "", nil, true)
 	require.NoError(t, err)
-	pipe := topLevelNodes(trees["t"])[0].(*template.RangeNode).Pipe
+	pipe := topLevelNodes(trees["t"])[0].(*htt.RangeNode).Pipe
 	for _, tt := range []struct {
 		name       string
 		over, want types.Type
@@ -86,7 +87,7 @@ func TestZeroLiteral(t *testing.T) {
 			}
 			trees, err := asteval.ParseTrees("t", tt.action, "", "", functions, true)
 			require.NoError(t, err)
-			pipe := topLevelNodes(trees["t"])[0].(*template.ActionNode).Pipe
+			pipe := topLevelNodes(trees["t"])[0].(*htt.ActionNode).Pipe
 			got, typed := zeroLiteral(dot, pipe, functions)
 			assert.Equal(t, tt.want, got, "zeroLiteral(%s) literal", tt.action)
 			assert.Equal(t, tt.typed, typed, "zeroLiteral(%s) typed", tt.action)

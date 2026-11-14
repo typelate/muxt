@@ -1,9 +1,9 @@
 // Package overlay writes the files that make the go command build a test
 // target with muxt's template engine in place of the standard library's
 // html/template: a shim of html/template that forwards to
-// github.com/typelate/muxt/template/html, an overlay putting the shim in
+// github.com/typelate/htt/template, an overlay putting the shim in
 // html/template's place, and a copy of the target's go.mod that requires
-// github.com/typelate/muxt.
+// github.com/typelate/htt.
 package overlay
 
 import (
@@ -17,30 +17,32 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
+	"runtime"
 	"runtime/debug"
 	"slices"
 	"strings"
-	"time"
 
 	"golang.org/x/mod/modfile"
 	"golang.org/x/mod/module"
 	"golang.org/x/mod/semver"
+
+	"github.com/typelate/htt/template"
 )
 
-// Module is muxt's module path, which the modfile copy requires.
-const Module = "github.com/typelate/muxt"
+// Module is the template engine's module path, which the modfile copy
+// requires.
+const Module = "github.com/typelate/htt"
+
+// enginePackage is the engine's package, which the shim and the probe
+// import.
+const enginePackage = Module + "/template"
 
 // ModuleDirEnv names the environment variable holding a directory of
-// muxt's module source, which the modfile copy then replaces Module with.
-// A development build of muxt has no published version to require, so it
-// needs one.
+// Module's source, which the modfile copy then replaces Module with.
 const ModuleDirEnv = "MUXT_MODULE_DIR"
 
-// PlaceholderVersion is the version Module is required at when a module
-// directory replaces it and muxt's own version is unknown.
-const PlaceholderVersion = "v0.0.0-00010101000000-000000000000"
-
-// shim is html/template's API forwarded to Module's template/html, which
+// shim is html/template's API forwarded to htt's template package, which
 // the overlay puts in place of html/template's own files.
 //
 //go:embed shim/shim.go
@@ -64,7 +66,7 @@ type Toolchain struct {
 	// Env is the go command's environment, nil for the process's own.
 	Env []string
 
-	// ModuleDir is a directory of muxt's module source to replace Module
+	// ModuleDir is a directory of Module's source to replace Module
 	// with. When empty, ModuleDirEnv in Env says, and when that is
 	// empty too, nothing replaces Module. A relative directory is
 	// relative to Dir.
@@ -119,8 +121,8 @@ type Files struct {
 	// Target is the test target's go.mod, which ModFile copies.
 	Target string
 
-	// Version is the version of Module that ModFile requires, "" when
-	// the test target is Module itself and requires nothing.
+	// Version is the version of Module that ModFile requires: the one
+	// this muxt was built with.
 	Version string
 
 	// ModuleDir is the directory ModFile replaces Module with, "" for
@@ -135,7 +137,7 @@ type Files struct {
 
 // GoLines returns the go line of the test target's go.mod and that of the
 // modfile copy, as they are now. The go command raises the copy's when a
-// requirement, muxt among them, needs a newer one, and the
+// requirement, htt among them, needs a newer one, and the
 // pre-pass then compiles the target at that language version. A go.mod
 // without a go line gives "".
 func (f Files) GoLines() (target, used string, err error) {
@@ -227,12 +229,12 @@ type Target struct {
 }
 
 // Resolve asks the toolchain for its GOROOT and the test target's go.mod,
-// and decides how the modfile copy requires Module.
+// and reads from this muxt's build information how the modfile copy
+// requires Module.
 //
 // The test target's go.mod is the one go env GOMOD names in the
-// toolchain's directory. When it is Module's own, the copy requires
-// nothing. Otherwise, a muxt whose version is unknown, or a build with
-// uncommitted changes, is an error unless a module directory is named.
+// toolchain's directory. A build information that does not name a version
+// of Module is an error.
 func Resolve(ctx context.Context, tc Toolchain) (Target, error) {
 	goroot, err := GOROOT(ctx, tc)
 	if err != nil {
@@ -242,18 +244,60 @@ func Resolve(ctx context.Context, tc Toolchain) (Target, error) {
 	if err != nil {
 		return Target{}, err
 	}
-	req, err := requirementFor(tc, targetMod)
+	info, ok := debug.ReadBuildInfo()
+	req, err := requirementFor(info, ok, engineFile())
 	if err != nil {
 		return Target{}, err
 	}
+	dir, err := tc.moduleDir()
+	if err != nil {
+		return Target{}, err
+	}
+	if dir != "" {
+		req.Dir = dir
+	}
 	return Target{tc: tc, goroot: goroot, goMod: targetMod, req: req}, nil
+}
+
+// moduleDir is the absolute module directory the toolchain names, "" for
+// none.
+func (tc Toolchain) moduleDir() (string, error) {
+	dir := tc.ModuleDir
+	if dir == "" {
+		dir = tc.getenv(ModuleDirEnv)
+	}
+	if dir == "" {
+		return "", nil
+	}
+	if !filepath.IsAbs(dir) {
+		dir = filepath.Join(tc.Dir, dir)
+	}
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return "", fmt.Errorf("%s: %w", ModuleDirEnv, err)
+	}
+	return abs, nil
+}
+
+// getenv is the value of key in the go command's environment.
+func (tc Toolchain) getenv(key string) string {
+	if tc.Env == nil {
+		return os.Getenv(key)
+	}
+	value := ""
+	for _, kv := range tc.Env {
+		if k, v, ok := strings.Cut(kv, "="); ok && k == key {
+			value = v // the last one wins, as in os/exec
+		}
+	}
+	return value
 }
 
 // Write writes under scratchDir the files go test needs to build the test
 // target with muxt's template engine in place of html/template:
 //
 //   - html-template/muxt_shim.go: the shim, which forwards html/template's
-//     API to Module's template/html;
+//     API to htt's template package;
 //   - overlay.json: deletes every non-test Go file of
 //     $GOROOT/src/html/template, as listed on disk now, and adds the shim
 //     there;
@@ -329,131 +373,43 @@ type requirement struct {
 	Dir string
 }
 
-// requirementFor is how the modfile copy of targetMod requires Module:
-// at this muxt's version, replaced by the toolchain's module directory if
-// it names one, and not at all if targetMod is Module's own.
-func requirementFor(tc Toolchain, targetMod string) (requirement, error) {
-	if self, err := isModule(targetMod); err != nil || self {
-		return requirement{}, err
-	}
-	dir, err := tc.moduleDir()
-	if err != nil {
-		return requirement{}, err
-	}
-	info, ok := debug.ReadBuildInfo()
-	version, err := moduleVersion(info, ok)
-	if dir == "" {
-		return requirement{Version: version}, err
-	}
-	if err != nil {
-		version = PlaceholderVersion
-	}
-	return requirement{Version: version, Dir: dir}, nil
-}
-
-// moduleDir is the absolute module directory the toolchain names, "" for
-// none.
-func (tc Toolchain) moduleDir() (string, error) {
-	dir := tc.ModuleDir
-	if dir == "" {
-		dir = tc.getenv(ModuleDirEnv)
-	}
-	if dir == "" {
-		return "", nil
-	}
-	if !filepath.IsAbs(dir) {
-		dir = filepath.Join(tc.Dir, dir)
-	}
-	abs, err := filepath.Abs(dir)
-	if err != nil {
-		return "", fmt.Errorf("%s: %w", ModuleDirEnv, err)
-	}
-	return abs, nil
-}
-
-// getenv is the value of key in the go command's environment.
-func (tc Toolchain) getenv(key string) string {
-	if tc.Env == nil {
-		return os.Getenv(key)
-	}
-	value := ""
-	for _, kv := range tc.Env {
-		if k, v, ok := strings.Cut(kv, "="); ok && k == key {
-			value = v // the last one wins, as in os/exec
-		}
-	}
-	return value
-}
-
-// errModified is a muxt that cannot be required by version, since its
-// source is not that of any commit.
-var errModified = errors.New("muxt is a modified development build; set " + ModuleDirEnv + " to its source directory")
-
-// moduleVersion is the version of Module this muxt was built from, given
-// its build information, as debug.ReadBuildInfo returns it: muxt's own
-// version when it is the main module, its version as a dependency when it
-// is another module's tool, and when it is a development build of a
-// commit, a pseudo-version of that commit. A build with uncommitted
-// changes, or without version control information, has none.
-//
-// A dependency replaced by a directory reports the version required; the
-// replace in the test target's go.mod, if it is that module, applies to
-// the copy too.
-func moduleVersion(info *debug.BuildInfo, ok bool) (string, error) {
+// requirementFor is how the modfile copy requires Module, given this
+// muxt's build information, as debug.ReadBuildInfo returns it: at the
+// version the dependency list names. A build information without one, or
+// whose version is not semver, is an error. file is engineFile's path.
+func requirementFor(info *debug.BuildInfo, ok bool, file string) (requirement, error) {
+	errNoVersion := errors.New("muxt's build information does not name a version of " + Module + "; build muxt with go build or go install")
 	if !ok || info == nil {
-		return "", errors.New("muxt has no build information; set " + ModuleDirEnv + " to its source directory")
+		return requirement{}, errNoVersion
 	}
-	m := info.Main
-	if m.Path != Module {
-		for _, dep := range info.Deps {
-			if dep.Path == Module {
-				m = *dep
-				break
-			}
+	for _, dep := range info.Deps {
+		if dep.Path == Module && semver.IsValid(dep.Version) {
+			return requirement{Version: dep.Version}, nil
 		}
 	}
-	if m.Path != Module {
-		return "", errors.New("muxt's build information does not name " + Module + "; set " + ModuleDirEnv + " to its source directory")
-	}
-	switch {
-	case strings.HasSuffix(m.Version, "+dirty"):
-		return "", errModified
-	case semver.IsValid(m.Version):
-		return m.Version, nil
-	}
-
-	settings := make(map[string]string)
-	for _, s := range info.Settings {
-		settings[s.Key] = s.Value
-	}
-	revision, stamp := settings["vcs.revision"], settings["vcs.time"]
-	switch {
-	case settings["vcs.modified"] == "true":
-		return "", errModified
-	case revision == "" || stamp == "" || settings["vcs.modified"] != "false":
-		return "", errors.New("muxt is a development build without version control information; set " + ModuleDirEnv + " to its source directory")
-	}
-	t, err := time.Parse(time.RFC3339, stamp)
-	if err != nil {
-		return "", fmt.Errorf("muxt's vcs.time %q: %w; set %s to its source directory", stamp, err, ModuleDirEnv)
-	}
-	return module.PseudoVersion("", "", t.UTC(), revision[:min(12, len(revision))]), nil
+	return requirement{}, errNoVersion
 }
 
-// isModule reports whether the go.mod at goModPath is Module's own.
-func isModule(goModPath string) (bool, error) {
-	b, err := os.ReadFile(goModPath)
-	if err != nil {
-		return false, fmt.Errorf("reading the test target's go.mod: %w", err)
+// engineFile is the path the compiler recorded for the file declaring
+// the engine's template.New: in the directory that held the engine when
+// this muxt was built, or module-relative with -trimpath. The build
+// information records a workspace module, or a relative replace, without a
+// usable directory; this is where the directory is.
+func engineFile() string {
+	pc := reflect.ValueOf(template.New).Pointer()
+	fn := runtime.FuncForPC(pc)
+	if fn == nil {
+		return ""
 	}
-	return modfile.ModulePath(b) == Module, nil
+	file, _ := fn.FileLine(pc)
+	return file
 }
 
 // writeModFile writes to modFile the test target's go.mod, targetMod,
 // with Module required as req says, and beside it a copy of the target's
 // go.sum, if it has one. The target's own requirement of Module, if any,
 // gives way to req's version; it returns that version when it differs,
-// and "" otherwise. A targetMod that is Module's own is copied as it is.
+// and "" otherwise.
 //
 // The go command resolves a relative replace against the target's
 // directory, not the modfile's, so req.Dir must be absolute.
@@ -463,28 +419,26 @@ func writeModFile(targetMod, modFile string, req requirement) (string, error) {
 		return "", fmt.Errorf("reading the test target's go.mod: %w", err)
 	}
 	targetVersion := ""
-	if modfile.ModulePath(mod) != Module {
-		f, err := modfile.Parse(targetMod, mod, nil)
-		if err != nil {
-			return "", fmt.Errorf("reading the test target's go.mod: %w", err)
+	f, err := modfile.Parse(targetMod, mod, nil)
+	if err != nil {
+		return "", fmt.Errorf("reading the test target's go.mod: %w", err)
+	}
+	for _, r := range f.Require {
+		if r.Mod.Path == Module && r.Mod.Version != req.Version {
+			targetVersion = r.Mod.Version
 		}
-		for _, r := range f.Require {
-			if r.Mod.Path == Module && r.Mod.Version != req.Version {
-				targetVersion = r.Mod.Version
-			}
+	}
+	if err := f.AddRequire(Module, req.Version); err != nil {
+		return "", fmt.Errorf("requiring %s: %w", Module, err)
+	}
+	if req.Dir != "" {
+		if err := f.AddReplace(Module, "", req.Dir, ""); err != nil {
+			return "", fmt.Errorf("replacing %s: %w", Module, err)
 		}
-		if err := f.AddRequire(Module, req.Version); err != nil {
-			return "", fmt.Errorf("requiring %s: %w", Module, err)
-		}
-		if req.Dir != "" {
-			if err := f.AddReplace(Module, "", req.Dir, ""); err != nil {
-				return "", fmt.Errorf("replacing %s: %w", Module, err)
-			}
-		}
-		f.Cleanup()
-		if mod, err = f.Format(); err != nil {
-			return "", fmt.Errorf("writing the modfile: %w", err)
-		}
+	}
+	f.Cleanup()
+	if mod, err = f.Format(); err != nil {
+		return "", fmt.Errorf("writing the modfile: %w", err)
 	}
 	if err := writeFile(modFile, mod); err != nil {
 		return "", err
@@ -510,7 +464,7 @@ func writeFile(name string, content []byte) error {
 const probeFile = "muxt_overlay_probe.go"
 
 // Probe checks that the toolchain honors an overlay of GOROOT's
-// html/template that imports Module's template/html, as the shim does, in
+// html/template that imports htt's template package, as the shim does, in
 // the test target's module with Module required as Write requires it: it
 // adds a one-line file importing that package to html/template and asks
 // go list whether the package has it. The go command fetches Module if it
@@ -518,9 +472,6 @@ const probeFile = "muxt_overlay_probe.go"
 // toolchain, in this module, or with this muxt.
 func Probe(ctx context.Context, target Target) (err error) {
 	tc, goroot, targetMod, req := target.tc, target.goroot, target.goMod, target.req
-	if err := checkSelfEngine(targetMod); err != nil {
-		return err
-	}
 	dir, err := os.MkdirTemp("", "muxt-overlay-probe-")
 	if err != nil {
 		return fmt.Errorf("making the overlay probe's directory: %w", err)
@@ -532,7 +483,7 @@ func Probe(ctx context.Context, target Target) (err error) {
 	}()
 
 	local := filepath.Join(dir, probeFile)
-	if err := writeFile(local, []byte("package template // muxt overlay probe\n\nimport _ \""+Module+"/template/html\"\n")); err != nil {
+	if err := writeFile(local, []byte("package template // muxt overlay probe\n\nimport _ \""+enginePackage+"\"\n")); err != nil {
 		return fmt.Errorf("writing the overlay probe: %w", err)
 	}
 	modFile := filepath.Join(dir, "go.mod")
@@ -554,33 +505,6 @@ func Probe(ctx context.Context, target Target) (err error) {
 		}
 	}
 	return fmt.Errorf("the go command ignores an overlay of GOROOT's html/template: go list html/template does not include %s", key)
-}
-
-// checkSelfEngine checks, when targetMod is Module's own, that its tree
-// has template/html: the modfile copy requires nothing then, so the shim's
-// import resolves inside the target, and a fork or copy older than this
-// muxt has no such package. A targetMod that is not Module's is not
-// checked.
-func checkSelfEngine(targetMod string) error {
-	self, err := isModule(targetMod)
-	if err != nil || !self {
-		return err
-	}
-	entries, err := os.ReadDir(filepath.Join(filepath.Dir(targetMod), "template", "html"))
-	if err != nil && !errors.Is(err, fs.ErrNotExist) {
-		return fmt.Errorf("reading the module under test's template/html: %w", err)
-	}
-	for _, e := range entries {
-		if name := e.Name(); !e.IsDir() && strings.HasSuffix(name, ".go") && !strings.HasSuffix(name, "_test.go") {
-			return nil
-		}
-	}
-	info, ok := debug.ReadBuildInfo()
-	version, err := moduleVersion(info, ok)
-	if err != nil {
-		version = "you ran"
-	}
-	return fmt.Errorf("the module under test is %s without template/html; the pre-pass needs the engine packages of muxt %s", Module, version)
 }
 
 // probeRefusal says why the probe's go list failed: the go command's own

@@ -6,7 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/typelate/muxt/template"
+	"github.com/typelate/htt"
 )
 
 func TestParseTrees(t *testing.T) {
@@ -53,8 +53,8 @@ func TestParseTreesKeywordsGiveWayToFunctions(t *testing.T) {
 		trees, err := ParseTrees("t", `{{range .}}{{break}}{{end}}`, "", "", functions, true)
 		require.NoError(t, err)
 		found := false
-		template.Walk(trees["t"], func(_ *template.Tree, n template.Node) {
-			if _, ok := n.(*template.BreakNode); ok {
+		htt.Walk(trees["t"], func(_ *htt.Tree, n htt.Node) {
+			if _, ok := n.(*htt.BreakNode); ok {
 				found = true
 			}
 		})
@@ -80,8 +80,8 @@ func TestParseTreesText(t *testing.T) {
 	require.NoError(t, err, "ParseTrees(%q, text)", text)
 	assert.Equal(t, text, trees["t"].Root.String())
 	assert.False(t, trees["t"].HTMLMode, "HTMLMode")
-	template.Walk(trees["t"], func(_ *template.Tree, n template.Node) {
-		if _, ok := n.(*template.HTMLCommentNode); ok {
+	htt.Walk(trees["t"], func(_ *htt.Tree, n htt.Node) {
+		if _, ok := n.(*htt.HTMLCommentNode); ok {
 			t.Errorf("ParseTrees(%q, text) built an HTML comment", text)
 		}
 	})

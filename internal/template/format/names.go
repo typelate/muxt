@@ -7,8 +7,9 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/typelate/htt"
+
 	"github.com/typelate/muxt/internal/muxt"
-	"github.com/typelate/muxt/template"
 )
 
 // KeepNames sets which names keep their spellings: a template name
@@ -86,19 +87,19 @@ func joinDefinitionName(name string) (string, bool) {
 // spells otherwise than canonically, so the references in the run keep
 // matching it, and a name two distinct define or block names of the
 // package share, which would define it twice.
-func KeptNames(run, outside []*template.Tree) map[string]bool {
+func KeptNames(run, outside []*htt.Tree) map[string]bool {
 	kept := make(map[string]bool)
 	definitions := make(map[string]string) // canonical name → a spelling defined
-	visit := func(t *template.Tree, isOutside bool) {
-		template.Walk(t, func(_ *template.Tree, n template.Node) {
+	visit := func(t *htt.Tree, isOutside bool) {
+		htt.Walk(t, func(_ *htt.Tree, n htt.Node) {
 			var name string
 			definition := true
 			switch n := n.(type) {
-			case *template.DefineNode:
+			case *htt.DefineNode:
 				name = n.Name
-			case *template.BlockNode:
+			case *htt.BlockNode:
 				name = n.Name
-			case *template.TemplateNode:
+			case *htt.TemplateNode:
 				name, definition = n.Name, false
 			default:
 				return
@@ -138,8 +139,8 @@ func KeptNames(run, outside []*template.Tree) map[string]bool {
 // whose exact spelling neither root nor context defines (an execution
 // error, or a template registered from Go) is as written, since its
 // canonical spelling may name another template.
-func (e *emitter) planRenames(root *template.ListNode, names nameRule) {
-	kept := KeptNames([]*template.Tree{{Root: root}}, nil)
+func (e *emitter) planRenames(root *htt.ListNode, names nameRule) {
+	kept := KeptNames([]*htt.Tree{{Root: root}}, nil)
 	defined := definedNames(root)
 	for _, t := range names.context {
 		maps.Copy(defined, definedNames(t.Root))
@@ -178,7 +179,7 @@ func (e *emitter) planRenames(root *template.ListNode, names nameRule) {
 // {{template}} calls may resolve to.
 type nameRule struct {
 	keep    func(canonical string) bool
-	context []*template.Tree
+	context []*htt.Tree
 }
 
 // renamed returns the rename actionShapes reads a source's names with,

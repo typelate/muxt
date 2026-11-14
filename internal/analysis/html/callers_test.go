@@ -3,35 +3,36 @@ package analysis_test
 import (
 	"testing"
 
-	"github.com/typelate/muxt/internal/analysis/html"
-	"github.com/typelate/muxt/template"
-	"github.com/typelate/muxt/template/lex"
+	"github.com/typelate/htt"
+	"github.com/typelate/htt/lex"
+
+	analysis "github.com/typelate/muxt/internal/analysis/html"
 )
 
 func TestCallers(t *testing.T) {
 	tests := []struct {
 		name     string
 		input    string
-		expected map[string][]template.HTMLContext // template name -> expected contexts
+		expected map[string][]htt.HTMLContext // template name -> expected contexts
 	}{
 		{
 			name:  "single template call in text",
 			input: `<p>{{template "widget" .}}</p>`,
-			expected: map[string][]template.HTMLContext{
+			expected: map[string][]htt.HTMLContext{
 				"widget": {{State: "text", Element: "p"}},
 			},
 		},
 		{
 			name:  "single template call in attr",
 			input: `<a href="{{template "url" .}}">link</a>`,
-			expected: map[string][]template.HTMLContext{
+			expected: map[string][]htt.HTMLContext{
 				"url": {{State: "attr", Element: "a", Attr: "href"}},
 			},
 		},
 		{
 			name:  "same template called from two contexts",
 			input: `<a href="{{template "x" .}}">{{template "x" .}}</a>`,
-			expected: map[string][]template.HTMLContext{
+			expected: map[string][]htt.HTMLContext{
 				"x": {
 					{State: "attr", Element: "a", Attr: "href"},
 					{State: "text", Element: "a"},
@@ -41,7 +42,7 @@ func TestCallers(t *testing.T) {
 		{
 			name:  "multiple templates",
 			input: `<p>{{template "a" .}}</p><div class="{{template "b" .}}">text</div>`,
-			expected: map[string][]template.HTMLContext{
+			expected: map[string][]htt.HTMLContext{
 				"a": {{State: "text", Element: "p"}},
 				"b": {{State: "attr", Element: "div", Attr: "class"}},
 			},
@@ -49,26 +50,26 @@ func TestCallers(t *testing.T) {
 		{
 			name:  "template in comment",
 			input: `<!-- {{template "info" .}} -->`,
-			expected: map[string][]template.HTMLContext{
+			expected: map[string][]htt.HTMLContext{
 				"info": {{State: "comment"}},
 			},
 		},
 		{
 			name:     "no template calls",
 			input:    `<p>{{.Text}}</p>`,
-			expected: map[string][]template.HTMLContext{},
+			expected: map[string][]htt.HTMLContext{},
 		},
 		{
 			name:  "template in range",
 			input: `<ul>{{range .Items}}<li>{{template "item" .}}</li>{{end}}</ul>`,
-			expected: map[string][]template.HTMLContext{
+			expected: map[string][]htt.HTMLContext{
 				"item": {{State: "text", Element: "li"}},
 			},
 		},
 		{
 			name:  "template in if branches",
 			input: `{{if .Show}}<p>{{template "x" .}}</p>{{else}}<div>{{template "x" .}}</div>{{end}}`,
-			expected: map[string][]template.HTMLContext{
+			expected: map[string][]htt.HTMLContext{
 				"x": {
 					{State: "text", Element: "p"},
 					{State: "text", Element: "div"},
@@ -79,11 +80,11 @@ func TestCallers(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			tree, err := template.ParseTree("test.gohtml", test.name, test.input, nil, lex.NewOptions())
+			tree, err := htt.ParseTree("test.gohtml", test.name, test.input, nil, lex.NewOptions())
 			if err != nil {
 				t.Fatalf("parse error: %v", err)
 			}
-			template.AnnotateHTMLContexts(tree.Root)
+			htt.AnnotateHTMLContexts(tree.Root)
 
 			callers := analysis.Callers(tree)
 
@@ -171,11 +172,11 @@ func TestContextConflicts(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			tree, err := template.ParseTree("test.gohtml", test.name, test.input, nil, lex.NewOptions())
+			tree, err := htt.ParseTree("test.gohtml", test.name, test.input, nil, lex.NewOptions())
 			if err != nil {
 				t.Fatalf("parse error: %v", err)
 			}
-			template.AnnotateHTMLContexts(tree.Root)
+			htt.AnnotateHTMLContexts(tree.Root)
 
 			callers := analysis.Callers(tree)
 			conflicts := analysis.ContextConflicts(callers)

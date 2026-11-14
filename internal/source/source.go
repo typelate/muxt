@@ -18,8 +18,8 @@ import (
 	"go/token"
 	"go/types"
 
-	"github.com/typelate/muxt/template"
-	html "github.com/typelate/muxt/template/html"
+	"github.com/typelate/htt"
+	html "github.com/typelate/htt/template"
 )
 
 // Package is a loaded Go package.
@@ -111,7 +111,7 @@ type Definition struct {
 	Define, End, TemplateName Span
 
 	// Tree is the template's parse tree.
-	Tree *template.Tree
+	Tree *htt.Tree
 
 	// Package is the import path of the package whose embed.FS the
 	// template's file came from, empty for the package that declares the

@@ -7,16 +7,16 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/typelate/muxt/template"
-	"github.com/typelate/muxt/template/lex"
+	"github.com/typelate/htt"
+	"github.com/typelate/htt/lex"
 )
 
-func parseTestTree(t *testing.T, text string) *template.Tree {
+func parseTestTree(t *testing.T, text string) *htt.Tree {
 	t.Helper()
 	// Parse without HTML mode so each action is a direct child of the root.
 	opts := lex.NewOptions()
 	opts.ParseHTML = false
-	tree, err := template.ParseTree("test.gohtml", "test.gohtml", text, nil, opts)
+	tree, err := htt.ParseTree("test.gohtml", "test.gohtml", text, nil, opts)
 	require.NoError(t, err)
 	return tree
 }

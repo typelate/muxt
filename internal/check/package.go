@@ -12,9 +12,10 @@ import (
 
 	"golang.org/x/tools/go/packages"
 
+	"github.com/typelate/htt"
+
 	"github.com/typelate/muxt/internal/check/internal/asteval"
 	"github.com/typelate/muxt/internal/check/internal/astgen"
-	"github.com/typelate/muxt/template"
 )
 
 type pendingCall struct {
@@ -25,7 +26,7 @@ type pendingCall struct {
 }
 
 type resolvedTemplate struct {
-	templates   *template.Template[*types.Signature]
+	templates   *htt.Template[*types.Signature]
 	functions   asteval.TemplateFunctions
 	metadata    *asteval.TemplateMetadata
 	definitions definitionSet
@@ -64,7 +65,7 @@ func definitionsFor(fset *token.FileSet, sources []asteval.ParsedText) []Definit
 // The tree is the invoked template's own tree, the same one def.Tree
 // holds. The type is the data argument's type, and def locates where the
 // template was defined.
-type ExecuteTemplateNodeInspectorFunc func(node *ast.CallExpr, t *template.Tree, tp types.Type, def Definition)
+type ExecuteTemplateNodeInspectorFunc func(node *ast.CallExpr, t *htt.Tree, tp types.Type, def Definition)
 
 // Package discovers all .ExecuteTemplate calls in the given package,
 // resolves receiver variables to their template construction chains,
@@ -90,12 +91,12 @@ func Package(pkg *packages.Package, inspectCall ExecuteTemplateNodeInspectorFunc
 // was found in (which also resolves any {{template}} names reachable from
 // it). Tooling receives one Entry per checked call via AnalyzePackage.
 type Entry struct {
-	Call         *ast.CallExpr                        // the ExecuteTemplate(...) call
-	TemplateName string                               // the invoked template's name
-	DataType     types.Type                           // type of the third (data) argument
-	Templates    *template.Template[*types.Signature] // resolved set; use Lookup/FindTree for names
-	Tree         *template.Tree                       // the invoked template's tree (Entry point)
-	Functions    []string                             // names of callable functions (builtins + funcmap), sorted
+	Call         *ast.CallExpr                   // the ExecuteTemplate(...) call
+	TemplateName string                          // the invoked template's name
+	DataType     types.Type                      // type of the third (data) argument
+	Templates    *htt.Template[*types.Signature] // resolved set; use Lookup/FindTree for names
+	Tree         *htt.Tree                       // the invoked template's tree (Entry point)
+	Functions    []string                        // names of callable functions (builtins + funcmap), sorted
 }
 
 // AnalyzePackage runs the same ExecuteTemplate discovery, template
@@ -155,7 +156,7 @@ func AnalyzePackage(pkg *packages.Package, onEntry func(Entry) NodeInspectorFunc
 		}
 		global := NewGlobal(pkg.Types, pkg.Fset, rt.templates, mergedFunctions)
 		global.InspectWarning = func(w Warning) { warnings = append(warnings, w) }
-		global.InspectTemplateNode = func(n *template.TemplateNode, t *template.Tree, dot types.Type, _ Definition) {
+		global.InspectTemplateNode = func(n *htt.TemplateNode, t *htt.Tree, dot types.Type, _ Definition) {
 			invocations = append(invocations, tmplInvocation{name: n.Name, dot: dot, tree: t, node: n})
 		}
 		if onEntry != nil {
@@ -182,8 +183,8 @@ func AnalyzePackage(pkg *packages.Package, onEntry func(Entry) NodeInspectorFunc
 type tmplInvocation struct {
 	name string
 	dot  types.Type
-	tree *template.Tree
-	node *template.TemplateNode
+	tree *htt.Tree
+	node *htt.TemplateNode
 }
 
 // inconsistentTemplateWarnings reports W007 when a sub-template is invoked
@@ -214,7 +215,7 @@ func inconsistentTemplateWarnings(invocations []tmplInvocation) []Warning {
 		}
 		msg := fmt.Sprintf("template %q is invoked with inconsistent data types (%s and %s)",
 			name, types.TypeString(dereference(a), nil), types.TypeString(dereference(b), nil))
-		seen := make(map[*template.TemplateNode]bool)
+		seen := make(map[*htt.TemplateNode]bool)
 		for _, inv := range invs {
 			if seen[inv.node] {
 				continue
@@ -247,7 +248,7 @@ func unusedTemplateWarnings(resolved map[types.Object]*resolvedTemplate, pending
 	for _, p := range pending {
 		referenced[p.templateName] = true
 	}
-	sets := make(map[*template.Template[*types.Signature]]bool)
+	sets := make(map[*htt.Template[*types.Signature]]bool)
 	for _, rt := range resolved {
 		set := rt.templates
 		if set == nil || sets[set] {
@@ -259,8 +260,8 @@ func unusedTemplateWarnings(resolved map[types.Object]*resolvedTemplate, pending
 			if !ok || tree == nil {
 				continue
 			}
-			template.Walk(tree, func(_ *template.Tree, n template.Node) {
-				if tn, ok := n.(*template.TemplateNode); ok {
+			htt.Walk(tree, func(_ *htt.Tree, n htt.Node) {
+				if tn, ok := n.(*htt.TemplateNode); ok {
 					referenced[tn.Name] = true
 				}
 			})
@@ -311,18 +312,18 @@ func unusedTemplateWarnings(resolved map[types.Object]*resolvedTemplate, pending
 // as having renderable content and W002-flagged as unused, even though its
 // defines are used via their route names. A DefineNode is therefore opaque
 // here and its body is not descended into.
-func hasRenderableContent(tree *template.Tree) bool {
+func hasRenderableContent(tree *htt.Tree) bool {
 	if tree == nil {
 		return false
 	}
 	return nodeRenders(tree.Root)
 }
 
-func nodeRenders(n template.Node) bool {
+func nodeRenders(n htt.Node) bool {
 	switch v := n.(type) {
 	case nil:
 		return false
-	case *template.ListNode:
+	case *htt.ListNode:
 		if v == nil {
 			return false
 		}
@@ -332,16 +333,16 @@ func nodeRenders(n template.Node) bool {
 			}
 		}
 		return false
-	case *template.HTMLDocumentFragmentNode:
+	case *htt.HTMLDocumentFragmentNode:
 		for _, c := range v.Children {
 			if nodeRenders(c) {
 				return true
 			}
 		}
 		return false
-	case *template.TextNode:
+	case *htt.TextNode:
 		return strings.TrimSpace(string(v.Text)) != ""
-	case *template.CommentNode, *template.HTMLCommentNode, *template.DefineNode:
+	case *htt.CommentNode, *htt.HTMLCommentNode, *htt.DefineNode:
 		// A {{define}} renders nothing in place; comments and whitespace
 		// are not renderable content.
 		return false

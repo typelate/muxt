@@ -4,29 +4,30 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/typelate/htt"
+
 	"github.com/typelate/muxt/internal/template/selectors"
-	"github.com/typelate/muxt/template"
 )
 
 // elementByID finds the element whose static id attribute equals id.
-func elementByID(t *testing.T, tree *template.Tree, id string) *template.HTMLElementNode {
+func elementByID(t *testing.T, tree *htt.Tree, id string) *htt.HTMLElementNode {
 	t.Helper()
-	var found *template.HTMLElementNode
-	template.Walk(tree, func(_ *template.Tree, n template.Node) {
+	var found *htt.HTMLElementNode
+	htt.Walk(tree, func(_ *htt.Tree, n htt.Node) {
 		if found != nil {
 			return
 		}
-		el, ok := n.(*template.HTMLElementNode)
+		el, ok := n.(*htt.HTMLElementNode)
 		if !ok {
 			return
 		}
 		for _, a := range el.Attr {
-			attr, ok := a.(*template.HTMLAttributeNode)
+			attr, ok := a.(*htt.HTMLAttributeNode)
 			if !ok || len(attr.Key) != 1 || len(attr.Value) != 1 {
 				continue
 			}
-			k, kok := attr.Key[0].(*template.TextNode)
-			v, vok := attr.Value[0].(*template.TextNode)
+			k, kok := attr.Key[0].(*htt.TextNode)
+			v, vok := attr.Value[0].(*htt.TextNode)
 			if kok && vok && string(k.Text) == "id" && strings.Trim(string(v.Text), `"'`) == id {
 				found = el
 			}

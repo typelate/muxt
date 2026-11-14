@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/typelate/muxt/template"
+	"github.com/typelate/htt"
 )
 
 // OperatorOperands varies the leaf operands of one action together,
@@ -35,32 +35,32 @@ type operand struct {
 //
 // A nested pipeline is walked into, so {{if and .A (or .B .C)}} reports
 // three operands rather than two.
-func operands(text string, dot types.Type, pipe *template.PipeNode) []operand {
+func operands(text string, dot types.Type, pipe *htt.PipeNode) []operand {
 	var found []operand
 	collectOperands(&found, text, dot, pipe)
 	return found
 }
 
-func collectOperands(out *[]operand, text string, dot types.Type, pipe *template.PipeNode) {
+func collectOperands(out *[]operand, text string, dot types.Type, pipe *htt.PipeNode) {
 	if pipe == nil {
 		return
 	}
 	for _, command := range pipe.Commands {
 		for _, arg := range command.Args {
 			switch node := arg.(type) {
-			case *template.PipeNode:
+			case *htt.PipeNode:
 				collectOperands(out, text, dot, node)
-			case *template.FieldNode:
+			case *htt.FieldNode:
 				// An unresolved path leaves the type nil, which draws a
 				// string: the one literal valid wherever a value is read.
 				resolved, _ := fieldPath(dot, node.Ident)
 				appendOperand(out, text, node, resolved)
-			case *template.VariableNode:
+			case *htt.VariableNode:
 				// A variable's type would have to be tracked through the
 				// declaration that bound it, which the checker does and
 				// this does not. It is still an input worth varying.
 				appendOperand(out, text, node, nil)
-			case *template.DotNode:
+			case *htt.DotNode:
 				appendOperand(out, text, node, dot)
 			}
 		}
@@ -74,7 +74,7 @@ func collectOperands(out *[]operand, text string, dot types.Type, pipe *template
 // so for a tree parsed from text the two agree; requiring it is what keeps
 // a mutation from splicing over the wrong bytes if a tree and the text it
 // is paired with ever disagree.
-func appendOperand(out *[]operand, text string, node template.Node, dataType types.Type) {
+func appendOperand(out *[]operand, text string, node htt.Node, dataType types.Type) {
 	written := node.String()
 	start, ok := operandStart(text, int(node.Start()), written)
 	if !ok {

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/typelate/muxt/template"
+	"github.com/typelate/htt"
 )
 
 // autoClosedBy maps an open element to the start tags that make
@@ -68,16 +68,16 @@ func setOf(tags ...string) map[string]bool {
 // <ul>, which is legal). The <p> row instead scans ancestors up to a
 // button-scope boundary, because block content can auto-close a <p>
 // through intervening inline elements such as <span>.
-func checkAutoClose(t *template.Tree, diags *Diagnostics) {
-	template.WalkPath(t, func(_ *template.Tree, path []template.Node, n template.Node) {
-		el, ok := n.(*template.HTMLElementNode)
+func checkAutoClose(t *htt.Tree, diags *Diagnostics) {
+	htt.WalkPath(t, func(_ *htt.Tree, path []htt.Node, n htt.Node) {
+		el, ok := n.(*htt.HTMLElementNode)
 		if !ok {
 			return
 		}
 		tag := strings.ToLower(el.TagName)
 
 		if enc, mod := enclosingElement(path); enc != nil && autoClosedBy[strings.ToLower(enc.TagName)][tag] {
-			appendDiag(diags, el.Start(), el.End(), template.DiagAutoClosed, mod,
+			appendDiag(diags, el.Start(), el.End(), htt.DiagAutoClosed, mod,
 				fmt.Sprintf(msgAutoClosed, enc.TagName, el.TagName))
 			return
 		}
@@ -88,7 +88,7 @@ func checkAutoClose(t *template.Tree, diags *Diagnostics) {
 		for anc, mod := range elementAncestors(path) {
 			ancTag := strings.ToLower(anc.TagName)
 			if ancTag == "p" {
-				appendDiag(diags, el.Start(), el.End(), template.DiagAutoClosed, mod,
+				appendDiag(diags, el.Start(), el.End(), htt.DiagAutoClosed, mod,
 					fmt.Sprintf(msgAutoClosed, anc.TagName, el.TagName))
 				return
 			}

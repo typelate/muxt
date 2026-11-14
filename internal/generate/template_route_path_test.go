@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/typelate/muxt/template/html"
+	"github.com/typelate/htt/template"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -166,7 +166,7 @@ func TestRoutePathFunc(t *testing.T) {
 				Types: pkg,
 				Variables: []source.Variable{{
 					Name: "templates",
-					Set:  html.Must(html.New("templates").Parse(`{{define "` + tt.pattern + `"}}{{end}}`)),
+					Set:  template.Must(template.New("templates").Parse(`{{define "` + tt.pattern + `"}}{{end}}`)),
 				}},
 			}
 			id := fake.Lookup(t, pkg, "ID")

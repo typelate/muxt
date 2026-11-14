@@ -5,7 +5,7 @@ import (
 	"go/token"
 	"testing"
 
-	"github.com/typelate/muxt/template/html"
+	"github.com/typelate/htt/template"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -78,8 +78,8 @@ func TestCheckForDuplicatePatternsOrdersLocations(t *testing.T) {
 }
 
 func TestDefinitionsSourceFile(t *testing.T) {
-	ts := html.New("root")
-	html.Must(ts.New("a.gohtml").Parse(`{{define "GET /a A()"}}x{{end}}`))
+	ts := template.New("root")
+	template.Must(ts.New("a.gohtml").Parse(`{{define "GET /a A()"}}x{{end}}`))
 	ts.New("GET /b B()") // declared, never parsed: no tree
 	defs, err := Definitions(source.Variable{Name: "templates", Set: ts})
 	require.NoError(t, err, "Definitions()")

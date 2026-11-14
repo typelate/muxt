@@ -3,7 +3,7 @@ package mutation
 import (
 	"go/types"
 
-	"github.com/typelate/muxt/template"
+	"github.com/typelate/htt"
 
 	"github.com/typelate/muxt/internal/check"
 )
@@ -16,7 +16,7 @@ import (
 // a string, zero for a count, false for a flag. Where the type cannot be
 // resolved from dot the caller falls back to an empty string, which
 // text/template accepts in any printing position.
-func zeroLiteral(dot types.Type, pipe *template.PipeNode, functions check.Functions) (string, bool) {
+func zeroLiteral(dot types.Type, pipe *htt.PipeNode, functions check.Functions) (string, bool) {
 	resolved, ok := pipelineType(dot, pipe, functions)
 	if !ok {
 		return "", false
@@ -74,7 +74,7 @@ func isSafeString(t types.Type) bool {
 
 // withDot returns the type of dot inside a {{with}} body, which is what
 // the with's pipeline selected.
-func withDot(dot types.Type, pipe *template.PipeNode, functions check.Functions) types.Type {
+func withDot(dot types.Type, pipe *htt.PipeNode, functions check.Functions) types.Type {
 	if selected, ok := pipelineType(dot, pipe, functions); ok {
 		return selected
 	}
@@ -86,7 +86,7 @@ func withDot(dot types.Type, pipe *template.PipeNode, functions check.Functions)
 //
 // Ranging over an integer, which text/template has allowed since Go 1.22,
 // yields the integer type itself.
-func rangeDot(dot types.Type, pipe *template.PipeNode, functions check.Functions) types.Type {
+func rangeDot(dot types.Type, pipe *htt.PipeNode, functions check.Functions) types.Type {
 	over, ok := pipelineType(dot, pipe, functions)
 	if !ok {
 		return nil
@@ -120,7 +120,7 @@ func rangeDot(dot types.Type, pipe *template.PipeNode, functions check.Functions
 // the function's signature, which is what the template set carries for
 // every function it registered. A pipeline reading a variable is left
 // alone; the fallback costs nothing but a less specific replacement.
-func pipelineType(dot types.Type, pipe *template.PipeNode, functions check.Functions) (types.Type, bool) {
+func pipelineType(dot types.Type, pipe *htt.PipeNode, functions check.Functions) (types.Type, bool) {
 	if pipe == nil || len(pipe.Commands) == 0 {
 		return nil, false
 	}
@@ -129,7 +129,7 @@ func pipelineType(dot types.Type, pipe *template.PipeNode, functions check.Funct
 		return nil, false
 	}
 
-	if ident, ok := command.Args[0].(*template.IdentifierNode); ok {
+	if ident, ok := command.Args[0].(*htt.IdentifierNode); ok {
 		return functionResult(ident.Ident, functions)
 	}
 	if len(command.Args) != 1 || dot == nil {
@@ -140,14 +140,14 @@ func pipelineType(dot types.Type, pipe *template.PipeNode, functions check.Funct
 }
 
 // operandType resolves a lone operand read off dot.
-func operandType(dot types.Type, operand template.Node) (types.Type, bool) {
+func operandType(dot types.Type, operand htt.Node) (types.Type, bool) {
 	switch arg := operand.(type) {
-	case *template.DotNode:
+	case *htt.DotNode:
 		return dot, true
-	case *template.FieldNode:
+	case *htt.FieldNode:
 		return fieldPath(dot, arg.Ident)
-	case *template.ChainNode:
-		if _, ok := arg.Node.(*template.DotNode); !ok {
+	case *htt.ChainNode:
+		if _, ok := arg.Node.(*htt.DotNode); !ok {
 			return nil, false
 		}
 		return fieldPath(dot, arg.Field)

@@ -13,9 +13,10 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/typelate/htt"
+	"github.com/typelate/htt/lex"
+
 	analysis "github.com/typelate/muxt/internal/analysis/html"
-	"github.com/typelate/muxt/template"
-	"github.com/typelate/muxt/template/lex"
 )
 
 // Option configures the formatter.
@@ -58,10 +59,10 @@ func Styles(options analysis.WhitespaceOptions) Option {
 // carriage return is returned as it is. Should the formatter fail (a bug
 // that Source reports as an error), the node's source is returned as it
 // is.
-func Node(root template.Node, opts ...Option) string {
-	list, ok := root.(*template.ListNode)
+func Node(root htt.Node, opts ...Option) string {
+	list, ok := root.(*htt.ListNode)
 	if !ok {
-		list = &template.ListNode{Nodes: []template.Node{root}}
+		list = &htt.ListNode{Nodes: []htt.Node{root}}
 	}
 	src := root.String()
 	if strings.Contains(src, "\r") {
@@ -93,12 +94,12 @@ type formatter struct {
 
 // format reindents src, the source of list starting at position base.
 // dir holds the file's muxt:fmt regions; it is nil for Node.
-func (f *formatter) format(src string, base lex.Pos, list *template.ListNode, dir *directives) (string, error) {
+func (f *formatter) format(src string, base lex.Pos, list *htt.ListNode, dir *directives) (string, error) {
 	whole, bodies := ignoredSelfCloses(list)
 	if whole || hasUnparsedMarkup(list.Nodes) {
 		return f.actionsOnly(src, base, list, dir)
 	}
-	trees := []*template.Tree{{Root: list}}
+	trees := []*htt.Tree{{Root: list}}
 	styles := analysis.ComputeWhitespace(trees, f.whitespace)
 	sites := f.callSiteTrees(list, styles)
 	// With a template of the package unreadable, call sites may be
@@ -128,7 +129,7 @@ func (f *formatter) format(src string, base lex.Pos, list *template.ListNode, di
 // actionsOnly returns src, the source of list starting at position
 // base, with only its actions printed (printToken): the whitespace
 // between them is as written.
-func (f *formatter) actionsOnly(src string, base lex.Pos, list *template.ListNode, dir *directives) (string, error) {
+func (f *formatter) actionsOnly(src string, base lex.Pos, list *htt.ListNode, dir *directives) (string, error) {
 	e := newEmitter(src, base, list, f.leftDelim, f.rightDelim, classes{}, nil, dir, f.nameRule())
 	f.renames = e.renames
 	return e.apply()
@@ -147,24 +148,24 @@ func (f *formatter) nameRule() nameRule {
 // when one of them calls a name list defines, whose elements' white-space
 // it then adds to styles. Defines called only from other packages, or
 // from Go, are not seen and collapse (spec §2).
-func (f *formatter) callSiteTrees(list *template.ListNode, styles analysis.Whitespaces) []*template.Tree {
-	trees := []*template.Tree{{Root: list}}
+func (f *formatter) callSiteTrees(list *htt.ListNode, styles analysis.Whitespaces) []*htt.Tree {
+	trees := []*htt.Tree{{Root: list}}
 	defined := make(map[string]bool)
-	template.Walk(trees[0], func(_ *template.Tree, n template.Node) {
+	htt.Walk(trees[0], func(_ *htt.Tree, n htt.Node) {
 		switch n := n.(type) {
-		case *template.DefineNode:
+		case *htt.DefineNode:
 			defined[n.Name] = true
-		case *template.BlockNode:
+		case *htt.BlockNode:
 			defined[n.Name] = true
 		}
 	})
 	calls := false
 	for _, t := range f.whitespace.Context {
-		template.Walk(t, func(_ *template.Tree, n template.Node) {
+		htt.Walk(t, func(_ *htt.Tree, n htt.Node) {
 			switch n := n.(type) {
-			case *template.TemplateNode:
+			case *htt.TemplateNode:
 				calls = calls || defined[n.Name]
-			case *template.BlockNode:
+			case *htt.BlockNode:
 				calls = calls || defined[n.Name]
 			}
 		})
@@ -231,7 +232,7 @@ func Source(filename, src string, opts ...Option) (string, error) {
 // names the emitter changed (f.renames), each everywhere it appears,
 // and as many distinct define and block names, so a rename never
 // merges two defines.
-func (f *formatter) checkReparse(filename string, tree *template.Tree, out string) error {
+func (f *formatter) checkReparse(filename string, tree *htt.Tree, out string) error {
 	again, err := f.parse(filename, out)
 	if err != nil || !slices.Equal(actionShapes(tree.Root, renamed(f.renames)), actionShapes(again.Root, nil)) ||
 		len(definedNames(tree.Root)) != len(definedNames(again.Root)) {
@@ -240,8 +241,8 @@ func (f *formatter) checkReparse(filename string, tree *template.Tree, out strin
 	return nil
 }
 
-func (f *formatter) parse(filename, src string) (*template.Tree, error) {
-	return template.ParseTree(filename, filename, src, nil, lex.Options{
+func (f *formatter) parse(filename, src string) (*htt.Tree, error) {
+	return htt.ParseTree(filename, filename, src, nil, lex.Options{
 		EmitComment: true,
 		ParseHTML:   true,
 		BreakOK:     true,
@@ -269,14 +270,14 @@ func normalizeLineEndings(src string) string {
 // defines are independent templates. One outside any define, or in a
 // define or block the file calls with {{template}} or that is a block
 // (rendered in place), leaves the whole file as written (whole).
-func ignoredSelfCloses(root *template.ListNode) (whole bool, bodies map[*template.DefineNode]bool) {
-	s := selfCloseScan{bodies: make(map[*template.DefineNode]bool), names: make(map[string]bool)}
+func ignoredSelfCloses(root *htt.ListNode) (whole bool, bodies map[*htt.DefineNode]bool) {
+	s := selfCloseScan{bodies: make(map[*htt.DefineNode]bool), names: make(map[string]bool)}
 	s.scan(root.Nodes, false, new(bool), nil)
 	if s.whole {
 		return true, nil
 	}
-	template.Walk(&template.Tree{Root: root}, func(_ *template.Tree, n template.Node) {
-		if call, ok := n.(*template.TemplateNode); ok && s.names[call.Name] {
+	htt.Walk(&htt.Tree{Root: root}, func(_ *htt.Tree, n htt.Node) {
+		if call, ok := n.(*htt.TemplateNode); ok && s.names[call.Name] {
 			s.whole = true
 		}
 	})
@@ -288,7 +289,7 @@ func ignoredSelfCloses(root *template.ListNode) (whole bool, bodies map[*templat
 
 type selfCloseScan struct {
 	whole  bool
-	bodies map[*template.DefineNode]bool
+	bodies map[*htt.DefineNode]bool
 	names  map[string]bool // defines and blocks holding one
 }
 
@@ -297,12 +298,12 @@ type selfCloseScan struct {
 // start tag (HTML §13.2.6.5) pops the browser out of foreign content,
 // what follows is HTML too. enclosing are the defines and blocks nodes
 // are in, outermost first.
-func (s *selfCloseScan) scan(nodes []template.Node, foreign bool, broke *bool, enclosing []template.Node) {
+func (s *selfCloseScan) scan(nodes []htt.Node, foreign bool, broke *bool, enclosing []htt.Node) {
 	for _, n := range nodes {
 		switch n := n.(type) {
-		case *template.HTMLDocumentFragmentNode:
+		case *htt.HTMLDocumentFragmentNode:
 			s.scan(n.Children, foreign, broke, enclosing)
-		case *template.HTMLElementNode:
+		case *htt.HTMLElementNode:
 			tag := strings.ToLower(n.TagName)
 			if foreign && breakoutTags[tag] {
 				*broke = true
@@ -321,7 +322,7 @@ func (s *selfCloseScan) scan(nodes []template.Node, foreign bool, broke *bool, e
 			} else {
 				s.scan(n.Children, inForeign, childBroke, enclosing)
 			}
-		case *template.IfNode, *template.WithNode, *template.RangeNode:
+		case *htt.IfNode, *htt.WithNode, *htt.RangeNode:
 			b := branchOf(n)
 			if b.List != nil {
 				s.scan(b.List.Nodes, foreign, broke, enclosing)
@@ -329,12 +330,12 @@ func (s *selfCloseScan) scan(nodes []template.Node, foreign bool, broke *bool, e
 			if b.ElseList != nil {
 				s.scan(b.ElseList.Nodes, foreign, broke, enclosing)
 			}
-		case *template.DefineNode:
+		case *htt.DefineNode:
 			// A body is HTML content: its callers are unknown.
 			if n.Body != nil {
 				s.scan(n.Body.Nodes, false, new(bool), append(enclosing, n))
 			}
-		case *template.BlockNode:
+		case *htt.BlockNode:
 			if n.Body != nil {
 				s.scan(n.Body.Nodes, false, new(bool), append(enclosing, n))
 			}
@@ -343,14 +344,14 @@ func (s *selfCloseScan) scan(nodes []template.Node, foreign bool, broke *bool, e
 }
 
 // found records an ignored self-close inside enclosing.
-func (s *selfCloseScan) found(enclosing []template.Node) {
-	var define *template.DefineNode
+func (s *selfCloseScan) found(enclosing []htt.Node) {
+	var define *htt.DefineNode
 	for _, e := range enclosing {
 		switch e := e.(type) {
-		case *template.DefineNode:
+		case *htt.DefineNode:
 			s.names[e.Name] = true
 			define = e
-		case *template.BlockNode:
+		case *htt.BlockNode:
 			s.names[e.Name] = true
 			s.whole = true // a block renders in place
 		}
@@ -401,39 +402,39 @@ var integrationPoints = map[string]bool{
 // the parser splits text from the comment that html/template does not,
 // and the formatter, which writes a comment with a --> close, would
 // change what html/template strips, so the file is written as it is.
-func hasUnparsedMarkup(nodes []template.Node) bool {
+func hasUnparsedMarkup(nodes []htt.Node) bool {
 	for _, n := range nodes {
 		switch n := n.(type) {
-		case *template.HTMLDoctypeNode:
+		case *htt.HTMLDoctypeNode:
 			if !analysis.IsDoctype(n) {
 				return true
 			}
-		case *template.HTMLCommentNode:
+		case *htt.HTMLCommentNode:
 			if !analysis.CommentDelimitedAlike(n) {
 				return true
 			}
-		case *template.TextNode:
+		case *htt.TextNode:
 			if unreadMarkupIn(n.Text) == unreadRetokenizes {
 				return true
 			}
-		case *template.HTMLDocumentFragmentNode:
+		case *htt.HTMLDocumentFragmentNode:
 			if hasUnparsedMarkup(n.Children) {
 				return true
 			}
-		case *template.HTMLElementNode:
+		case *htt.HTMLElementNode:
 			if !rawTextTags[strings.ToLower(n.TagName)] && hasUnparsedMarkup(n.Children) {
 				return true
 			}
-		case *template.IfNode, *template.WithNode, *template.RangeNode:
+		case *htt.IfNode, *htt.WithNode, *htt.RangeNode:
 			b := branchOf(n)
 			if b.List != nil && hasUnparsedMarkup(b.List.Nodes) || b.ElseList != nil && hasUnparsedMarkup(b.ElseList.Nodes) {
 				return true
 			}
-		case *template.DefineNode:
+		case *htt.DefineNode:
 			if n.Body != nil && hasUnparsedMarkup(n.Body.Nodes) {
 				return true
 			}
-		case *template.BlockNode:
+		case *htt.BlockNode:
 			if n.Body != nil && hasUnparsedMarkup(n.Body.Nodes) {
 				return true
 			}
@@ -508,10 +509,10 @@ var rawTextTags = map[string]bool{
 	"iframe": true, "noembed": true, "noframes": true, "noscript": true, "plaintext": true,
 }
 
-func hasElement(tree *template.Tree) bool {
+func hasElement(tree *htt.Tree) bool {
 	found := false
-	template.Walk(tree, func(_ *template.Tree, n template.Node) {
-		if _, ok := n.(*template.HTMLElementNode); ok {
+	htt.Walk(tree, func(_ *htt.Tree, n htt.Node) {
+		if _, ok := n.(*htt.HTMLElementNode); ok {
 			found = true
 		}
 	})

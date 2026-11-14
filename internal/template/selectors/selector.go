@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/typelate/muxt/template"
+	"github.com/typelate/htt"
 )
 
 // Selector is a compiled selector. The zero value is not usable; obtain one
@@ -17,7 +17,7 @@ type Selector struct {
 // matcher is the internal interface implemented by every selector AST node.
 // It reports, for a node in a template tree, whether the selector matches.
 type matcher interface {
-	match(n template.Node) Trit
+	match(n htt.Node) Trit
 }
 
 // Compile parses a selector string into a [Selector].
@@ -42,13 +42,13 @@ func MustCompile(s string) Selector {
 // possible (the Trit is [TritYes] or [TritMaybe]) and false when it is
 // statically impossible ([TritNo]). The Trit gives the certainty: [TritYes] if
 // n statically matches, [TritMaybe] if the result depends on runtime data.
-func (s Selector) Matches(n template.Node) (ok bool, certainty Trit) {
+func (s Selector) Matches(n htt.Node) (ok bool, certainty Trit) {
 	t := s.trit(n)
 	return t != TritNo, t
 }
 
 // trit returns the raw match certainty for n.
-func (s Selector) trit(n template.Node) Trit {
+func (s Selector) trit(n htt.Node) Trit {
 	if s.match == nil {
 		return TritNo
 	}

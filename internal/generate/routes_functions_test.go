@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/typelate/muxt/template/html"
+	"github.com/typelate/htt/template"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -46,9 +46,9 @@ func (T) Raw(ResponseWriter) string { return "" }
 func routesTestDefinitions(t *testing.T, files map[string]string) (source.Package, []muxt.Definition) {
 	t.Helper()
 	pkg := fake.Check(t, "example.com/server", map[string]string{"server.go": routesTestSource})
-	set := html.New("templates")
+	set := template.New("templates")
 	for _, name := range slices.Sorted(maps.Keys(files)) {
-		html.Must(set.New(name).Parse(files[name]))
+		template.Must(set.New(name).Parse(files[name]))
 	}
 	src := source.Package{
 		Fset:      fake.FileSet,

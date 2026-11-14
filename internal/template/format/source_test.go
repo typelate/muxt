@@ -4,8 +4,9 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/typelate/htt"
+
 	"github.com/typelate/muxt/internal/template/format"
-	"github.com/typelate/muxt/template"
 )
 
 func TestSource(t *testing.T) {
@@ -31,7 +32,7 @@ func TestSource(t *testing.T) {
 	}
 
 	_, err := format.Source("a.gohtml", "{{if}}")
-	if !errors.As(err, new(*template.ParseError)) {
+	if !errors.As(err, new(*htt.ParseError)) {
 		t.Errorf("Source(%q) error = %v, want *template.ParseError", "{{if}}", err)
 	}
 }

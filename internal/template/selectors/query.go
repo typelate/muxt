@@ -3,7 +3,7 @@ package selectors
 import (
 	"iter"
 
-	"github.com/typelate/muxt/template"
+	"github.com/typelate/htt"
 )
 
 // QuerySelectorAll returns an iterator over the descendant elements of root
@@ -17,9 +17,9 @@ import (
 // Traversal does not enter DefineNode or BlockNode bodies: those are detached
 // templates, reached by following {{template}}/{{block}} calls rather than by
 // lexical descent.
-func (s Selector) QuerySelectorAll(root template.Node) iter.Seq2[*template.HTMLElementNode, Trit] {
-	return func(yield func(*template.HTMLElementNode, Trit) bool) {
-		walkChildren(root, false, func(el *template.HTMLElementNode, conditional bool) bool {
+func (s Selector) QuerySelectorAll(root htt.Node) iter.Seq2[*htt.HTMLElementNode, Trit] {
+	return func(yield func(*htt.HTMLElementNode, Trit) bool) {
+		walkChildren(root, false, func(el *htt.HTMLElementNode, conditional bool) bool {
 			t := s.matchPresence(el, conditional)
 			if t == TritNo {
 				return false
@@ -33,7 +33,7 @@ func (s Selector) QuerySelectorAll(root template.Node) iter.Seq2[*template.HTMLE
 // QuerySelector returns the first descendant element of root that the selector
 // matches, in document order, with its Trit. When nothing matches it returns
 // (nil, TritNo).
-func (s Selector) QuerySelector(root template.Node) (*template.HTMLElementNode, Trit) {
+func (s Selector) QuerySelector(root htt.Node) (*htt.HTMLElementNode, Trit) {
 	for el, t := range s.QuerySelectorAll(root) {
 		return el, t
 	}
@@ -44,9 +44,9 @@ func (s Selector) QuerySelector(root template.Node) (*template.HTMLElementNode, 
 // matches, walking up the lexical ancestors, with its Trit. An ancestor is
 // present whenever start is, so the Trit is the plain match certainty. When
 // nothing matches it returns (nil, TritNo).
-func (s Selector) Closest(start template.Node) (*template.HTMLElementNode, Trit) {
+func (s Selector) Closest(start htt.Node) (*htt.HTMLElementNode, Trit) {
 	for n := start; n != nil; n = parentOf(n) {
-		el, ok := n.(*template.HTMLElementNode)
+		el, ok := n.(*htt.HTMLElementNode)
 		if !ok {
 			continue
 		}
@@ -58,7 +58,7 @@ func (s Selector) Closest(start template.Node) (*template.HTMLElementNode, Trit)
 }
 
 // matchPresence combines the selector match for el with el's runtime presence.
-func (s Selector) matchPresence(el *template.HTMLElementNode, conditional bool) Trit {
+func (s Selector) matchPresence(el *htt.HTMLElementNode, conditional bool) Trit {
 	t := s.trit(el)
 	if conditional {
 		t = t.And(TritMaybe)
@@ -70,8 +70,8 @@ func (s Selector) matchPresence(el *template.HTMLElementNode, conditional bool) 
 // its children are walked; otherwise its structural children are walked.
 // conditional is true once descent has passed through an if/range/with body.
 // fn returns true to stop the walk.
-func walkEl(n template.Node, conditional bool, fn func(*template.HTMLElementNode, bool) bool) bool {
-	if el, ok := n.(*template.HTMLElementNode); ok {
+func walkEl(n htt.Node, conditional bool, fn func(*htt.HTMLElementNode, bool) bool) bool {
+	if el, ok := n.(*htt.HTMLElementNode); ok {
 		if fn(el, conditional) {
 			return true
 		}
@@ -82,26 +82,26 @@ func walkEl(n template.Node, conditional bool, fn func(*template.HTMLElementNode
 
 // walkChildren walks the structural children of n. Children of an if/range/with
 // body are marked conditional. DefineNode and BlockNode bodies are not entered.
-func walkChildren(n template.Node, conditional bool, fn func(*template.HTMLElementNode, bool) bool) bool {
+func walkChildren(n htt.Node, conditional bool, fn func(*htt.HTMLElementNode, bool) bool) bool {
 	switch x := n.(type) {
-	case *template.HTMLElementNode:
+	case *htt.HTMLElementNode:
 		return walkEach(x.Children, conditional, fn)
-	case *template.ListNode:
+	case *htt.ListNode:
 		return walkEach(x.Nodes, conditional, fn)
-	case *template.HTMLDocumentFragmentNode:
+	case *htt.HTMLDocumentFragmentNode:
 		return walkEach(x.Children, conditional, fn)
-	case *template.IfNode:
+	case *htt.IfNode:
 		return walkBranchEach(x.List, x.ElseList, fn)
-	case *template.RangeNode:
+	case *htt.RangeNode:
 		return walkBranchEach(x.List, x.ElseList, fn)
-	case *template.WithNode:
+	case *htt.WithNode:
 		return walkBranchEach(x.List, x.ElseList, fn)
 	default:
 		return false
 	}
 }
 
-func walkEach(children []template.Node, conditional bool, fn func(*template.HTMLElementNode, bool) bool) bool {
+func walkEach(children []htt.Node, conditional bool, fn func(*htt.HTMLElementNode, bool) bool) bool {
 	for _, c := range children {
 		if walkEl(c, conditional, fn) {
 			return true
@@ -110,7 +110,7 @@ func walkEach(children []template.Node, conditional bool, fn func(*template.HTML
 	return false
 }
 
-func walkBranchEach(list, elseList *template.ListNode, fn func(*template.HTMLElementNode, bool) bool) bool {
+func walkBranchEach(list, elseList *htt.ListNode, fn func(*htt.HTMLElementNode, bool) bool) bool {
 	if list != nil && walkEach(list.Nodes, true, fn) {
 		return true
 	}

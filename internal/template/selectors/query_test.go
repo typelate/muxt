@@ -3,8 +3,9 @@ package selectors_test
 import (
 	"testing"
 
+	"github.com/typelate/htt"
+
 	"github.com/typelate/muxt/internal/template/selectors"
-	"github.com/typelate/muxt/template"
 )
 
 func TestQuery(t *testing.T) {
@@ -14,7 +15,7 @@ func TestQuery(t *testing.T) {
 	root := tree.Root
 
 	t.Run("QuerySelectorAll yields matches with their Trit, in document order", func(t *testing.T) {
-		var elems []*template.HTMLElementNode
+		var elems []*htt.HTMLElementNode
 		var trits []selectors.Trit
 		for el, tr := range selectors.MustCompile(".card").QuerySelectorAll(root) {
 			elems = append(elems, el)

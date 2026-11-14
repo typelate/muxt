@@ -32,10 +32,6 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-template (including template/html and template/lex) is derived in
-part from the Go standard library's text/template and html/template
-packages under the notice above.
-
 internal/diff is copied from the Go standard library's src/internal/diff
 (go1.27.0) under the notice above; the test imports golang.org/x/tools/txtar
 instead of Go's internal/txtar.

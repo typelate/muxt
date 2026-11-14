@@ -7,7 +7,7 @@ import (
 	"testing"
 	"testing/fstest"
 
-	"github.com/typelate/muxt/template"
+	"github.com/typelate/htt"
 )
 
 func TestResolveStylesheets(t *testing.T) {
@@ -57,7 +57,7 @@ func TestResolveStylesheets(t *testing.T) {
 		{source: `<link rel=stylesheet href=/static/x.css>`, want: []string{"/static/x.css"}},
 	} {
 		t.Run(test.source, func(t *testing.T) {
-			trees := []*template.Tree{parseWhitespaceTree(t, "t.gohtml", test.source)}
+			trees := []*htt.Tree{parseWhitespaceTree(t, "t.gohtml", test.source)}
 			sheets, missing, err := ResolveStylesheets(trees, assets)
 			if err != nil {
 				t.Fatalf("ResolveStylesheets(%q) error: %v", test.source, err)
@@ -82,7 +82,7 @@ func (permissionFS) Open(name string) (fs.File, error) {
 
 func TestResolveStylesheetsReadError(t *testing.T) {
 	const source = `<link rel="stylesheet" href="/static/x.css">`
-	trees := []*template.Tree{parseWhitespaceTree(t, "t.gohtml", source)}
+	trees := []*htt.Tree{parseWhitespaceTree(t, "t.gohtml", source)}
 	_, _, err := ResolveStylesheets(trees, []StaticAssets{{Prefix: "/static/", Files: permissionFS{}}})
 	if !errors.Is(err, fs.ErrPermission) {
 		t.Errorf("ResolveStylesheets(%q) error = %v, want fs.ErrPermission", source, err)
@@ -140,7 +140,7 @@ func TestResolvedStylesheetsWhitespace(t *testing.T) {
 		{source: `{{if .X}}<style>@import "/static/blk.css";</style>{{end}}<span class="x"></span>`, want: Whitespace{DisplayUnknown, WhiteSpaceCollapse}},
 	} {
 		t.Run(test.source, func(t *testing.T) {
-			trees := []*template.Tree{parseWhitespaceTree(t, "t.gohtml", test.source)}
+			trees := []*htt.Tree{parseWhitespaceTree(t, "t.gohtml", test.source)}
 			sheets, missing, err := ResolveStylesheets(trees, assets)
 			if err != nil || missing {
 				t.Fatalf("ResolveStylesheets(%q) = _, %v, %v; want no missing sheet and no error", test.source, missing, err)

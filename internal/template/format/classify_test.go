@@ -8,10 +8,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/typelate/htt"
+	"github.com/typelate/htt/lex"
+
 	analysis "github.com/typelate/muxt/internal/analysis/html"
 	"github.com/typelate/muxt/internal/template/format/internal/rendering"
-	"github.com/typelate/muxt/template"
-	"github.com/typelate/muxt/template/lex"
 )
 
 func TestClassify(t *testing.T) {
@@ -162,7 +163,7 @@ func TestClassify(t *testing.T) {
 // no marker. With css empty, no author CSS is known.
 func annotate(t *testing.T, src, css string) string {
 	t.Helper()
-	tree, err := template.ParseTree("annotate", "annotate", src, nil, lex.Options{
+	tree, err := htt.ParseTree("annotate", "annotate", src, nil, lex.Options{
 		EmitComment: true,
 		ParseHTML:   true,
 		BreakOK:     true,
@@ -175,14 +176,14 @@ func annotate(t *testing.T, src, css string) string {
 	if css != "" {
 		options.Sheets = []analysis.Stylesheet{{Filename: "annotate.css", Text: css}}
 	}
-	cl := classify(tree.Root, analysis.ComputeWhitespace([]*template.Tree{tree}, options))
+	cl := classify(tree.Root, analysis.ComputeWhitespace([]*htt.Tree{tree}, options))
 
 	type edit struct {
 		start, end int
 		marker     string
 	}
 	var edits []edit
-	runEdit := func(text *template.TextNode, g gap) {
+	runEdit := func(text *htt.TextNode, g gap) {
 		base := int(text.Start())
 		edits = append(edits, edit{base + g.start, base + g.end, "⟨" + runMarkers[g.class] + "⟩"})
 	}
@@ -228,15 +229,15 @@ var runMarkers = map[runClass]string{
 
 // nodeStart and nodeEnd are n's source bounds including the delimiters of
 // a template comment, whose node spans only the comment text.
-func nodeStart(src string, n template.Node) int {
-	if _, ok := n.(*template.CommentNode); ok {
+func nodeStart(src string, n htt.Node) int {
+	if _, ok := n.(*htt.CommentNode); ok {
 		return strings.LastIndex(src[:n.Start()], "{{")
 	}
 	return int(n.Start())
 }
 
-func nodeEnd(src string, n template.Node) int {
-	if _, ok := n.(*template.CommentNode); ok {
+func nodeEnd(src string, n htt.Node) int {
+	if _, ok := n.(*htt.CommentNode); ok {
 		return int(n.End()) + strings.Index(src[n.End():], "}}") + len("}}")
 	}
 	return int(n.End())
@@ -375,8 +376,8 @@ func TestUnsureParsedElsewhere(t *testing.T) {
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			parse := func(name, src string) *template.Tree {
-				tree, err := template.ParseTree(name, name, src, nil, lex.Options{
+			parse := func(name, src string) *htt.Tree {
+				tree, err := htt.ParseTree(name, name, src, nil, lex.Options{
 					EmitComment: true,
 					ParseHTML:   true,
 				})
@@ -386,19 +387,19 @@ func TestUnsureParsedElsewhere(t *testing.T) {
 				return tree
 			}
 			tree := parse("input.gohtml", tt.src)
-			var context []*template.Tree
+			var context []*htt.Tree
 			for i, src := range tt.context {
 				context = append(context, parse(fmt.Sprintf("context%d.gohtml", i), src))
 			}
-			styles := analysis.ComputeWhitespace([]*template.Tree{tree}, analysis.WhitespaceOptions{Context: context, AuthorCSSKnown: true})
-			var unknown []*template.HTMLElementNode
+			styles := analysis.ComputeWhitespace([]*htt.Tree{tree}, analysis.WhitespaceOptions{Context: context, AuthorCSSKnown: true})
+			var unknown []*htt.HTMLElementNode
 			misplaced, _ := parsedElsewhere(tree.Root, styles, context)
 			for _, m := range misplaced {
 				if !slices.Contains(unknown, m.el) {
 					unknown = append(unknown, m.el)
 				}
 			}
-			slices.SortFunc(unknown, func(a, b *template.HTMLElementNode) int { return cmp.Compare(a.Start(), b.Start()) })
+			slices.SortFunc(unknown, func(a, b *htt.HTMLElementNode) int { return cmp.Compare(a.Start(), b.Start()) })
 			var got []string
 			for _, el := range unknown {
 				got = append(got, strings.ToLower(el.TagName))
@@ -917,7 +918,7 @@ func TestDefineCallSiteModes(t *testing.T) {
 			}
 			for i, src := range tt.context {
 				name := fmt.Sprintf("context%d.gohtml", i)
-				tree, err := template.ParseTree(name, name, src, nil, lex.Options{EmitComment: true, ParseHTML: true})
+				tree, err := htt.ParseTree(name, name, src, nil, lex.Options{EmitComment: true, ParseHTML: true})
 				if err != nil {
 					t.Fatalf("parse %q: %v", src, err)
 				}
@@ -983,7 +984,7 @@ func TestDefineCallSiteSelectors(t *testing.T) {
 			}
 			for i, src := range tt.context {
 				name := fmt.Sprintf("context%d.gohtml", i)
-				tree, err := template.ParseTree(name, name, src, nil, lex.Options{EmitComment: true, ParseHTML: true})
+				tree, err := htt.ParseTree(name, name, src, nil, lex.Options{EmitComment: true, ParseHTML: true})
 				if err != nil {
 					t.Fatalf("parse %q: %v", src, err)
 				}

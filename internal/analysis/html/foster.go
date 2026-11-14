@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/typelate/muxt/template"
-	"github.com/typelate/muxt/template/lex"
+	"github.com/typelate/htt"
+	"github.com/typelate/htt/lex"
 )
 
 // WHATWG §13.2.6.4.9: content allowed inside table-context elements
@@ -22,14 +22,14 @@ var tableContentAllowed = map[string]bool{
 // table/thead/tbody/tfoot/tr that browsers foster-parent out to
 // before the <table> during tree construction, rather than keeping
 // where the source places it.
-func checkFosterParenting(t *template.Tree, diags *Diagnostics) {
-	template.WalkPath(t, func(_ *template.Tree, path []template.Node, n template.Node) {
+func checkFosterParenting(t *htt.Tree, diags *Diagnostics) {
+	htt.WalkPath(t, func(_ *htt.Tree, path []htt.Node, n htt.Node) {
 		enc, mod := enclosingElement(path)
 		if enc == nil || !fosterParents[strings.ToLower(enc.TagName)] {
 			return
 		}
 		switch node := n.(type) {
-		case *template.HTMLElementNode:
+		case *htt.HTMLElementNode:
 			tag := strings.ToLower(node.TagName)
 			// input is allowed only when its type is the literal value
 			// "hidden": browsers foster-parent any other <input> out of
@@ -42,13 +42,13 @@ func checkFosterParenting(t *template.Tree, diags *Diagnostics) {
 			if tableContentAllowed[tag] || (tag == "input" && hasLiteralAttr(node, "type", "hidden")) {
 				return
 			}
-			appendDiag(diags, node.Start(), node.End(), template.DiagFosteredContent, mod,
+			appendDiag(diags, node.Start(), node.End(), htt.DiagFosteredContent, mod,
 				fmt.Sprintf(msgFosteredElement, node.TagName, enc.TagName))
-		case *template.TextNode:
+		case *htt.TextNode:
 			if node.Verbatim || !containsNonWhitespace(node.Text) {
 				return
 			}
-			appendDiag(diags, node.Start(), node.End(), template.DiagFosteredContent, mod,
+			appendDiag(diags, node.Start(), node.End(), htt.DiagFosteredContent, mod,
 				fmt.Sprintf(msgFosteredText, enc.TagName))
 		}
 	})
@@ -57,14 +57,14 @@ func checkFosterParenting(t *template.Tree, diags *Diagnostics) {
 // hasLiteralAttr reports whether el has an attribute named key (case
 // insensitive) whose value is a single literal text node equal to
 // value (case insensitive).
-func hasLiteralAttr(el *template.HTMLElementNode, key, value string) bool {
+func hasLiteralAttr(el *htt.HTMLElementNode, key, value string) bool {
 	for _, a := range el.Attr {
-		attr, ok := a.(*template.HTMLAttributeNode)
+		attr, ok := a.(*htt.HTMLAttributeNode)
 		if !ok || len(attr.Key) != 1 || len(attr.Value) != 1 {
 			continue
 		}
-		k, kOK := attr.Key[0].(*template.TextNode)
-		v, vOK := attr.Value[0].(*template.TextNode)
+		k, kOK := attr.Key[0].(*htt.TextNode)
+		v, vOK := attr.Value[0].(*htt.TextNode)
 		if !kOK || !vOK {
 			continue
 		}
@@ -105,7 +105,7 @@ func containsNonWhitespace(b []byte) bool {
 // appendDiag appends a warning diagnostic, appending a modality
 // suffix to msg when mod indicates the relationship does not hold on
 // every render (see appendDiagSev).
-func appendDiag(diags *Diagnostics, pos, end lex.Pos, code template.DiagnosticCode, mod Modality, msg string) {
+func appendDiag(diags *Diagnostics, pos, end lex.Pos, code htt.DiagnosticCode, mod Modality, msg string) {
 	appendDiagSev(diags, pos, end, code, SeverityWarning, mod, msg)
 }
 
@@ -113,7 +113,7 @@ func appendDiag(diags *Diagnostics, pos, end lex.Pos, code template.DiagnosticCo
 // a modality suffix to msg when mod indicates the relationship does
 // not hold on every render: repeatedSuffix inside a {{range}} body,
 // conditionalSuffix inside an {{if}}/{{with}} branch.
-func appendDiagSev(diags *Diagnostics, pos, end lex.Pos, code template.DiagnosticCode, sev Severity, mod Modality, msg string) {
+func appendDiagSev(diags *Diagnostics, pos, end lex.Pos, code htt.DiagnosticCode, sev Severity, mod Modality, msg string) {
 	switch mod {
 	case ModalityRepeatedly:
 		msg += repeatedSuffix

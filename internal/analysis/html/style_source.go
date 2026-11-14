@@ -5,13 +5,13 @@ import (
 	"go/token"
 	"strings"
 
-	"github.com/typelate/muxt/template"
-	"github.com/typelate/muxt/template/lex"
+	"github.com/typelate/htt"
+	"github.com/typelate/htt/lex"
 )
 
 // styleSource is where CSS text came from: a template or a stylesheet file.
 type styleSource struct {
-	tree     *template.Tree // nil for a stylesheet file
+	tree     *htt.Tree // nil for a stylesheet file
 	filename string
 	text     string // the stylesheet file's text when tree is nil
 }
@@ -28,7 +28,7 @@ type styleBlock struct {
 
 // styleAttributes returns the style attributes of trees, each once even when
 // several trees hold it.
-func styleAttributes(trees []*template.Tree) []styleBlock {
+func styleAttributes(trees []*htt.Tree) []styleBlock {
 	var blocks []styleBlock
 	seen := make(map[token.Position]bool)
 	for _, t := range trees {
@@ -36,8 +36,8 @@ func styleAttributes(trees []*template.Tree) []styleBlock {
 			continue
 		}
 		source := templateSource(t)
-		template.Walk(t, func(_ *template.Tree, n template.Node) {
-			attr, ok := n.(*template.HTMLAttributeNode)
+		htt.Walk(t, func(_ *htt.Tree, n htt.Node) {
+			attr, ok := n.(*htt.HTMLAttributeNode)
 			if !ok || len(attr.Value) == 0 || !strings.EqualFold(staticAttrName(attr), "style") {
 				return
 			}
@@ -76,13 +76,13 @@ func (s styleSource) position(pos lex.Pos) token.Position {
 	return token.Position{Filename: s.filename, Offset: int(pos), Line: line, Column: column}
 }
 
-func templateSource(t *template.Tree) styleSource {
+func templateSource(t *htt.Tree) styleSource {
 	return styleSource{tree: t, filename: cmp.Or(t.Filepath, t.PositionAt(0).ParseName)}
 }
 
 // styleBlocks returns the <style> elements of trees, each once even when
 // several trees hold it, and sheets.
-func styleBlocks(trees []*template.Tree, sheets []Stylesheet) []styleBlock {
+func styleBlocks(trees []*htt.Tree, sheets []Stylesheet) []styleBlock {
 	var blocks []styleBlock
 	seen := make(map[token.Position]bool)
 	for _, t := range trees {
@@ -90,8 +90,8 @@ func styleBlocks(trees []*template.Tree, sheets []Stylesheet) []styleBlock {
 			continue
 		}
 		source := templateSource(t)
-		template.Walk(t, func(_ *template.Tree, n template.Node) {
-			el, ok := n.(*template.HTMLElementNode)
+		htt.Walk(t, func(_ *htt.Tree, n htt.Node) {
+			el, ok := n.(*htt.HTMLElementNode)
 			if !ok || !strings.EqualFold(el.TagName, "style") || len(el.Children) == 0 {
 				return
 			}

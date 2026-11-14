@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/typelate/muxt/template"
-	"github.com/typelate/muxt/template/lex"
+	"github.com/typelate/htt"
+	"github.com/typelate/htt/lex"
 )
 
 // errActionChanged is the error Source returns when its output does not
@@ -27,45 +27,45 @@ var errActionUnread = errors.New("format: an action could not be read for printi
 // output have the same shapes. Each name is written as rename returns
 // it, when rename is not nil. It is independent of the printer: it reads
 // the tree only.
-func actionShapes(root *template.ListNode, rename func(string) string) []string {
+func actionShapes(root *htt.ListNode, rename func(string) string) []string {
 	if rename == nil {
 		rename = func(name string) string { return name }
 	}
 	var shapes []string
-	template.WalkPath(&template.Tree{Root: root}, func(_ *template.Tree, path []template.Node, n template.Node) {
+	htt.WalkPath(&htt.Tree{Root: root}, func(_ *htt.Tree, path []htt.Node, n htt.Node) {
 		var b strings.Builder
 		b.WriteString(shapeNesting(path))
 		switch n := n.(type) {
-		case *template.ActionNode:
+		case *htt.ActionNode:
 			b.WriteString("action")
 			shapeTrims(&b, n.TrimLeft, n.TrimRight)
 			shapePipe(&b, n.Pipe, actionCommands(n.Pipe))
-		case *template.IfNode:
+		case *htt.IfNode:
 			shapeBranch(&b, "if", &n.BranchNode)
-		case *template.WithNode:
+		case *htt.WithNode:
 			shapeBranch(&b, "with", &n.BranchNode)
-		case *template.RangeNode:
+		case *htt.RangeNode:
 			shapeBranch(&b, "range", &n.BranchNode)
-		case *template.TemplateNode:
+		case *htt.TemplateNode:
 			b.WriteString("template " + strconv.Quote(rename(n.Name)))
 			shapeTrims(&b, n.TrimLeft, n.TrimRight)
 			if n.Pipe != nil {
 				shapePipe(&b, n.Pipe, commands(n.Pipe))
 			}
-		case *template.BlockNode:
+		case *htt.BlockNode:
 			b.WriteString("block " + strconv.Quote(rename(n.Name)))
 			shapeTrims(&b, n.StartTrimLeft, n.StartTrimRight, n.EndTrimLeft, n.EndTrimRight)
 			shapePipe(&b, n.Pipe, commands(n.Pipe))
-		case *template.DefineNode:
+		case *htt.DefineNode:
 			b.WriteString("define " + strconv.Quote(rename(n.Name)))
 			shapeTrims(&b, n.StartTrimLeft, n.StartTrimRight, n.EndTrimLeft, n.EndTrimRight)
-		case *template.BreakNode:
+		case *htt.BreakNode:
 			b.WriteString("break")
 			shapeTrims(&b, n.TrimLeft, n.TrimRight)
-		case *template.ContinueNode:
+		case *htt.ContinueNode:
 			b.WriteString("continue")
 			shapeTrims(&b, n.TrimLeft, n.TrimRight)
-		case *template.CommentNode:
+		case *htt.CommentNode:
 			// A comment's continuation lines may shift (shiftComment).
 			b.WriteString("comment " + strconv.Quote(strings.Join(strings.Fields(n.Text), " ")))
 			shapeTrims(&b, n.TrimLeft, n.TrimRight)
@@ -80,27 +80,27 @@ func actionShapes(root *template.ListNode, rename func(string) string) []string 
 // shapeNesting describes where a node with ancestors path sits among
 // the template's structures: each enclosing branch, define and block,
 // and for a branch whether the node is in its body or its else list.
-func shapeNesting(path []template.Node) string {
+func shapeNesting(path []htt.Node) string {
 	var b strings.Builder
 	for i, n := range path {
 		var kind string
-		var branch *template.BranchNode
+		var branch *htt.BranchNode
 		switch n := n.(type) {
-		case *template.IfNode:
+		case *htt.IfNode:
 			kind, branch = "if", &n.BranchNode
-		case *template.WithNode:
+		case *htt.WithNode:
 			kind, branch = "with", &n.BranchNode
-		case *template.RangeNode:
+		case *htt.RangeNode:
 			kind, branch = "range", &n.BranchNode
-		case *template.DefineNode:
+		case *htt.DefineNode:
 			kind = "define"
-		case *template.BlockNode:
+		case *htt.BlockNode:
 			kind = "block"
 		default:
 			continue
 		}
 		b.WriteString(kind)
-		if branch != nil && i+1 < len(path) && branch.ElseList != nil && path[i+1] == template.Node(branch.ElseList) {
+		if branch != nil && i+1 < len(path) && branch.ElseList != nil && path[i+1] == htt.Node(branch.ElseList) {
 			b.WriteString(".else")
 		}
 		b.WriteString("/")
@@ -110,20 +110,20 @@ func shapeNesting(path []template.Node) string {
 
 // definedNames returns the distinct names root's defines and blocks
 // declare.
-func definedNames(root *template.ListNode) map[string]bool {
+func definedNames(root *htt.ListNode) map[string]bool {
 	names := make(map[string]bool)
-	template.Walk(&template.Tree{Root: root}, func(_ *template.Tree, n template.Node) {
+	htt.Walk(&htt.Tree{Root: root}, func(_ *htt.Tree, n htt.Node) {
 		switch n := n.(type) {
-		case *template.DefineNode:
+		case *htt.DefineNode:
 			names[n.Name] = true
-		case *template.BlockNode:
+		case *htt.BlockNode:
 			names[n.Name] = true
 		}
 	})
 	return names
 }
 
-func shapeBranch(b *strings.Builder, keyword string, n *template.BranchNode) {
+func shapeBranch(b *strings.Builder, keyword string, n *htt.BranchNode) {
 	b.WriteString(keyword)
 	switch {
 	case n.ElseChain() != nil:
@@ -149,7 +149,7 @@ func shapeTrims(b *strings.Builder, trims ...bool) {
 
 // shapePipe describes p with cmds, its commands as the formatter prints
 // them (commands, actionCommands).
-func shapePipe(b *strings.Builder, p *template.PipeNode, cmds []*template.CommandNode) {
+func shapePipe(b *strings.Builder, p *htt.PipeNode, cmds []*htt.CommandNode) {
 	b.WriteString(" pipe(")
 	for _, v := range p.Decl {
 		b.WriteString("decl " + strings.Join(v.Ident, ".") + " ")
@@ -167,29 +167,29 @@ func shapePipe(b *strings.Builder, p *template.PipeNode, cmds []*template.Comman
 	b.WriteString(")")
 }
 
-func shapeArg(b *strings.Builder, n template.Node) {
+func shapeArg(b *strings.Builder, n htt.Node) {
 	switch n := n.(type) {
-	case *template.PipeNode:
+	case *htt.PipeNode:
 		shapePipe(b, n, commands(n))
-	case *template.ChainNode:
+	case *htt.ChainNode:
 		b.WriteString(" chain(")
 		shapeArg(b, n.Node)
 		b.WriteString(" ." + strings.Join(n.Field, ".") + ")")
-	case *template.FieldNode:
+	case *htt.FieldNode:
 		b.WriteString(" field ." + strings.Join(n.Ident, "."))
-	case *template.VariableNode:
+	case *htt.VariableNode:
 		b.WriteString(" var " + strings.Join(n.Ident, "."))
-	case *template.IdentifierNode:
+	case *htt.IdentifierNode:
 		b.WriteString(" ident " + n.Ident)
-	case *template.DotNode:
+	case *htt.DotNode:
 		b.WriteString(" dot")
-	case *template.NilNode:
+	case *htt.NilNode:
 		b.WriteString(" nil")
-	case *template.BoolNode:
+	case *htt.BoolNode:
 		b.WriteString(" bool " + strconv.FormatBool(n.True))
-	case *template.NumberNode:
+	case *htt.NumberNode:
 		b.WriteString(" number " + n.Text)
-	case *template.StringNode:
+	case *htt.StringNode:
 		b.WriteString(" string " + n.Quoted)
 	default:
 		b.WriteString(" unknown")
@@ -213,7 +213,7 @@ func shapeArg(b *strings.Builder, n template.Node) {
 //   - one that declares a variable, ($y := .X).
 //
 // A plain action's pipeline keeps one more kind (actionCommands).
-func commands(pl *template.PipeNode) []*template.CommandNode {
+func commands(pl *htt.PipeNode) []*htt.CommandNode {
 	return pl.HeadCommands()
 }
 
@@ -222,7 +222,7 @@ func commands(pl *template.PipeNode) []*template.CommandNode {
 // declares nothing a parenthesized first command that calls the html or
 // urlquery escaper stays (callsPredefinedEscaper). That pipeline is the
 // only one html/template checks for those escapers (escapeAction).
-func actionCommands(pl *template.PipeNode) []*template.CommandNode {
+func actionCommands(pl *htt.PipeNode) []*htt.CommandNode {
 	if len(pl.Decl) > 0 {
 		return commands(pl)
 	}
@@ -232,10 +232,10 @@ func actionCommands(pl *template.PipeNode) []*template.CommandNode {
 // inlineHead flattens pl's parenthesized first command as
 // [template.PipeNode.HeadCommands] does, stopping at a pipeline keep
 // reports must stay in parentheses.
-func inlineHead(pl *template.PipeNode, keep func(*template.PipeNode) bool) []*template.CommandNode {
+func inlineHead(pl *htt.PipeNode, keep func(*htt.PipeNode) bool) []*htt.CommandNode {
 	cmds := pl.Commands
 	for len(cmds) > 0 && len(cmds[0].Args) == 1 {
-		inner, ok := cmds[0].Args[0].(*template.PipeNode)
+		inner, ok := cmds[0].Args[0].(*htt.PipeNode)
 		if !ok || len(inner.Decl) > 0 || keep(inner) {
 			break
 		}
@@ -250,12 +250,12 @@ func inlineHead(pl *template.PipeNode, keep func(*template.PipeNode) bool) []*te
 // look inside a parenthesized pipeline, so flattening one into the
 // action's pipeline would make html/template reject a template it
 // accepted as written.
-func callsPredefinedEscaper(pl *template.PipeNode) bool {
+func callsPredefinedEscaper(pl *htt.PipeNode) bool {
 	for _, cmd := range pl.Commands {
 		if len(cmd.Args) == 0 {
 			continue
 		}
-		id, ok := cmd.Args[0].(*template.IdentifierNode)
+		id, ok := cmd.Args[0].(*htt.IdentifierNode)
 		if ok && (id.Ident == "html" || id.Ident == "urlquery") {
 			return true
 		}
@@ -279,7 +279,7 @@ type actionToken struct {
 	// reports a {{template}} call.
 	named, call   bool
 	name, literal string
-	pipe          *template.PipeNode // nil when the token has none
+	pipe          *htt.PipeNode // nil when the token has none
 	// asWritten reports that the token is copied as it is: it is in a
 	// muxt:fmt region, or a string literal in it spans lines.
 	asWritten bool
@@ -382,9 +382,9 @@ func nameLiteral(inner string) (string, bool) {
 
 // collectActions finds the action-bearing tokens of root, in source
 // order, for the emitter to print.
-func (e *emitter) collectActions(root *template.ListNode, left, right string) {
-	chained := make(map[*template.BranchNode]bool)
-	add := func(start lex.Pos, wantEnd lex.Pos, keyword string, named bool, name string, pipe *template.PipeNode) {
+func (e *emitter) collectActions(root *htt.ListNode, left, right string) {
+	chained := make(map[*htt.BranchNode]bool)
+	add := func(start lex.Pos, wantEnd lex.Pos, keyword string, named bool, name string, pipe *htt.PipeNode) {
 		tok, ok := e.scanToken(start, wantEnd, keyword, named, left, right)
 		if !ok {
 			e.unread = true
@@ -396,23 +396,23 @@ func (e *emitter) collectActions(root *template.ListNode, left, right string) {
 		tok.name, tok.pipe, tok.call = name, pipe, keyword == "template"
 		e.actions = append(e.actions, tok)
 	}
-	template.Walk(&template.Tree{Root: root}, func(_ *template.Tree, n template.Node) {
+	htt.Walk(&htt.Tree{Root: root}, func(_ *htt.Tree, n htt.Node) {
 		switch n := n.(type) {
-		case *template.ActionNode:
+		case *htt.ActionNode:
 			add(n.Start(), n.End(), "", false, "", n.Pipe)
-		case *template.TemplateNode:
+		case *htt.TemplateNode:
 			add(n.Start(), n.End(), "template", true, n.Name, n.Pipe)
-		case *template.BreakNode:
+		case *htt.BreakNode:
 			add(n.Start(), n.End(), "break", false, "", nil)
-		case *template.ContinueNode:
+		case *htt.ContinueNode:
 			add(n.Start(), n.End(), "continue", false, "", nil)
-		case *template.IfNode:
+		case *htt.IfNode:
 			e.collectBranch(add, "if", &n.BranchNode, chained)
-		case *template.WithNode:
+		case *htt.WithNode:
 			e.collectBranch(add, "with", &n.BranchNode, chained)
-		case *template.RangeNode:
+		case *htt.RangeNode:
 			e.collectBranch(add, "range", &n.BranchNode, chained)
-		case *template.DefineNode:
+		case *htt.DefineNode:
 			if n.Body == nil {
 				e.unread = true
 				e.unprinted = append(e.unprinted, n.Name)
@@ -420,7 +420,7 @@ func (e *emitter) collectActions(root *template.ListNode, left, right string) {
 			}
 			add(n.Start(), -1, "define", true, n.Name, nil)
 			add(n.Body.End(), n.End(), "end", false, "", nil)
-		case *template.BlockNode:
+		case *htt.BlockNode:
 			if n.Body == nil || n.Pipe == nil {
 				e.unread = true
 				e.unprinted = append(e.unprinted, n.Name)
@@ -495,7 +495,7 @@ func (e *emitter) scanToken(start, wantEnd lex.Pos, keyword string, named bool, 
 // collectBranch adds b's opener ({{else if}} or {{else with}} when b is
 // chained onto another branch's else), its plain {{else}}, and its
 // {{end}}, which a chain shares with its last branch.
-func (e *emitter) collectBranch(add func(start, wantEnd lex.Pos, keyword string, named bool, name string, pipe *template.PipeNode), keyword string, b *template.BranchNode, chained map[*template.BranchNode]bool) {
+func (e *emitter) collectBranch(add func(start, wantEnd lex.Pos, keyword string, named bool, name string, pipe *htt.PipeNode), keyword string, b *htt.BranchNode, chained map[*htt.BranchNode]bool) {
 	if b.List == nil || b.Pipe == nil {
 		e.unread = true
 		return
@@ -573,7 +573,7 @@ func (p *actionPrinter) newline(level int) {
 }
 
 // between returns the source from the end of a to the start of b.
-func (p *actionPrinter) between(a, b template.Node) string {
+func (p *actionPrinter) between(a, b htt.Node) string {
 	from, to := int(a.End()-p.base), int(b.Start()-p.base)
 	if from < 0 || to > len(p.src) || from > to {
 		return ""
@@ -585,7 +585,7 @@ func (p *actionPrinter) between(a, b template.Node) string {
 // cmds, its commands as printed (commands, actionCommands), one per line
 // one level deeper when it splits. It reports whether pl split: its
 // stages or the arguments of one of its commands.
-func (p *actionPrinter) pipe(pl *template.PipeNode, cmds []*template.CommandNode, level int) bool {
+func (p *actionPrinter) pipe(pl *htt.PipeNode, cmds []*htt.CommandNode, level int) bool {
 	for i, v := range pl.Decl {
 		if i > 0 {
 			p.b.WriteString(", ")
@@ -624,7 +624,7 @@ func (p *actionPrinter) pipe(pl *template.PipeNode, cmds []*template.CommandNode
 // one per line: it has four or more (when splitting is automatic), the
 // source breaks between two of them, or it has two or more and one
 // command's arguments split.
-func (p *actionPrinter) stagesSplit(cmds []*template.CommandNode) bool {
+func (p *actionPrinter) stagesSplit(cmds []*htt.CommandNode) bool {
 	if p.auto && len(cmds) >= 4 {
 		return true
 	}
@@ -642,7 +642,7 @@ func (p *actionPrinter) stagesSplit(cmds []*template.CommandNode) bool {
 // argsSplit reports whether c's arguments go one per line: it has three
 // or more parenthesized ones (when splitting is automatic), or the
 // source breaks between two of them.
-func (p *actionPrinter) argsSplit(c *template.CommandNode) bool {
+func (p *actionPrinter) argsSplit(c *htt.CommandNode) bool {
 	parens := 0
 	for _, arg := range c.Args {
 		if parenthesized(arg) {
@@ -654,7 +654,7 @@ func (p *actionPrinter) argsSplit(c *template.CommandNode) bool {
 	}
 	for i := 1; i < len(c.Args); i++ {
 		gap := p.between(c.Args[i-1], c.Args[i])
-		if _, ok := c.Args[i].(*template.PipeNode); ok {
+		if _, ok := c.Args[i].(*htt.PipeNode); ok {
 			// A pipeline argument starts after its "(": a break
 			// between the two is inside the parentheses.
 			if j := strings.LastIndexByte(gap, '('); j >= 0 {
@@ -670,7 +670,7 @@ func (p *actionPrinter) argsSplit(c *template.CommandNode) bool {
 
 // command prints c, whose line is at level. It reports whether c's
 // arguments split.
-func (p *actionPrinter) command(c *template.CommandNode, level int) bool {
+func (p *actionPrinter) command(c *htt.CommandNode, level int) bool {
 	split := p.argsSplit(c)
 	for i, arg := range c.Args {
 		switch {
@@ -687,12 +687,12 @@ func (p *actionPrinter) command(c *template.CommandNode, level int) bool {
 	return split
 }
 
-func parenthesized(n template.Node) bool {
+func parenthesized(n htt.Node) bool {
 	switch n := n.(type) {
-	case *template.PipeNode:
+	case *htt.PipeNode:
 		return true
-	case *template.ChainNode:
-		_, ok := n.Node.(*template.PipeNode)
+	case *htt.ChainNode:
+		_, ok := n.Node.(*htt.PipeNode)
 		return ok
 	}
 	return false
@@ -700,36 +700,36 @@ func parenthesized(n template.Node) bool {
 
 // operand prints n, whose line is at level. A parenthesized pipeline
 // that splits closes on a line of its own at level.
-func (p *actionPrinter) operand(n template.Node, level int) {
+func (p *actionPrinter) operand(n htt.Node, level int) {
 	switch n := n.(type) {
-	case *template.PipeNode:
+	case *htt.PipeNode:
 		p.b.WriteByte('(')
 		if p.pipe(n, commands(n), level) {
 			p.newline(level)
 		}
 		p.b.WriteByte(')')
-	case *template.ChainNode:
+	case *htt.ChainNode:
 		p.operand(n.Node, level)
 		for _, f := range n.Field {
 			p.b.WriteString("." + f)
 		}
-	case *template.FieldNode:
+	case *htt.FieldNode:
 		for _, id := range n.Ident {
 			p.b.WriteString("." + id)
 		}
-	case *template.VariableNode:
+	case *htt.VariableNode:
 		p.b.WriteString(strings.Join(n.Ident, "."))
-	case *template.IdentifierNode:
+	case *htt.IdentifierNode:
 		p.b.WriteString(n.Ident)
-	case *template.DotNode:
+	case *htt.DotNode:
 		p.b.WriteByte('.')
-	case *template.NilNode:
+	case *htt.NilNode:
 		p.b.WriteString("nil")
-	case *template.BoolNode:
+	case *htt.BoolNode:
 		p.b.WriteString(strconv.FormatBool(n.True))
-	case *template.NumberNode:
+	case *htt.NumberNode:
 		p.b.WriteString(n.Text)
-	case *template.StringNode:
+	case *htt.StringNode:
 		p.b.WriteString(n.Quoted)
 	default:
 		p.b.WriteString(n.String())

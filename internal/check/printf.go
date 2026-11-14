@@ -4,7 +4,7 @@ import (
 	"go/types"
 	"strings"
 
-	"github.com/typelate/muxt/template"
+	"github.com/typelate/htt"
 )
 
 // checkPrintf validates a literal printf format string against the types of
@@ -15,11 +15,11 @@ import (
 // string for %d, say) and a mismatch between the number of verbs and
 // arguments. It is deliberately conservative — %v, interfaces, fmt.Formatter
 // and fmt.Stringer values, and every aggregate type are accepted.
-func checkPrintf(g *Global, argNodes []template.Node, argTypes []types.Type) error {
+func checkPrintf(g *Global, argNodes []htt.Node, argTypes []types.Type) error {
 	if len(argNodes) == 0 {
 		return nil
 	}
-	lit, ok := argNodes[0].(*template.StringNode)
+	lit, ok := argNodes[0].(*htt.StringNode)
 	if !ok {
 		return nil // dynamic format string; cannot check statically
 	}

@@ -6,7 +6,7 @@ import (
 	"io"
 	"regexp"
 
-	"github.com/typelate/muxt/template"
+	"github.com/typelate/htt"
 
 	"github.com/typelate/muxt/internal/check"
 
@@ -48,7 +48,7 @@ func templateCalls(config TemplateCallsConfiguration, pkg source.Package, lt sou
 	global := newGlobal(pkg, lt)
 	refs := make(map[string][]TemplateReference)
 
-	global.InspectTemplateNode = func(node *template.TemplateNode, tree *template.Tree, data types.Type, _ check.Definition) {
+	global.InspectTemplateNode = func(node *htt.TemplateNode, tree *htt.Tree, data types.Type, _ check.Definition) {
 		refs[tree.Name] = append(refs[tree.Name], TemplateReference{
 			Name:     node.Name,
 			Kind:     ParseTemplateNode,

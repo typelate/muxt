@@ -10,8 +10,9 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/tools/go/packages"
 
+	"github.com/typelate/htt"
+
 	"github.com/typelate/muxt/internal/check"
-	"github.com/typelate/muxt/template"
 )
 
 // analyzeModule writes files into a temp module, loads it, and returns every
@@ -64,7 +65,7 @@ func warningsWith(t *testing.T, src string, data types.Type, configure func(*che
 	testPkg := find(t, loadPkg(), func(p *packages.Package) bool {
 		return p.Name == packageName
 	})
-	tp, err := template.New[*types.Signature]("main").Parse(src)
+	tp, err := htt.New[*types.Signature]("main").Parse(src)
 	require.NoError(t, err)
 	global := check.NewGlobal(testPkg.Types, testPkg.Fset, tp, check.DefaultFunctions(testPkg.Types))
 	var ws []check.Warning

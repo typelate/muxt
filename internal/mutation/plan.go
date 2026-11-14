@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/typelate/muxt/template"
+	"github.com/typelate/htt"
 
 	"github.com/typelate/muxt/internal/check"
 
@@ -71,7 +71,7 @@ type plan struct {
 	// not run.
 	prePass time.Duration
 
-	// engine says which muxt module the coverage pre-pass built the
+	// engine says which htt module the coverage pre-pass built the
 	// template engine from, empty when it ran no go test.
 	engine string
 }
@@ -684,7 +684,7 @@ func indexTrees(sources []*templateSource, defined map[string]*templateSource, f
 				}
 				continue
 			}
-			if existing, ok := index[name]; ok && template.IsEmptyTree(tree.Root) && !template.IsEmptyTree(existing.tree.Root) {
+			if existing, ok := index[name]; ok && htt.IsEmptyTree(tree.Root) && !htt.IsEmptyTree(existing.tree.Root) {
 				continue
 			}
 			index[name] = treeLocation{src: src, tree: tree}
@@ -720,13 +720,13 @@ func verifyReadable(defs []source.Definition, index map[string]treeLocation, wor
 	return nil
 }
 
-func hasRoot(tree *template.Tree) bool { return tree != nil && tree.Root != nil }
+func hasRoot(tree *htt.Tree) bool { return tree != nil && tree.Root != nil }
 
 // countActions reports how many dynamic or control flow actions a tree
 // holds, which is what a template has to offer a mutation.
-func countActions(node template.Node) int {
+func countActions(node htt.Node) int {
 	switch n := node.(type) {
-	case *template.ListNode:
+	case *htt.ListNode:
 		if n == nil {
 			return 0
 		}
@@ -735,23 +735,23 @@ func countActions(node template.Node) int {
 			total += countActions(child)
 		}
 		return total
-	case *template.ActionNode, *template.TemplateNode, *template.BlockNode:
+	case *htt.ActionNode, *htt.TemplateNode, *htt.BlockNode:
 		// A block counts as the {{template}} call text/template made of it;
 		// its body is a tree of its own.
 		return 1
-	case *template.IfNode:
+	case *htt.IfNode:
 		return 1 + countActions(n.List) + countActions(n.ElseList)
-	case *template.WithNode:
+	case *htt.WithNode:
 		return 1 + countActions(n.List) + countActions(n.ElseList)
-	case *template.RangeNode:
+	case *htt.RangeNode:
 		return 1 + countActions(n.List) + countActions(n.ElseList)
-	case *template.HTMLDocumentFragmentNode:
+	case *htt.HTMLDocumentFragmentNode:
 		return countActionsIn(n.Children)
-	case *template.HTMLElementNode:
+	case *htt.HTMLElementNode:
 		return countActionsIn(n.Attr) + countActionsIn(n.Children)
-	case *template.HTMLAttributeNode:
+	case *htt.HTMLAttributeNode:
 		return countActionsIn(n.Key) + countActionsIn(n.Value)
-	case *template.HTMLCommentNode:
+	case *htt.HTMLCommentNode:
 		return countActionsIn(n.Children)
 	default:
 		return 0
@@ -760,7 +760,7 @@ func countActions(node template.Node) int {
 
 // countActionsIn counts the actions among the children of an HTML node,
 // which the copied parser builds where text/template kept flat text.
-func countActionsIn(nodes []template.Node) int {
+func countActionsIn(nodes []htt.Node) int {
 	total := 0
 	for _, child := range nodes {
 		total += countActions(child)

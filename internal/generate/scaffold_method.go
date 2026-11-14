@@ -10,9 +10,10 @@ import (
 	"go/types"
 	"strings"
 
+	"github.com/typelate/htt/template"
+
 	"github.com/typelate/muxt/internal/muxt"
 	"github.com/typelate/muxt/internal/source"
-	"github.com/typelate/muxt/template/html"
 )
 
 // MethodStubs returns a stub for each method the route name calls that
@@ -20,7 +21,7 @@ import (
 // has gives no stub. Stubs use a pointer receiver when the type's own methods
 // do. Types are spelled the way receiver's package spells them.
 func MethodStubs(pkg source.Package, receiver *types.Named, name string, checker muxt.Checker) (string, error) {
-	templates, err := html.New("").Parse(DefineBlock(name, FragmentBody))
+	templates, err := template.New("").Parse(DefineBlock(name, FragmentBody))
 	if err != nil {
 		return "", fmt.Errorf("parsing %q: %w", name, err)
 	}

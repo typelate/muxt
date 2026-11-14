@@ -5,8 +5,9 @@ import (
 	"go/token"
 	"go/types"
 
+	"github.com/typelate/htt"
+
 	"github.com/typelate/muxt/internal/source"
-	"github.com/typelate/muxt/template"
 )
 
 // Scope is the package a template chain is evaluated in. It is input only:
@@ -40,7 +41,7 @@ type Scope struct {
 // next call.
 type Chain struct {
 	// Templates is the set built so far, nil at the start of a chain.
-	Templates *template.Template[*types.Signature]
+	Templates *htt.Template[*types.Signature]
 
 	// LeftDelim and RightDelim are the delimiters in effect, empty for the
 	// template defaults.
@@ -49,14 +50,14 @@ type Chain struct {
 
 // next is the return of a step that leaves the delimiters alone: the set t,
 // and err if the step failed.
-func (c Chain) next(t *template.Template[*types.Signature], err error) (Chain, error) {
+func (c Chain) next(t *htt.Template[*types.Signature], err error) (Chain, error) {
 	c.Templates = t
 	return c, err
 }
 
 // delimited is the return of a Delims step: the set t with the new
 // delimiters in effect.
-func (c Chain) delimited(t *template.Template[*types.Signature], leftDelim, rightDelim string) (Chain, error) {
+func (c Chain) delimited(t *htt.Template[*types.Signature], leftDelim, rightDelim string) (Chain, error) {
 	c.Templates, c.LeftDelim, c.RightDelim = t, leftDelim, rightDelim
 	return c, nil
 }

@@ -3,7 +3,7 @@ package mutation
 import (
 	"go/types"
 
-	"github.com/typelate/muxt/template"
+	"github.com/typelate/htt"
 
 	"github.com/typelate/muxt/internal/check"
 )
@@ -13,11 +13,11 @@ import (
 type action struct {
 	// node is the action itself. Its kind decides which variations
 	// apply, so the walker reports it rather than interpreting it.
-	node template.Node
+	node htt.Node
 
 	// pipe is the pipeline the action evaluates, nil for a {{template}}
 	// invocation written without an argument.
-	pipe *template.PipeNode
+	pipe *htt.PipeNode
 
 	// dot is the type in force where the action sits, already narrowed
 	// by any range or with it is written inside.
@@ -35,10 +35,10 @@ type action struct {
 //
 // The order is the walk's own: an action before the bodies it encloses,
 // and a body before the else beside it.
-func walkActions(found []region, dot types.Type, functions check.Functions, root template.Node, visit func(action)) {
-	var walk func(template.Node, types.Type)
-	var walkNodes func([]template.Node, types.Type)
-	report := func(node template.Node, pipe *template.PipeNode, at int, dot types.Type) {
+func walkActions(found []region, dot types.Type, functions check.Functions, root htt.Node, visit func(action)) {
+	var walk func(htt.Node, types.Type)
+	var walkNodes func([]htt.Node, types.Type)
+	report := func(node htt.Node, pipe *htt.PipeNode, at int, dot types.Type) {
 		index, r, ok := regionAt(found, at)
 		if !ok {
 			return
@@ -52,55 +52,55 @@ func walkActions(found []region, dot types.Type, functions check.Functions, root
 		})
 	}
 
-	walk = func(node template.Node, dot types.Type) {
+	walk = func(node htt.Node, dot types.Type) {
 		switch n := node.(type) {
-		case *template.ListNode:
+		case *htt.ListNode:
 			if n == nil {
 				return
 			}
 			for _, child := range n.Nodes {
 				walk(child, dot)
 			}
-		case *template.ActionNode:
+		case *htt.ActionNode:
 			report(n, n.Pipe, int(n.Pipe.Start()), dot)
-		case *template.IfNode:
+		case *htt.IfNode:
 			report(n, n.Pipe, int(n.Pipe.Start()), dot)
 			walk(n.List, dot)
 			walk(n.ElseList, dot)
-		case *template.WithNode:
+		case *htt.WithNode:
 			report(n, n.Pipe, int(n.Pipe.Start()), dot)
 			// Inside the body, dot is what the with selected.
 			walk(n.List, withDot(dot, n.Pipe, functions))
 			walk(n.ElseList, dot)
-		case *template.RangeNode:
+		case *htt.RangeNode:
 			report(n, n.Pipe, int(n.Pipe.Start()), dot)
 			// Inside the body, dot is one element of what was ranged over.
 			walk(n.List, rangeDot(dot, n.Pipe, functions))
 			walk(n.ElseList, dot)
-		case *template.TemplateNode:
+		case *htt.TemplateNode:
 			// A {{template}} node's pipeline may be absent entirely, so
 			// the node's own start locates it.
 			report(n, n.Pipe, int(n.Start()), dot)
-		case *template.BlockNode:
+		case *htt.BlockNode:
 			// text/template turns a block into a {{template}} call of the
 			// tree it defines, and that tree is mutated on its own; the
 			// copied parser keeps the clause, and its body, inline.
 			report(n, n.Pipe, int(n.Start()), dot)
-		case *template.HTMLDocumentFragmentNode:
+		case *htt.HTMLDocumentFragmentNode:
 			walkNodes(n.Children, dot)
-		case *template.HTMLElementNode:
+		case *htt.HTMLElementNode:
 			walkNodes(n.Attr, dot)
 			walkNodes(n.Children, dot)
-		case *template.HTMLAttributeNode:
+		case *htt.HTMLAttributeNode:
 			walkNodes(n.Key, dot)
 			walkNodes(n.Value, dot)
-		case *template.HTMLCommentNode:
+		case *htt.HTMLCommentNode:
 			walkNodes(n.Children, dot)
 		}
 	}
 	// The copied parser builds HTML nodes where text/template kept flat
 	// text; their children are walked in source order.
-	walkNodes = func(nodes []template.Node, dot types.Type) {
+	walkNodes = func(nodes []htt.Node, dot types.Type) {
 		for _, child := range nodes {
 			walk(child, dot)
 		}

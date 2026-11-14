@@ -13,18 +13,18 @@ import (
 	"strings"
 	"text/template/parse"
 
-	"github.com/typelate/muxt/template"
-	"github.com/typelate/muxt/template/lex"
+	"github.com/typelate/htt"
+	"github.com/typelate/htt/lex"
 )
 
 // Comment diagnostic codes.
 const (
-	DiagCommentInRCDATA  template.DiagnosticCode = "comment-in-rcdata"
-	DiagEscapedMarkup    template.DiagnosticCode = "escaped-markup"
-	DiagCommentDelimiter template.DiagnosticCode = "comment-delimiter"
-	DiagCommentInRawText template.DiagnosticCode = "comment-in-raw-text"
-	DiagEscapedInRawText template.DiagnosticCode = "escaped-markup-in-raw-text"
-	DiagEscaperRefuses   template.DiagnosticCode = "escaper-refuses"
+	DiagCommentInRCDATA  htt.DiagnosticCode = "comment-in-rcdata"
+	DiagEscapedMarkup    htt.DiagnosticCode = "escaped-markup"
+	DiagCommentDelimiter htt.DiagnosticCode = "comment-delimiter"
+	DiagCommentInRawText htt.DiagnosticCode = "comment-in-raw-text"
+	DiagEscapedInRawText htt.DiagnosticCode = "escaped-markup-in-raw-text"
+	DiagEscaperRefuses   htt.DiagnosticCode = "escaper-refuses"
 )
 
 const (
@@ -54,7 +54,7 @@ var (
 // reads as a doctype that html/template writes unchanged. The parser
 // reads a bogus comment or processing instruction (<!x>, <?x>) as a
 // doctype node too; html/template writes its < as &lt;.
-func IsDoctype(n *template.HTMLDoctypeNode) bool {
+func IsDoctype(n *htt.HTMLDoctypeNode) bool {
 	return strings.HasPrefix(strings.ToUpper(n.Text), "<!DOCTYPE")
 }
 
@@ -62,7 +62,7 @@ func IsDoctype(n *template.HTMLDoctypeNode) bool {
 // where the template parser does. html/template strips a comment from
 // <!-- to the first --> after it, while the parser follows the HTML
 // tokenizer, which also closes one abruptly (<!-->, <!--->).
-func CommentDelimitedAlike(n *template.HTMLCommentNode) bool {
+func CommentDelimitedAlike(n *htt.HTMLCommentNode) bool {
 	src := n.String()
 	return len(src) >= len("<!---->") && strings.HasSuffix(src, commentClose) &&
 		strings.Index(src[len(commentOpen):], commentClose) == len(src)-len("<!---->")
@@ -70,7 +70,7 @@ func CommentDelimitedAlike(n *template.HTMLCommentNode) bool {
 
 // TreeDiagnostic is a diagnostic at a position in the text of Tree.
 type TreeDiagnostic struct {
-	Tree *template.Tree
+	Tree *htt.Tree
 	Diagnostic
 }
 
@@ -101,7 +101,7 @@ type TreeDiagnostic struct {
 //
 // templates maps the name of each template in the set to its tree, parsed
 // as HTML. CheckComments fails when html/template cannot parse a source.
-func CheckComments(templates map[string]*template.Tree, roots []string) ([]TreeDiagnostic, error) {
+func CheckComments(templates map[string]*htt.Tree, roots []string) ([]TreeDiagnostic, error) {
 	o := &escapeOracle{
 		set:      htmltemplate.New(""),
 		original: make(map[*parse.TextNode]string),
@@ -185,7 +185,7 @@ type stdlibTemplate struct {
 	parsed, tree *parse.Tree
 	// muxt is the template parser's tree of the same template, and view
 	// how a browser reads its source.
-	muxt *template.Tree
+	muxt *htt.Tree
 	view *browserView
 }
 
@@ -193,7 +193,7 @@ type stdlibTemplate struct {
 // given to Parse.
 type sourceKey struct{ parseName, filepath, source string }
 
-func (o *escapeOracle) parse(templates map[string]*template.Tree) error {
+func (o *escapeOracle) parse(templates map[string]*htt.Tree) error {
 	const rootName = "\x00root"
 	parsed := make(map[sourceKey]map[string]*parse.Tree)
 	views := make(map[sourceKey]*browserView)
@@ -677,12 +677,12 @@ func (o *escapeOracle) endComment(open *openComment, endView *browserView, end l
 // browserCommentEnd returns the token browsers end comment n at, and its
 // position: an abrupt <!--> or <!--->, the first --!> in its text, or its
 // -->.
-func browserCommentEnd(n *template.HTMLCommentNode) (string, lex.Pos) {
+func browserCommentEnd(n *htt.HTMLCommentNode) (string, lex.Pos) {
 	if src := n.String(); src == "<!-->" || src == "<!--->" {
 		return src, n.Start()
 	}
 	for _, child := range n.Children {
-		text, ok := child.(*template.TextNode)
+		text, ok := child.(*htt.TextNode)
 		if !ok {
 			continue
 		}
@@ -717,7 +717,7 @@ func (o *escapeOracle) escapedLT(v *browserView, pos lex.Pos, text, outer string
 	}
 }
 
-func (o *escapeOracle) report(v *browserView, pos lex.Pos, code template.DiagnosticCode, format string, args ...any) {
+func (o *escapeOracle) report(v *browserView, pos lex.Pos, code htt.DiagnosticCode, format string, args ...any) {
 	o.diags = append(o.diags, TreeDiagnostic{Tree: v.tree, Diagnostic: Diagnostic{
 		Pos:      pos,
 		Severity: SeverityError,
@@ -785,10 +785,10 @@ func forEachTextNode(l *parse.ListNode, fn func(*parse.TextNode)) {
 // the comments.
 type browserView struct {
 	// tree is a tree parsed from the source, to report positions in.
-	tree     *template.Tree
+	tree     *htt.Tree
 	texts    []browserText
 	comments map[lex.Pos]browserComment
-	added    map[*template.Tree]bool
+	added    map[*htt.Tree]bool
 }
 
 type browserText struct {
@@ -801,15 +801,15 @@ type browserText struct {
 }
 
 type browserComment struct {
-	node    *template.HTMLCommentNode
+	node    *htt.HTMLCommentNode
 	element string
 }
 
 func newBrowserView() *browserView {
-	return &browserView{comments: make(map[lex.Pos]browserComment), added: make(map[*template.Tree]bool)}
+	return &browserView{comments: make(map[lex.Pos]browserComment), added: make(map[*htt.Tree]bool)}
 }
 
-func (v *browserView) add(t *template.Tree) {
+func (v *browserView) add(t *htt.Tree) {
 	if v.added[t] {
 		return
 	}
@@ -817,12 +817,12 @@ func (v *browserView) add(t *template.Tree) {
 	if v.tree == nil || t.Root.Start() < v.tree.Root.Start() {
 		v.tree = t
 	}
-	template.WalkPath(t, func(_ *template.Tree, path []template.Node, n template.Node) {
+	htt.WalkPath(t, func(_ *htt.Tree, path []htt.Node, n htt.Node) {
 		element, markup := pathContext(path)
 		switch n := n.(type) {
-		case *template.TextNode, *template.HTMLDoctypeNode, *template.TemplateNode:
+		case *htt.TextNode, *htt.HTMLDoctypeNode, *htt.TemplateNode:
 			v.texts = append(v.texts, browserText{start: n.Start(), end: n.End(), element: element, markup: markup})
-		case *template.HTMLCommentNode:
+		case *htt.HTMLCommentNode:
 			if markup {
 				v.comments[n.Start()] = browserComment{node: n, element: element}
 			}
@@ -834,15 +834,15 @@ func (v *browserView) add(t *template.Tree) {
 // pathContext returns the element a node with ancestors path is in, in
 // its template, and whether it is in markup: not in an attribute or a
 // comment.
-func pathContext(path []template.Node) (string, bool) {
+func pathContext(path []htt.Node) (string, bool) {
 	element, markup := "", true
 	for _, n := range path {
 		switch n := n.(type) {
-		case *template.DefineNode, *template.BlockNode:
+		case *htt.DefineNode, *htt.BlockNode:
 			element, markup = "", true
-		case *template.HTMLElementNode:
+		case *htt.HTMLElementNode:
 			element = strings.ToLower(n.TagName)
-		case *template.HTMLAttributeNode, *template.HTMLCommentNode:
+		case *htt.HTMLAttributeNode, *htt.HTMLCommentNode:
 			markup = false
 		}
 	}

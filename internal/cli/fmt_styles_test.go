@@ -8,10 +8,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/typelate/htt"
+	"github.com/typelate/htt/lex"
+
 	htmlanalysis "github.com/typelate/muxt/internal/analysis/html"
 	"github.com/typelate/muxt/internal/header"
-	"github.com/typelate/muxt/template"
-	"github.com/typelate/muxt/template/lex"
 )
 
 func TestFormatStyles(t *testing.T) {
@@ -22,11 +23,11 @@ func TestFormatStyles(t *testing.T) {
 	writeTestFile(t, wd, filepath.Join("assets", "app.css"), ".code{white-space:pre}")
 	writeTestFile(t, wd, "template_routes.go", header.Format([]string{"--input-static-assets-directory=assets", "--output-static-assets-path=/static"}, "v1")+"package main\n")
 
-	parse := func(source string) []*template.Tree {
+	parse := func(source string) []*htt.Tree {
 		t.Helper()
-		tree, err := template.ParseTree("t.gohtml", "t.gohtml", source, nil, lex.NewOptions())
+		tree, err := htt.ParseTree("t.gohtml", "t.gohtml", source, nil, lex.NewOptions())
 		require.NoError(t, err, "ParseTree(%q)", source)
-		return []*template.Tree{tree}
+		return []*htt.Tree{tree}
 	}
 	const linked = `<link rel="stylesheet" href="/static/app.css"><div class="code"></div>`
 	appCSS := []htmlanalysis.Stylesheet{{Filename: "/static/app.css", Text: ".code{white-space:pre}"}}
