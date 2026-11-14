@@ -23,7 +23,7 @@ const (
 	itsEntry
 	// itsEntryOnly is itsEntry, except that in the muxt.json's own directory
 	// without an entry it is an error when the file lists packages: the
-	// command tests one, and the directory is not one of them.
+	// command acts on one, and the directory is not one of them.
 	itsEntryOnly
 )
 
@@ -37,6 +37,9 @@ type jobSpec struct {
 	// decides between a muxt.json entry and the command line.
 	Settings []setting
 	Scope    scope
+	// OnePackage words the error of an itsEntryOnly run in a muxt.json's own
+	// directory that is not one of its packages.
+	OnePackage onePackageWording
 	// RequireEntry makes a flagless run without an entry for its directory an
 	// error, for the command that writes from the file.
 	RequireEntry bool
@@ -49,6 +52,13 @@ type jobSpec struct {
 	// Fallback is the configuration the command's own flags and defaults give
 	// dir.
 	Fallback func(dir string) (generate.RoutesFileConfiguration, error)
+}
+
+// onePackageWording is how a command that acts on one package says so, and how
+// a person picks the package: Task follows the command name ("tests one
+// package") and Where leads the directories ("pass one of").
+type onePackageWording struct {
+	Task, Where string
 }
 
 // packageJob is one package directory and what to run a command with. Key is
@@ -190,7 +200,7 @@ func severalPackages(spec jobSpec, f *composite.File) error {
 		}
 		dirs = append(dirs, filepath.ToSlash(rel))
 	}
-	return &composite.SeveralPackagesError{Path: f.Name, Command: spec.Name, Dirs: dirs}
+	return &composite.SeveralPackagesError{Path: f.Name, Command: spec.Name, Task: spec.OnePackage.Task, Where: spec.OnePackage.Where, Dirs: dirs}
 }
 
 // fallbackSelection is the one job the command's own flags and defaults give

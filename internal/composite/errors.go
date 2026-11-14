@@ -390,19 +390,23 @@ func (e *KeyCaseError) Error() string {
 	return fmt.Sprintf("%s: packages key %q is spelled %q on disk; write that", e.Path, e.Key, e.OnDisk)
 }
 
-// SeveralPackagesError reports a command that tests one package, run with no
+// SeveralPackagesError reports a command that acts on one package, run with no
 // flags in the directory of a muxt.json that lists packages but not that
 // directory: the file's directory holds no package to act on, and guessing one
 // would fail late. Path is the file's absolute path and Dirs the entries'
-// directories relative to it, in key order.
+// directories relative to it, in key order. Task says what the command does to
+// the package ("tests one package") and Where how to name one ("pass one of"),
+// since a command that takes a directory argument and one that runs in the
+// working directory give different advice.
 type SeveralPackagesError struct {
-	Path, Command string
-	Dirs          []string
+	Path, Command, Task, Where string
+	Dirs                       []string
 }
 
-// Error returns the file, the command and the directories to pass, on one line.
+// Error returns the file, the command, what it does and the directories to
+// choose from, on one line.
 func (e *SeveralPackagesError) Error() string {
-	return fmt.Sprintf("%s: %s tests one package; pass one of: %s", e.Path, e.Command, strings.Join(e.Dirs, " "))
+	return fmt.Sprintf("%s: %s %s; %s: %s", e.Path, e.Command, e.Task, e.Where, strings.Join(e.Dirs, " "))
 }
 
 // ValueTypeError reports a key in a muxt.json entry whose value is not the

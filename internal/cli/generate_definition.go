@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/tools/txtar"
 
+	"github.com/typelate/muxt/internal/check"
 	"github.com/typelate/muxt/internal/generate"
 	"github.com/typelate/muxt/internal/load"
 	"github.com/typelate/muxt/internal/muxt"
@@ -50,6 +51,9 @@ The stub is a placeholder to rewrite: it returns any and its body returns nil. I
 			spec := jobSpec{
 				Name:  generateCommandName + " def",
 				Scope: itsEntry,
+				// It takes no directory, so a person in the wrong one is told
+				// where to run it; see notAPackage.
+				OnePackage: onePackageWording{Task: "adds a template to one package", Where: "run it in one of"},
 				// The receiver type flag is the only setting def reads from the
 				// command line, and what it gives an unconfigured package.
 				Fallback: func(dir string) (generate.RoutesFileConfiguration, error) {
@@ -77,7 +81,8 @@ The stub is a placeholder to rewrite: it returns any and its body returns nil. I
 				config.ReceiverType = receiverType
 			}
 			target := definitionTarget{Dir: *workingDirectory, Name: args[0], File: templateFile}
-			return scaffoldDefinition(cmd, target, body, config, getEnv, loadPackages)
+			err = scaffoldDefinition(cmd, target, body, config, getEnv, loadPackages)
+			return notAPackage(spec, sel, *workingDirectory, err)
 		},
 	}
 	cmd.Flags().StringVar(&templateFile, outputFile, "", "the .gohtml file in the working directory to add the template to")
@@ -85,6 +90,25 @@ The stub is a placeholder to rewrite: it returns any and its body returns nil. I
 	cmd.Flags().BoolVar(&fragment, outputFragment, false, "make the template an empty fragment (the default)")
 	cmd.Flags().BoolVar(&document, outputDocument, false, "make the template a full HTML document")
 	return cmd
+}
+
+// notAPackage replaces err when def ran in a muxt.json's own directory, that
+// directory is not one of the file's packages, and it has no templates
+// variable: the person meant one of the packages, so the error names them. A
+// directory that does have the variable is a package flags configure, which
+// def adds to, so the variable has to be looked for before this can be said.
+func notAPackage(spec jobSpec, sel selection, dir string, err error) error {
+	if _, missing := errors.AsType[*check.VariableNotFoundError](err); !missing {
+		return err
+	}
+	if sel.File == nil || len(sel.File.Packages) == 0 || sel.Jobs[0].File != "" {
+		return err
+	}
+	abs, absErr := filepath.Abs(dir)
+	if absErr != nil || abs != sel.File.Dir {
+		return err
+	}
+	return severalPackages(spec, sel.File)
 }
 
 // definitionTarget is where generate def puts a route template. The three

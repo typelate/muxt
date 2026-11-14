@@ -80,6 +80,7 @@ working tree is never written to.`,
 			// reads the directory's entry alone, whatever the file lists.
 			spec := templatesSpec(testTemplateMutationsName, config.TemplatesVariables, settings, getEnv)
 			spec.Scope = itsEntryOnly
+			spec.OnePackage = onePackageWording{Task: "tests one package", Where: "pass one of"}
 			sel, err := selectJobs(spec, dir, cmd.Flags(), getEnv)
 			if err != nil {
 				return err

@@ -56,11 +56,25 @@ func TestConfiguredDirectoryErrorMessage(t *testing.T) {
 // package, run where a muxt.json lists several, names the file, the command and
 // the directories to pass, on one line.
 func TestSeveralPackagesErrorMessage(t *testing.T) {
-	err := &composite.SeveralPackagesError{
-		Path:    "/m/muxt.json",
-		Command: "test-template-mutations",
-		Dirs:    []string{"contacts", "inventory", "tasks"},
+	dirs := []string{"contacts", "inventory", "tasks"}
+	for _, tt := range []struct {
+		name string
+		err  *composite.SeveralPackagesError
+		want string
+	}{
+		{
+			name: "a command that takes a directory",
+			err:  &composite.SeveralPackagesError{Path: "/m/muxt.json", Command: "test-template-mutations", Task: "tests one package", Where: "pass one of", Dirs: dirs},
+			want: "/m/muxt.json: test-template-mutations tests one package; pass one of: contacts inventory tasks",
+		},
+		{
+			name: "a command that takes none",
+			err:  &composite.SeveralPackagesError{Path: "/m/muxt.json", Command: "generate def", Task: "adds a template to one package", Where: "run it in one of", Dirs: dirs},
+			want: "/m/muxt.json: generate def adds a template to one package; run it in one of: contacts inventory tasks",
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, tt.err.Error(), "message")
+		})
 	}
-
-	assert.Equal(t, "/m/muxt.json: test-template-mutations tests one package; pass one of: contacts inventory tasks", err.Error())
 }

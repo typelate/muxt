@@ -270,6 +270,49 @@ func TestGenerateDefSaysWhenItCannotCheckForDuplicates(t *testing.T) {
 	assert.NoFileExists(t, filepath.Join(dir, "index.gohtml"))
 }
 
+// TestGenerateDefInMuxtJSONDirectoryNamesPackages states that generate def,
+// run in the directory of a muxt.json that lists packages but not that
+// directory, names the package directories when the directory has no templates
+// variable: it takes no directory argument, so the person has to run it in one.
+func TestGenerateDefInMuxtJSONDirectoryNamesPackages(t *testing.T) {
+	if testing.Short() {
+		t.Skip("loads packages with the go command")
+	}
+	dir := t.TempDir()
+	writeTestFile(t, dir, "go.mod", "module example.com/m\n\ngo 1.24\n")
+	writeTestFile(t, dir, "m.go", "package m\n")
+	writeMuxtJSON(t, dir, `{"packages": {"example.com/m/tasks": {}, "example.com/m/contacts": {}}}`)
+
+	_, _, err := runCommandArgs(dir, []string{"generate", "def", "GET /foo Index()", "--output-file=index.gohtml"}, runners{load: load.InDirectories})
+
+	several, ok := errors.AsType[*composite.SeveralPackagesError](err)
+	require.True(t, ok, "error is a *composite.SeveralPackagesError: %v", err)
+	assert.Equal(t, []string{"contacts", "tasks"}, several.Dirs, "directories in key order")
+	assert.Equal(t, filepath.Join(dir, composite.FileName)+": generate def adds a template to one package; run it in one of: contacts tasks", err.Error(), "message")
+	assert.NoFileExists(t, filepath.Join(dir, "index.gohtml"))
+}
+
+// TestGenerateDefInMuxtJSONDirectoryAddsToAPackageThere states that the
+// muxt.json's own directory, when it holds a templates variable and no entry,
+// is a package flags configure, so generate def adds the template to it.
+func TestGenerateDefInMuxtJSONDirectoryAddsToAPackageThere(t *testing.T) {
+	if testing.Short() {
+		t.Skip("loads packages with the go command")
+	}
+	dir := t.TempDir()
+	writeTestFile(t, dir, "go.mod", "module example.com/m\n\ngo 1.24\n")
+	writeTestFile(t, dir, "m.go", "package m\n\nimport (\n\t\"embed\"\n\t\"html/template\"\n)\n\n//go:embed *.gohtml\nvar source embed.FS\n\nvar templates = template.Must(template.ParseFS(source, \"*.gohtml\"))\n")
+	writeTestFile(t, dir, "index.gohtml", `{{define "GET / Home()"}}{{end}}`+"\n")
+	writeMuxtJSON(t, dir, `{"packages": {"example.com/m/tasks": {}, "example.com/m/contacts": {}}}`)
+
+	_, _, err := runCommandArgs(dir, []string{"generate", "def", "GET /foo Index()", "--output-file=index.gohtml"}, runners{load: load.InDirectories})
+
+	require.NoError(t, err, "generate def")
+	got, err := os.ReadFile(filepath.Join(dir, "index.gohtml"))
+	require.NoError(t, err, "reading index.gohtml")
+	assert.Contains(t, string(got), `{{define "GET /foo Index()"}}`, "index.gohtml")
+}
+
 // TestGenerateDefOutputDocumentWritesAHTMLDocument states that
 // --output-document makes the define a full HTML document.
 func TestGenerateDefOutputDocumentWritesAHTMLDocument(t *testing.T) {
