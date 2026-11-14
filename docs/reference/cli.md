@@ -66,7 +66,7 @@ A run with no flags in the directory of a [`muxt.json`](muxt-json.md) is keyed, 
 | `--use-receiver-type` | | Type whose method signatures give each call its parameter and result types ([type resolution](call-parameters.md#type-resolution)). Accepted by the root command and `generate`; `check` reads it from the generated file. |
 | `--use-receiver-type-package` | current package | Import path that holds `--use-receiver-type`. Accepted by the root command and `generate`. |
 | `--format` | `text` | `text` or `json`. Accepted by the root command, `explore-module`, the list commands, and `test-template-mutations`. |
-| `-v, --verbose` | `false` | More output; each command page says what. Accepted by every command but `fmt`, `documentation` and `completion`; `list-template-calls`, `list-template-callers`, `explore-module` and `generate-fake-server` accept it and print no more. `muxt --version` prints what `muxt version` prints. |
+| `-v, --verbose` | `false` | More output; each command page says what. Accepted by every command but `fmt`, `documentation`, `completion`, `help`, `generate config` and `generate def`; `list-template-calls`, `list-template-callers`, `explore-module` and `generate-fake-server` accept it and print no more. `muxt --version` prints what `muxt version` prints. |
 
 ```bash
 muxt -C ./web generate --use-receiver-type=Server
@@ -76,7 +76,7 @@ muxt -C ./web generate --use-receiver-type=Server
 
 | Flag | Default | Description |
 |---|---|---|
-| `--output-file` | `template_routes.go` | Path of the generated routes file. |
+| `--output-file` | `template_routes.go` | Name of the generated routes file in the working directory. |
 | `--output-routes-func` | `TemplateRoutes` | Function that registers handlers on an `*http.ServeMux`. |
 | `--output-receiver-interface` | `RoutesReceiver` | Interface listing the methods the routes call. |
 | `--output-template-data-type` | `TemplateData` | Type passed to route templates. |
@@ -98,7 +98,7 @@ muxt -C ./web generate --use-receiver-type=Server
 
 ### Deprecated flags
 
-Each still works and prints `Flag --old has been deprecated, use --new instead`. `check` accepts the `--receiver-type` spellings only to ignore them: it reads the receiver from the generated routes file.
+Each still works on `generate` and `generate package` and prints `Flag --old has been deprecated, use --new instead`. Of these, the other commands accept only `--templates-variable`. `check` also accepts `--receiver-type` and ignores it: it reads the receiver from the generated routes file.
 
 | Old | New |
 |---|---|
