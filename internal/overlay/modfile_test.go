@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"golang.org/x/mod/modfile"
+	"golang.org/x/mod/module"
 
 	"github.com/typelate/muxt/internal/overlay"
 )
@@ -57,6 +58,34 @@ func TestWriteModFile(t *testing.T) {
 			wantRequire:   cli,
 			wantReplace:   "/src/htt",
 			targetVersion: "v0.1.0",
+		},
+		{
+			name:        "a directory replace",
+			goMod:       "module example.com/target\n\ngo 1.27\n",
+			req:         overlay.Requirement{Version: cli, Dir: "/src/htt"},
+			wantRequire: cli,
+			wantReplace: "/src/htt",
+		},
+		{
+			name:        "a directory replace over the target's own",
+			goMod:       "module example.com/target\n\ngo 1.27\n\nrequire github.com/typelate/htt v0.1.0\n\nreplace github.com/typelate/htt => /elsewhere\n",
+			req:         overlay.Requirement{Version: cli, Dir: "/src/htt"},
+			wantRequire: cli,
+			wantReplace: "/src/htt",
+		},
+		{
+			name:        "a workspace module",
+			goMod:       "module example.com/target\n\ngo 1.27\n",
+			req:         overlay.Requirement{Dir: "/src/htt"},
+			wantRequire: module.ZeroPseudoVersion("v0"),
+			wantReplace: "/src/htt",
+		},
+		{
+			name:        "a fork",
+			goMod:       "module example.com/target\n\ngo 1.27\n",
+			req:         overlay.Requirement{Version: cli, Fork: module.Version{Path: "github.com/x/htt", Version: "v1.2.3"}},
+			wantRequire: cli,
+			wantReplace: "github.com/x/htt",
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {

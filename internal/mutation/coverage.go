@@ -110,10 +110,13 @@ func templateCoverage(ctx context.Context, tc overlay.Toolchain, scratch string,
 
 // engineNote says which github.com/typelate/htt the pre-pass built the
 // engine from, for the verbose preamble: the version the modfile copy
-// requires, the directory replacing it, and the test target's own
-// requirement when the copy overrode it.
+// requires, what replaces it, and the test target's own requirement when
+// the copy overrode it. A workspace build has no version to name.
 func engineNote(engine overlay.Files) string {
-	note := "engine " + overlay.Module + "@" + engine.Version
+	note := "engine " + overlay.Module
+	if engine.Version != "" {
+		note += "@" + engine.Version
+	}
 	if engine.Replace != "" {
 		note += " => " + engine.Replace
 	}

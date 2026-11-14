@@ -15,6 +15,7 @@ import (
 	"testing"
 
 	"golang.org/x/mod/modfile"
+	"golang.org/x/mod/module"
 
 	"github.com/typelate/muxt/internal/overlay"
 )
@@ -346,18 +347,39 @@ func TestProbe(t *testing.T) {
 }
 
 // TestProbeRefusalNamesAnUnfetchableModule states that a go list that
-// cannot get htt at the required version says so, not that the overlay
-// is refused.
+// cannot get the module the copy requires says so, not that the overlay
+// is refused: htt at its version, or the fork that replaces it.
 func TestProbeRefusalNamesAnUnfetchableModule(t *testing.T) {
-	reason := errors.New("go: github.com/typelate/htt@v0.2.0: module lookup disabled by GOPROXY=off")
-	err := overlay.ProbeRefusal(reason, "v0.2.0")
-	for _, want := range []string{"cannot get github.com/typelate/htt@v0.2.0", "module cache", "module lookup disabled by GOPROXY=off"} {
-		if !strings.Contains(err.Error(), want) {
-			t.Errorf("probeRefusal = %q, want it to say %q", err, want)
-		}
-	}
-	if strings.Contains(err.Error(), "refuses an overlay") {
-		t.Errorf("probeRefusal = %q, want no overlay refusal", err)
+	for _, tt := range []struct {
+		name   string
+		reason string
+		req    overlay.Requirement
+		want   string
+	}{
+		{
+			name:   "htt",
+			reason: "go: github.com/typelate/htt@v0.2.0: module lookup disabled by GOPROXY=off",
+			req:    overlay.Requirement{Version: "v0.2.0"},
+			want:   "cannot get github.com/typelate/htt@v0.2.0",
+		},
+		{
+			name:   "a fork",
+			reason: "go: github.com/x/htt@v1.2.3: module lookup disabled by GOPROXY=off",
+			req:    overlay.Requirement{Version: "v0.2.0", Fork: module.Version{Path: "github.com/x/htt", Version: "v1.2.3"}},
+			want:   "cannot get github.com/x/htt@v1.2.3",
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			err := overlay.ProbeRefusal(errors.New(tt.reason), tt.req)
+			for _, want := range []string{tt.want, "module cache", "module lookup disabled by GOPROXY=off"} {
+				if !strings.Contains(err.Error(), want) {
+					t.Errorf("probeRefusal = %q, want it to say %q", err, want)
+				}
+			}
+			if strings.Contains(err.Error(), "refuses an overlay") {
+				t.Errorf("probeRefusal = %q, want no overlay refusal", err)
+			}
+		})
 	}
 }
 

@@ -182,6 +182,8 @@ The command is `go test -count=1 -v -mod=mod -modfile=<scratch>/go.mod -overlay=
 
 muxt never writes your `go.mod` or `go.sum`. `-mod=mod` lets the go command add the sums htt's requirements need to the copy. The go command takes htt from the module cache, where `go install` or `go get` left it, and fetches it from the module proxy otherwise. With `-v`, the [timing](#timing) preamble names the module the engine came from, as in `coverage pre-pass 2.4s (engine github.com/typelate/htt@v0.2.0)`, and adds `, not your go.mod's v0.1.0` when the copy overrode your version. muxt removes the scratch directory when the run ends.
 
+When muxt was built with `github.com/typelate/htt` replaced, through a `go.work` or a `replace` directive, the copy replaces htt the same way.
+
 Each test binary that runs the engine writes its profile, `<pid>.cov`, as it starts, before it renders anything. A profile with no blocks is a test binary that executed no template, and every mutant it would have reached is unreached. No profile at all means no test binary ran the engine, and coverage is unknown.
 
 The overlay adds no package under GOROOT, so vet runs in the pre-pass as in your normal test run. `-v` lets a test binary that stopped recording coverage say so in its output.
@@ -211,7 +213,7 @@ The preamble counts mutants, templates and total complexity (per template, one p
 20 mutants across 6 templates (complexity 10), baseline 1.9s, coverage pre-pass 2.4s, estimated 38s
 ```
 
-With `-v` the pre-pass's part also names the module the engine came from: `coverage pre-pass 2.4s (engine github.com/typelate/htt@v0.2.0)`.
+With `-v` the pre-pass's part also names the module the engine came from: `coverage pre-pass 2.4s (engine github.com/typelate/htt@v0.2.0)`. When htt was replaced, the note adds ` => <replacement>`; a `go.work` build has no version to name, so its note is `engine github.com/typelate/htt => <dir>`.
 
 Progress goes to stderr only, so `--format json` on stdout stays machine-readable. When stderr is a terminal, or with `-v`, one line is written as each template finishes: its position among the templates that have mutants, its mutant counts and the time its mutants took.
 
@@ -316,6 +318,7 @@ These edge cases apply to the [coverage pre-pass](#coverage-pre-pass).
 - **Coverage unknown.** When the pre-pass cannot tell which actions the tests reach, stderr gets one line that starts with `warning: template coverage unknown:` and gives the reason. muxt then reports no mutant as unreached and skips none as unreached, with or without `--include-uncovered-nodes`. The run goes on as it would without the pre-pass.
 - **The overlay is refused.** muxt runs a probe first to check that the go command accepts an overlay of GOROOT's `html/template` that imports `github.com/typelate/htt/template`, with htt required as in the pre-pass. When the go command refuses or ignores that overlay, coverage is unknown, and the warning quotes the go command's own reason. It suggests `GOTOOLCHAIN=local` only when that reason is about the toolchain or the module cache.
 - **htt cannot be fetched.** When the go command cannot get the `github.com/typelate/htt` version the copy requires, the probe fails, coverage is unknown, and the warning says `the go command cannot get github.com/typelate/htt@<version>` with the go command's reason. The htt of a muxt installed with `go install` is in the module cache already.
+- **A replaced htt and `-trimpath`.** A muxt built with `-trimpath` while htt was replaced by a directory does not record that directory, so coverage is unknown and the warning says to rebuild muxt without `-trimpath`.
 - **Another htt version in your `go.mod`.** The copy requires the CLI's version in place of yours, so the pre-pass builds the engine of the muxt you ran. `-v` says so in the preamble. When another requirement of yours needs a newer htt, minimal version selection keeps the newer one, and the engine is that version's, not the CLI's. Code of yours that imports htt is built against the version muxt was built with in the pre-pass.
 - **Workspaces.** In workspace mode (a `go.work` in use), the go command refuses `-modfile`, so the probe fails, the warning says `go.work is in use`, and coverage is unknown. muxt does not set `GOWORK=off`, because your tests would then build against a different set of modules than the baseline and the kill runs. Set `GOWORK=off` yourself if your module builds without the workspace.
 - **Shared module versions.** The pre-pass builds your tests against the copy's module graph, not yours. `-mod=mod` ignores `vendor/`, so your dependencies come from the module cache, downloaded when they are not there. And since the copy requires htt, the go command selects the highest version any module requires, so a module you share with htt, such as `golang.org/x/net`, can be built at a newer version than your `go.mod` requires. When any is, the run warns once, naming each module and both versions, and still uses the coverage:

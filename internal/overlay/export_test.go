@@ -16,8 +16,5 @@ type Requirement = requirement
 // WriteModFile writes the modfile copy of a test target's go.mod.
 var WriteModFile = writeModFile
 
-// ProbeRefusal is why the probe's go list failed, with htt required at
-// version and not replaced.
-func ProbeRefusal(err error, version string) error {
-	return probeRefusal(err, requirement{Version: version})
-}
+// ProbeRefusal is why the probe's go list failed, given how htt is required.
+var ProbeRefusal = probeRefusal

@@ -111,8 +111,9 @@ type Files struct {
 	// Target is the test target's go.mod, which ModFile copies.
 	Target string
 
-	// Version is the version of Module that ModFile requires: the one
-	// this muxt was built with.
+	// Version is the version of Module this muxt was built with, as its
+	// build information names it; "" when muxt was built in a workspace
+	// that used Module's directory, which has none.
 	Version string
 
 	// Replace is what ModFile replaces Module with, as muxt's build did:
@@ -268,7 +269,7 @@ func Write(target Target, scratchDir string) (Files, error) {
 		ModFile: filepath.Join(scratchDir, "go.mod"),
 		Target:  targetMod,
 		Version: req.Version,
-		Replace: req.Dir,
+		Replace: req.replacement(),
 	}
 	local := filepath.Join(scratchDir, "html-template", shimFile)
 	if err := writeFile(local, shim); err != nil {
@@ -315,28 +316,69 @@ func goMod(ctx context.Context, tc Toolchain) (string, error) {
 
 // requirement is how the modfile copy requires Module.
 type requirement struct {
-	// Version is the version required; "" for none.
+	// Version is as the build information names it; "" for a workspace
+	// module, which has none.
 	Version string
 
-	// Dir is the directory that replaces Module, absolute; "" for none.
+	// Dir is the absolute directory that replaces Module; "" for none.
 	Dir string
+
+	// Fork is another module that replaces Module; zero for none.
+	Fork module.Version
+}
+
+// replacement is what the modfile copy replaces Module with: a directory,
+// or path@version of another module; "" for none.
+func (r requirement) replacement() string {
+	if r.Fork != (module.Version{}) {
+		return r.Fork.Path + "@" + r.Fork.Version
+	}
+	return r.Dir
 }
 
 // requirementFor is how the modfile copy requires Module, given this
-// muxt's build information, as debug.ReadBuildInfo returns it: at the
-// version the dependency list names. A build information without one, or
-// whose version is not semver, is an error. file is engineFile's path.
+// muxt's build information, as debug.ReadBuildInfo returns it and
+// engineFile's path: at the version muxt was built with; replaced by the
+// module muxt's build replaced it with; and, when that build used a
+// directory (a directory replace, or a workspace module, whose version is
+// "(devel)"), replaced by the module root two levels above file. A version
+// that is not semver without a directory, a file that is not absolute
+// (-trimpath), or a root whose go.mod is not Module's is an error.
 func requirementFor(info *debug.BuildInfo, ok bool, file string) (requirement, error) {
 	errNoVersion := errors.New("muxt's build information does not name a version of " + Module + "; build muxt with go build or go install")
 	if !ok || info == nil {
 		return requirement{}, errNoVersion
 	}
-	for _, dep := range info.Deps {
-		if dep.Path == Module && semver.IsValid(dep.Version) {
-			return requirement{Version: dep.Version}, nil
-		}
+	i := slices.IndexFunc(info.Deps, func(dep *debug.Module) bool { return dep.Path == Module })
+	if i < 0 {
+		return requirement{}, errNoVersion
 	}
-	return requirement{}, errNoVersion
+	dep := info.Deps[i]
+	switch {
+	case dep.Replace != nil && !modfile.IsDirectoryPath(dep.Replace.Path):
+		return requirement{Version: dep.Version, Fork: module.Version{Path: dep.Replace.Path, Version: dep.Replace.Version}}, nil
+	case dep.Replace == nil && semver.IsValid(dep.Version):
+		return requirement{Version: dep.Version}, nil
+	case dep.Replace == nil && dep.Version != "(devel)":
+		return requirement{}, errNoVersion
+	}
+
+	version := dep.Version
+	if !semver.IsValid(version) {
+		version = ""
+	}
+	if !filepath.IsAbs(file) {
+		return requirement{}, errors.New("muxt was built with " + Module + " replaced by a directory and -trimpath, which leaves the directory out; rebuild muxt without -trimpath")
+	}
+	root := filepath.Dir(filepath.Dir(file))
+	b, err := os.ReadFile(filepath.Join(root, "go.mod"))
+	if err == nil && modfile.ModulePath(b) != Module {
+		err = errors.New("its go.mod is not " + Module + "'s")
+	}
+	if err != nil {
+		return requirement{}, fmt.Errorf("muxt was built with %s replaced by %s, which does not hold it now: %w; rebuild muxt", Module, root, err)
+	}
+	return requirement{Version: version, Dir: root}, nil
 }
 
 // engineFile is the path the compiler recorded for the file declaring
@@ -356,9 +398,12 @@ func engineFile() string {
 
 // writeModFile writes to modFile the test target's go.mod, targetMod,
 // with Module required as req says, and beside it a copy of the target's
-// go.sum, if it has one. The target's own requirement of Module, if any,
-// gives way to req's version; it returns that version when it differs,
-// and "" otherwise.
+// go.sum, if it has one. Module is required at req.Version, or at
+// module.ZeroPseudoVersion("v0") when that is "". When req replaces Module,
+// every replace of Module the target has is dropped and req's added.
+// The target's own requirement of Module, if any, gives way to req's
+// version; it returns that version when it differs and req replaces
+// nothing, and "" otherwise.
 //
 // The go command resolves a relative replace against the target's
 // directory, not the modfile's, so req.Dir must be absolute.
@@ -367,21 +412,38 @@ func writeModFile(targetMod, modFile string, req requirement) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("reading the test target's go.mod: %w", err)
 	}
-	targetVersion := ""
 	f, err := modfile.Parse(targetMod, mod, nil)
 	if err != nil {
 		return "", fmt.Errorf("reading the test target's go.mod: %w", err)
 	}
+	version := req.Version
+	if version == "" {
+		version = module.ZeroPseudoVersion("v0")
+	}
+	replaced := req.Dir != "" || req.Fork != (module.Version{})
+	targetVersion := ""
 	for _, r := range f.Require {
-		if r.Mod.Path == Module && r.Mod.Version != req.Version {
+		if r.Mod.Path == Module && r.Mod.Version != version && !replaced {
 			targetVersion = r.Mod.Version
 		}
 	}
-	if err := f.AddRequire(Module, req.Version); err != nil {
+	if err := f.AddRequire(Module, version); err != nil {
 		return "", fmt.Errorf("requiring %s: %w", Module, err)
 	}
-	if req.Dir != "" {
-		if err := f.AddReplace(Module, "", req.Dir, ""); err != nil {
+	if replaced {
+		for _, r := range slices.Clone(f.Replace) {
+			if r.Old.Path != Module {
+				continue
+			}
+			if err := f.DropReplace(Module, r.Old.Version); err != nil {
+				return "", fmt.Errorf("dropping the replace of %s: %w", Module, err)
+			}
+		}
+		newPath, newVersion := req.Dir, ""
+		if req.Fork != (module.Version{}) {
+			newPath, newVersion = req.Fork.Path, req.Fork.Version
+		}
+		if err := f.AddReplace(Module, "", newPath, newVersion); err != nil {
 			return "", fmt.Errorf("replacing %s: %w", Module, err)
 		}
 	}
@@ -465,11 +527,15 @@ func probeRefusal(err error, req requirement) error {
 	if errors.As(err, &goErr) && goErr.stderr != "" {
 		reason = goErr.stderr
 	}
+	engine := module.Version{Path: Module, Version: req.Version}
+	if req.Fork != (module.Version{}) {
+		engine = req.Fork
+	}
 	switch {
 	case strings.Contains(reason, "workspace mode"):
 		return fmt.Errorf("go.work is in use, and the go command refuses the coverage pre-pass's -modfile in workspace mode: %s", reason)
-	case req.Version != "" && req.Dir == "" && strings.Contains(reason, Module+"@"):
-		return fmt.Errorf("the go command cannot get %s@%s, which the coverage pre-pass requires (it must be in the module cache or on the module proxy): %s", Module, req.Version, reason)
+	case req.Dir == "" && strings.Contains(reason, engine.Path+"@"):
+		return fmt.Errorf("the go command cannot get %s@%s, which the coverage pre-pass requires (it must be in the module cache or on the module proxy): %s", engine.Path, engine.Version, reason)
 	case strings.Contains(strings.ToLower(reason), "toolchain"), strings.Contains(reason, "GOMODCACHE"):
 		return fmt.Errorf("the go command refuses an overlay of GOROOT's html/template (try GOTOOLCHAIN=local): %s", reason)
 	default:
