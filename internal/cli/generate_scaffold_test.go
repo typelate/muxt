@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -215,6 +216,47 @@ func TestGeneratePackageLeavesNothingWhenMuxtJSONCannotBeSaved(t *testing.T) {
 	require.Error(t, err)
 	_, statErr := os.Stat(filepath.Join(sub, "web"))
 	assert.ErrorIs(t, statErr, os.ErrNotExist, "web directory is removed")
+}
+
+// TestGeneratePackageKeepsEntriesOfConcurrentRuns states that muxt generate
+// package runs started together each leave their entry in muxt.json, and that
+// of several runs with one NAME exactly one succeeds, so no run loses its
+// entry to another's rewrite of the file.
+func TestGeneratePackageKeepsEntriesOfConcurrentRuns(t *testing.T) {
+	if testing.Short() {
+		t.Skip("runs commands at once against the real lock wait")
+	}
+	const n = 8
+	root := moduleDir(t)
+	writeMuxtJSON(t, root, `{"packages": {}}`)
+	names := make([]string, 0, n+4)
+	for i := range n {
+		names = append(names, "p"+strconv.Itoa(i))
+	}
+	names = append(names, "same", "same", "same", "same")
+	errs := make([]error, len(names))
+	var wg sync.WaitGroup
+	for i, name := range names {
+		wg.Go(func() {
+			_, errs[i] = runCommand(t, root, "generate package "+name)
+		})
+	}
+	wg.Wait()
+
+	succeeded := 0
+	for i, err := range errs {
+		if err == nil {
+			succeeded++
+		} else if names[i] != "same" {
+			t.Errorf("generate package %s: %v", names[i], err)
+		}
+	}
+	assert.Equal(t, n+1, succeeded, "runs that succeeded")
+	f, found, err := composite.Find(root, muxtJSONKeys())
+	require.NoError(t, err, "Find")
+	require.True(t, found, "found")
+	assert.Len(t, f.Packages, n+1, "entries in muxt.json: %v", f.Keys())
+	assert.NoFileExists(t, filepath.Join(root, "muxt.json"+composite.LockSuffix), "lock file outlived the runs")
 }
 
 // TestGeneratePackageDeclaresReceiverType states that the Go file of the new

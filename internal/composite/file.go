@@ -216,6 +216,20 @@ func (f *File) Keys() []string {
 	return slices.Sorted(maps.Keys(f.Packages))
 }
 
+// Add puts entry under key in f's packages. It fails with an *ExistsError
+// naming the key when f already holds it, so of two runs adding one key under
+// Update's lock only the first writes.
+func (f *File) Add(key string, entry Entry) error {
+	if _, exists := f.Packages[key]; exists {
+		return &ExistsError{Path: f.Name, Where: fmt.Sprintf("packages[%q]", key)}
+	}
+	if f.Packages == nil {
+		f.Packages = map[string]Entry{}
+	}
+	f.Packages[key] = entry
+	return nil
+}
+
 // DirOf returns the absolute directory of a packages key, which Find has
 // checked is an import path in f's module.
 func (f *File) DirOf(key string) string {

@@ -340,6 +340,19 @@ func (e *NestedError) Error() string {
 	return fmt.Sprintf("%s is below %s; a module's muxt.json files do not nest: move its entries into %s and delete it", e.Inner, e.Outer, e.Outer)
 }
 
+// LockedError reports a muxt.json that another muxt run is rewriting: its lock
+// file was still there after the wait. Path and Lock are absolute paths. The
+// lock outlives a run only when the run was killed, so the message says to
+// delete it then.
+type LockedError struct {
+	Path, Lock string
+}
+
+// Error returns the file, the lock and the fix on one line.
+func (e *LockedError) Error() string {
+	return fmt.Sprintf("%s is locked by %s: another muxt run is writing it; delete the lock file if none is", e.Path, e.Lock)
+}
+
 // AlreadyConfiguredError reports a muxt.json at or above the directory a
 // command would write one into. A second file would nest below it, so the
 // directory is already configured. Path is the found file's absolute path.

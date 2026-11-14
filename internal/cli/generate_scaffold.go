@@ -152,8 +152,12 @@ func scaffoldPackage(out io.Writer, wd, name string, flags *pflag.FlagSet, confi
 	if err := os.WriteFile(filepath.Join(dir, name+".gohtml"), nil, 0o644); err != nil {
 		return undo(fmt.Errorf("writing %s: %w", written[1], err))
 	}
-	f.Packages = candidate.Packages
-	if err := f.Save(); err != nil {
+	// The file is read again under the lock: another run may have added to it
+	// since f was read, and may have added this very key.
+	err = composite.Update(f.Name, muxtJSONKeys(), func(fresh *composite.File) error {
+		return fresh.Add(key, entry)
+	})
+	if err != nil {
 		return undo(err)
 	}
 	for _, path := range written {
