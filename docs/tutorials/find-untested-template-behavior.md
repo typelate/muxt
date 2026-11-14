@@ -21,7 +21,7 @@ go run github.com/typelate/muxt test-template-mutations --seed 1
 20 mutants across 6 templates (complexity 10, seed 1)
 baseline ok
 
-template_routes.go:38:13 ExecuteTemplate "/ Count()" (dot: *main.TemplateData[main.RoutesReceiver, int64])
+template_routes.go:40:13 ExecuteTemplate "/ Count()" (dot: *main.TemplateData[main.RoutesReceiver, int64])
   "/ Count()" template.gohtml (complexity 1, dot: *main.TemplateData[main.RoutesReceiver, int64])
     MISS 14:2 template-drop
     MISS 17:2 template-drop
