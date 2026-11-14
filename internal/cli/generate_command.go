@@ -326,36 +326,21 @@ const routeBuilderSuffix = "Builder"
 func applyDefaults(config *generate.RoutesFileConfiguration, settings []setting, g givenSettings) {
 	config.PackageName = cmp.Or(config.PackageName, defaultPackageName)
 
-	// g files a deprecated spelling under the name it spells, so has asks
-	// about either.
-	if !config.OutputExportedDefaultIdentifiers {
-		if !g.has(outputRoutesFunc) {
-			config.RoutesFunction = strcase.ToGoCamel(defaultRoutesFunctionName)
-		}
-		if !g.has(outputReceiverInterface) {
-			config.ReceiverInterface = strcase.ToGoCamel(defaultReceiverInterfaceName)
-		}
-		if !g.has(outputTemplateDataType) {
-			config.TemplateDataType = strcase.ToGoCamel(defaultTemplateDataTypeName)
-		}
-		if !g.has(outputSSETemplateDataType) {
-			config.SSETemplateDataType = strcase.ToGoCamel(defaultSSETemplateDataTypeName)
-		}
-		if !g.has(outputTemplateRoutePathsType) {
-			config.TemplateRoutePathsTypeName = strcase.ToGoCamel(defaultTemplateRoutePathsTypeName)
-		}
-	} else {
-		config.RoutesFunction = cmp.Or(config.RoutesFunction, defaultRoutesFunctionName)
-		config.ReceiverInterface = cmp.Or(config.ReceiverInterface, defaultReceiverInterfaceName)
-		config.TemplateDataType = cmp.Or(config.TemplateDataType, defaultTemplateDataTypeName)
-		config.SSETemplateDataType = cmp.Or(config.SSETemplateDataType, defaultSSETemplateDataTypeName)
-		config.TemplateRoutePathsTypeName = cmp.Or(config.TemplateRoutePathsTypeName, defaultTemplateRoutePathsTypeName)
-	}
-
-	// The route type is named after the paths type, and the route builder
-	// after the route type, unless their own settings say otherwise. Their
-	// Derived functions are the only place those conventions are applied.
+	// A name that was not given is derived from the identifiers' default
+	// case, the route type from the paths type, and the route builder from
+	// the route type. Each setting's Derived function is the only place its
+	// convention is applied, which is also what the header compares with.
 	deriveDefaults(settings, g)
+}
+
+// defaultIdentifier is the name a run generates for an identifier whose
+// setting was not given: the default name, lowercased at the first letter
+// when the default identifiers are not exported.
+func defaultIdentifier(name string, exported bool) string {
+	if exported {
+		return name
+	}
+	return strcase.ToGoCamel(name)
 }
 
 // routeTypeSuffix is appended to a route paths type name that is not the
@@ -369,12 +354,8 @@ const routeTypeSuffix = "Route"
 // appended. A package holding several route sets, each with its own
 // --output-template-route-paths-type, so gets a route type per set.
 func defaultRouteTypeName(pathsType string, exported bool) string {
-	defaultPaths, defaultRoute := defaultTemplateRoutePathsTypeName, defaultTemplateRouteTypeName
-	if !exported {
-		defaultPaths, defaultRoute = strcase.ToGoCamel(defaultPaths), strcase.ToGoCamel(defaultRoute)
-	}
-	if pathsType == defaultPaths {
-		return defaultRoute
+	if pathsType == defaultIdentifier(defaultTemplateRoutePathsTypeName, exported) {
+		return defaultIdentifier(defaultTemplateRouteTypeName, exported)
 	}
 	return pathsType + routeTypeSuffix
 }

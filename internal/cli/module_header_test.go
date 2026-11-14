@@ -39,6 +39,16 @@ func TestParseModuleHeader(t *testing.T) {
 			},
 		},
 		{
+			name: "unexported default identifiers", wantOK: true,
+			args: []string{"--use-receiver-type=Server", "--output-exported-default-identifiers=false"},
+			want: analysis.PackageConfig{
+				RoutesFunction:         "templateRoutes",
+				ReceiverInterface:      "routesReceiver",
+				ReceiverType:           "Server",
+				TemplateRoutePathsType: "templateRoutePaths",
+			},
+		},
+		{
 			name: "empty value takes the default", wantOK: true,
 			args: []string{"--output-routes-func="},
 			want: analysis.PackageConfig{

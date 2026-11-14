@@ -1,10 +1,8 @@
 package cli
 
 import (
-	"io"
 	"testing"
 
-	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -21,16 +19,8 @@ import (
 // of the recorded command line reads them: parsed, then defaulted.
 func parseGeneratedHeader(t *testing.T, args []string) generate.RoutesFileConfiguration {
 	t.Helper()
-	var (
-		config     generate.RoutesFileConfiguration
-		deprecated string
-	)
-	set := pflag.NewFlagSet("header", pflag.ContinueOnError)
-	set.SetOutput(io.Discard)
-	addGenerateFlags(set, &config, &deprecated)
-	require.NoError(t, set.Parse(args), "parsing the header %q", args)
-	settings := generateSettings(&config)
-	applyDefaults(&config, settings, givenFlags(set, settings))
+	config, err := headerConfiguration(args)
+	require.NoError(t, err, "parsing the header %q", args)
 	return config
 }
 
@@ -309,5 +299,63 @@ func TestConfigToArgsRecordsWhatDiffersFromTheDefaults(t *testing.T) {
 			tt.change(&config)
 			assert.Equal(t, tt.want, headerArguments(generateSettings(&config)), "args")
 		})
+	}
+}
+
+// TestHeaderRecordsOnlyWhatWasGiven states that a flag nobody gave is not
+// in the header, whichever default identifiers the run derived, and that one
+// given a value other than the derived one is.
+func TestHeaderRecordsOnlyWhatWasGiven(t *testing.T) {
+	for _, tt := range []struct {
+		name        string
+		commandLine []string
+		want        []string
+	}{
+		{
+			name:        "unexported default identifiers",
+			commandLine: []string{"--use-receiver-type=T", "--output-exported-default-identifiers=false"},
+			want:        []string{"--use-receiver-type=T", "--output-exported-default-identifiers=false"},
+		},
+		{
+			name:        "an exported name beside unexported default identifiers",
+			commandLine: []string{"--use-receiver-type=T", "--output-exported-default-identifiers=false", "--output-receiver-interface=RoutesReceiver"},
+			want:        []string{"--use-receiver-type=T", "--output-receiver-interface=RoutesReceiver", "--output-exported-default-identifiers=false"},
+		},
+		{
+			name:        "an unexported name beside exported default identifiers",
+			commandLine: []string{"--output-routes-func=templateRoutes"},
+			want:        []string{"--output-routes-func=templateRoutes"},
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			config := parseGeneratedHeader(t, tt.commandLine)
+			assert.Equal(t, tt.want, headerArguments(generateSettings(&config)), "args")
+		})
+	}
+}
+
+// TestHeaderReproducesItsRun states, for every setting, that the command a
+// header records gives the configuration and the header it came from, with
+// the default identifiers exported or not.
+func TestHeaderReproducesItsRun(t *testing.T) {
+	var probe generate.RoutesFileConfiguration
+	for _, s := range generateSettings(&probe) {
+		for _, exported := range []string{"true", "false"} {
+			if s.name == outputExportedDefaultIdentifiers && exported == "true" {
+				continue
+			}
+			t.Run(s.name+"/exported="+exported, func(t *testing.T) {
+				commandLine := []string{"--" + s.name + "=" + s.example}
+				if s.name != outputExportedDefaultIdentifiers {
+					commandLine = append(commandLine, "--"+outputExportedDefaultIdentifiers+"="+exported)
+				}
+				first := parseGeneratedHeader(t, commandLine)
+				recordedArgs := headerArguments(generateSettings(&first))
+
+				second := parseGeneratedHeader(t, recordedArgs)
+				assert.Equal(t, recorded(first), recorded(second), "the configuration the header %q gives", recordedArgs)
+				assert.Equal(t, recordedArgs, headerArguments(generateSettings(&second)), "the header of the run the header gives")
+			})
+		}
 	}
 }

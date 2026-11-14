@@ -3,14 +3,12 @@ package cli
 import (
 	"cmp"
 	"fmt"
-	"io"
 	"os"
 	"path"
 	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/spf13/pflag"
 
 	"github.com/typelate/muxt/internal/analysis"
 	"github.com/typelate/muxt/internal/fakeserver"
@@ -22,14 +20,8 @@ import (
 // header into what analysis.NewModule reports about the package. It reports
 // false when they do not parse.
 func parseModuleHeader(args []string) (analysis.PackageConfig, bool) {
-	var (
-		config                 generate.RoutesFileConfiguration
-		deprecatedTemplatesVar string
-	)
-	set := pflag.NewFlagSet("parse-header", pflag.ContinueOnError)
-	set.SetOutput(io.Discard)
-	addGenerateFlags(set, &config, &deprecatedTemplatesVar)
-	if err := set.Parse(args); err != nil {
+	config, err := headerConfiguration(args)
+	if err != nil {
 		return analysis.PackageConfig{}, false
 	}
 	return analysis.PackageConfig{

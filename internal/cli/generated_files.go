@@ -49,14 +49,8 @@ func ownedGeneratedFiles(dir, routesFunction string, logger *log.Logger) (map[st
 	}
 	owned := make(map[string]bool, len(generated))
 	for path, h := range generated {
-		var (
-			config     generate.RoutesFileConfiguration
-			deprecated string
-		)
-		set := pflag.NewFlagSet("parse-old", pflag.ContinueOnError)
-		addGenerateFlags(set, &config, &deprecated)
-		set.SetOutput(io.Discard)
-		if err := set.Parse(h.Args()); err != nil {
+		config, err := headerConfiguration(h.Args())
+		if err != nil {
 			logger.Printf("WARNING: ignored generated file %s because arguments failed to parse: %s", path, err)
 			continue
 		}
@@ -65,6 +59,26 @@ func ownedGeneratedFiles(dir, routesFunction string, logger *log.Logger) (map[st
 		}
 	}
 	return owned, nil
+}
+
+// headerConfiguration reads the arguments a header records the way a run of
+// the recorded command line reads them: parsed, then defaulted. The header
+// leaves out every name equal to the one the run derived, so the parsed flags
+// alone would read as the exported defaults whatever the run generated.
+func headerConfiguration(args []string) (generate.RoutesFileConfiguration, error) {
+	var (
+		config     generate.RoutesFileConfiguration
+		deprecated string
+	)
+	set := pflag.NewFlagSet("parse-old", pflag.ContinueOnError)
+	addGenerateFlags(set, &config, &deprecated)
+	set.SetOutput(io.Discard)
+	if err := set.Parse(args); err != nil {
+		return generate.RoutesFileConfiguration{}, err
+	}
+	settings := generateSettings(&config)
+	applyDefaults(&config, settings, givenFlags(set, settings))
+	return config, nil
 }
 
 // recordedStaticAssets returns the static assets mappings recorded in the

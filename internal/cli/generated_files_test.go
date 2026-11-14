@@ -70,6 +70,7 @@ func TestOwnedGeneratedFiles(t *testing.T) {
 	explicitDefault := generated("explicit_default.go", "--output-routes-func=TemplateRoutes")
 	deprecatedFlag := generated("deprecated_flag.go", "--routes-func=TemplateRoutes")
 	other := generated("other.go", "--output-routes-func=AdminRoutes")
+	unexported := generated("unexported.go", "--output-exported-default-identifiers=false")
 	writeTestFile(t, dir, "handwritten.go", "package main\n")
 	writeTestFile(t, dir, "notes.txt", header.Format(nil, ""))
 
@@ -84,6 +85,12 @@ func TestOwnedGeneratedFiles(t *testing.T) {
 		got, err := ownedGeneratedFiles(dir, "AdminRoutes", log.New(io.Discard, "", 0))
 		require.NoError(t, err, "ownedGeneratedFiles()")
 		assert.Equal(t, map[string]bool{other: true}, got, "ownedGeneratedFiles(%q)", "AdminRoutes")
+	})
+
+	t.Run("the routes function unexported default identifiers give", func(t *testing.T) {
+		got, err := ownedGeneratedFiles(dir, "templateRoutes", log.New(io.Discard, "", 0))
+		require.NoError(t, err, "ownedGeneratedFiles()")
+		assert.Equal(t, map[string]bool{unexported: true}, got, "ownedGeneratedFiles(%q)", "templateRoutes")
 	})
 }
 

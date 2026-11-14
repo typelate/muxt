@@ -21,26 +21,41 @@ func generateSettings(c *generate.RoutesFileConfiguration) []setting {
 		stringSetting(&c.ReceiverInterface, spec[string]{
 			Name: outputReceiverInterface, Default: defaultReceiverInterfaceName, NonEmpty: true,
 			Deprecated: []string{deprecatedReceiverInterface}, Example: "RoutesReceiver",
+			Derived: func() string {
+				return defaultIdentifier(defaultReceiverInterfaceName, c.OutputExportedDefaultIdentifiers)
+			},
 			Usage: `The interface name in the generated output file listing the methods used by handler routes in the routes function.`,
 		}),
 		stringSetting(&c.RoutesFunction, spec[string]{
 			Name: outputRoutesFunc, Default: defaultRoutesFunctionName, NonEmpty: true,
 			Deprecated: []string{deprecatedRoutesFunc}, Example: "Routes",
+			Derived: func() string {
+				return defaultIdentifier(defaultRoutesFunctionName, c.OutputExportedDefaultIdentifiers)
+			},
 			Usage: `The function name for the package registering handler functions on an *"net/http".ServeMux.
 This function also receives an argument with a type matching the name given by output-receiver-interface.`,
 		}),
 		stringSetting(&c.TemplateDataType, spec[string]{
 			Name: outputTemplateDataType, Default: defaultTemplateDataTypeName, NonEmpty: true,
 			Deprecated: []string{deprecatedTemplateDataType}, Example: "PageData",
+			Derived: func() string {
+				return defaultIdentifier(defaultTemplateDataTypeName, c.OutputExportedDefaultIdentifiers)
+			},
 			Usage: `The type name for the template data passed to root route templates.`,
 		}),
 		stringSetting(&c.SSETemplateDataType, spec[string]{
 			Name: outputSSETemplateDataType, Default: defaultSSETemplateDataTypeName, NonEmpty: true, Example: "PageEvent",
+			Derived: func() string {
+				return defaultIdentifier(defaultSSETemplateDataTypeName, c.OutputExportedDefaultIdentifiers)
+			},
 			Usage: `The type name for the template data passed to Server-Sent Events route templates.`,
 		}),
 		stringSetting(&c.TemplateRoutePathsTypeName, spec[string]{
 			Name: outputTemplateRoutePathsType, Default: defaultTemplateRoutePathsTypeName, NonEmpty: true,
 			Deprecated: []string{deprecatedTemplateRoutePathsType}, Example: "SitePaths",
+			Derived: func() string {
+				return defaultIdentifier(defaultTemplateRoutePathsTypeName, c.OutputExportedDefaultIdentifiers)
+			},
 			Usage: `The type name for the type with path constructor helper methods.`,
 		}),
 		stringSetting(&c.TemplateRouteTypeName, spec[string]{
