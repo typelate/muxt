@@ -14,8 +14,8 @@ muxt list-template-calls --match='^PATCH'
 template "PATCH /todos/{id} ToggleTodo(id)" calls:
 
   - template.gohtml:84:44 template "error" error
-  - template.gohtml:87:12 template "footer" TodoChange
-  - template.gohtml:86:12 template "todo-item" *Todo
+  - template.gohtml:87:12 template "footer" *TemplateData[RoutesReceiver, TodoChange]
+  - template.gohtml:86:12 template "todo-item" TodoItem
 ```
 
 Takes an optional `[package-dir]`, resolved like `-C`; a missing directory, a file, or a pattern is an error ([reference_package_directory_argument.txt](../../../cmd/muxt/testdata/reference_package_directory_argument.txt)).
