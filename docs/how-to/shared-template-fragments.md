@@ -55,7 +55,19 @@ You are splitting a hypertext package into sub-packages, and they should keep on
    func (Server) Show() Page { return Page{Title: "workspace", Body: "workspace-only text"} }
    ```
 
-5. Repeat steps 3 and 4 in `billing`, then generate both packages from the top of the module ([muxt.json](muxt-json.md)) and check each one:
+5. Repeat steps 3 and 4 in `billing`. Give each package an entry in a [muxt.json](muxt-json.md) at the top of the module:
+
+   ```json
+   {
+   	"package_defaults": {"use_receiver_type": "Server"},
+   	"packages": {
+   		"example.com/m/billing": {},
+   		"example.com/m/workspace": {}
+   	}
+   }
+   ```
+
+   Then generate and check both from there:
 
    ```bash
    muxt generate
