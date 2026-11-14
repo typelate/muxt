@@ -91,7 +91,7 @@ func requireNoneBelow(dir, outer string) error {
 		}
 		if !d.IsDir() {
 			if d.Name() == FileName && filepath.Dir(path) != dir {
-				return &NestedError{Inner: path, Outer: outer}
+				return &NestedError{Inner: path, Outer: outer, Unwritten: true}
 			}
 			return nil
 		}

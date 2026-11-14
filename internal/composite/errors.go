@@ -328,15 +328,21 @@ func (e *PackageNameError) Error() string {
 // NestedError reports two muxt.json files in one module with one below the
 // other. A run at the outer file and a run at the inner file would generate
 // different code for the same package, so a module keeps one file per path
-// from a directory to the module root. Inner and Outer are absolute paths; when
-// the inner file does not exist yet, as in muxt generate config, Inner is
-// the file that does and Outer the one that would be written.
+// from a directory to the module root. Inner and Outer are absolute paths.
+// Unwritten is set when Outer is the file muxt generate config would have
+// written: there is no file to move entries into, and since packages keys are
+// import paths the inner file means the same thing at Outer, so the fix is to
+// move it.
 type NestedError struct {
 	Inner, Outer string
+	Unwritten    bool
 }
 
 // Error returns both files and the fix on one line.
 func (e *NestedError) Error() string {
+	if e.Unwritten {
+		return fmt.Sprintf("%s already configures a directory below; a module's muxt.json files do not nest: move it to %s", e.Inner, e.Outer)
+	}
 	return fmt.Sprintf("%s is below %s; a module's muxt.json files do not nest: move its entries into %s and delete it", e.Inner, e.Outer, e.Outer)
 }
 

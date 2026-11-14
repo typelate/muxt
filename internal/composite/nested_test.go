@@ -181,5 +181,8 @@ func TestCreateRefusesDirectoryWithFileBelow(t *testing.T) {
 	require.True(t, ok, "Create = %v, want *composite.NestedError", err)
 	assert.Equal(t, filepath.Join(root, "web/deeper/muxt.json"), nested.Inner, "inner")
 	assert.Equal(t, filepath.Join(root, "muxt.json"), nested.Outer, "outer")
+	// The outer file is not there to move entries into, and keys are import
+	// paths, so the lower file means the same thing one directory up.
+	assert.Equal(t, nested.Inner+" already configures a directory below; a module's muxt.json files do not nest: move it to "+nested.Outer, err.Error(), "message")
 	assert.NoFileExists(t, filepath.Join(root, "muxt.json"), "Create wrote a file")
 }

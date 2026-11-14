@@ -516,7 +516,7 @@ func TestGenerateConfigRefusesDirectoryAboveMuxtJSON(t *testing.T) {
 	var nested *composite.NestedError
 	require.ErrorAs(t, err, &nested)
 	inner, outer := filepath.Join(web, "muxt.json"), filepath.Join(root, "muxt.json")
-	require.EqualError(t, err, inner+" is below "+outer+"; a module's muxt.json files do not nest: move its entries into "+outer+" and delete it")
+	require.EqualError(t, err, inner+" already configures a directory below; a module's muxt.json files do not nest: move it to "+outer)
 	assert.NoFileExists(t, outer, "muxt.json is written")
 }
 
