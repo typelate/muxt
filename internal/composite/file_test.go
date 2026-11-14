@@ -21,9 +21,9 @@ func writeIn(t *testing.T, dir, name, content string) {
 	require.NoError(t, os.WriteFile(path, []byte(content), 0o644))
 }
 
-// TestFindWalksUpToTheModuleRoot states that Find reads the nearest muxt.json
-// at or above the working directory and goes no higher than the directory
-// holding go.mod, since a file above the module belongs to another project.
+// TestFindWalksUpToTheModuleRoot states that Find reads the muxt.json at or
+// above the working directory and goes no higher than the directory holding
+// go.mod, since a file above the module belongs to another project.
 func TestFindWalksUpToTheModuleRoot(t *testing.T) {
 	const empty = `{"packages": {}}`
 	for _, tt := range []struct {
@@ -50,16 +50,6 @@ func TestFindWalksUpToTheModuleRoot(t *testing.T) {
 			},
 			wd:   "a/b",
 			want: ".",
-		},
-		{
-			name: "the nearest wins",
-			setup: func(t *testing.T, root string) {
-				writeIn(t, root, "go.mod", "module example.com/m\n")
-				writeIn(t, root, "muxt.json", empty)
-				writeIn(t, root, "a/muxt.json", empty)
-			},
-			wd:   "a",
-			want: "a",
 		},
 		{
 			name: "none below the module root",
@@ -393,7 +383,7 @@ func TestCreateRefuses(t *testing.T) {
 			as: isError[*composite.AlreadyConfiguredError],
 		},
 		{
-			name: "a file above the directory that would be shadowed",
+			name: "a file above the directory",
 			setup: func(t *testing.T, root string) {
 				writeIn(t, root, "go.mod", "module example.com/m\n")
 				writeIn(t, root, composite.FileName, `{"packages": {}}`)

@@ -443,7 +443,7 @@ func TestGeneratePackageRefusesExistingEntry(t *testing.T) {
 
 // TestGenerateConfigRefusesDirectoryBelowMuxtJSON states that muxt generate
 // config fails, and writes nothing, in a directory below a muxt.json, because
-// a nearer file would shadow the one that configures it.
+// a module's muxt.json files do not nest.
 func TestGenerateConfigRefusesDirectoryBelowMuxtJSON(t *testing.T) {
 	root := moduleDir(t)
 	const existing = `{"packages": {"example.com/m/contacts": {"output_htmx": true}}}`
@@ -458,6 +458,24 @@ func TestGenerateConfigRefusesDirectoryBelowMuxtJSON(t *testing.T) {
 	require.EqualError(t, err, filepath.Join(root, "muxt.json")+" already configures this directory; add a package with: muxt generate package NAME")
 	_, statErr := os.Stat(filepath.Join(contacts, "muxt.json"))
 	assert.ErrorIs(t, statErr, os.ErrNotExist, "no nearer muxt.json is written")
+}
+
+// TestGenerateConfigRefusesDirectoryAboveMuxtJSON states that muxt generate
+// config fails, and writes nothing, in a directory with a muxt.json below it
+// in the module, since the two files would nest.
+func TestGenerateConfigRefusesDirectoryAboveMuxtJSON(t *testing.T) {
+	root := moduleDir(t)
+	web := filepath.Join(root, "web")
+	require.NoError(t, os.Mkdir(web, 0o755))
+	writeMuxtJSON(t, web, `{"packages": {}}`)
+
+	_, err := runCommand(t, root, "generate config")
+
+	var nested *composite.NestedError
+	require.ErrorAs(t, err, &nested)
+	inner, outer := filepath.Join(web, "muxt.json"), filepath.Join(root, "muxt.json")
+	require.EqualError(t, err, inner+" is below "+outer+"; a module's muxt.json files do not nest: move its entries into "+outer+" and delete it")
+	assert.NoFileExists(t, outer, "muxt.json is written")
 }
 
 // TestGenerateConfigNeedsModule states that muxt generate config fails, and

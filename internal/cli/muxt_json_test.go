@@ -625,6 +625,26 @@ func TestGenerateRejectsMissingMuxtJSONDirectory(t *testing.T) {
 	}
 }
 
+// TestGenerateRejectsMuxtJSONBelowEntry states that a flagless muxt generate
+// in the muxt.json directory fails, naming both files, when an entry's
+// directory holds a muxt.json of its own, and the generate runner is not
+// called.
+func TestGenerateRejectsMuxtJSONBelowEntry(t *testing.T) {
+	dir := moduleDir(t)
+	web := filepath.Join(dir, "web")
+	require.NoError(t, os.Mkdir(web, 0o755))
+	writeMuxtJSON(t, web, `{"packages": {}}`)
+	writeMuxtJSON(t, dir, `{"packages": {"example.com/m/web": {"use_receiver_type": "T1"}}}`)
+
+	called, err := generateFailureOf(t, dir)
+
+	var nested *composite.NestedError
+	require.ErrorAs(t, err, &nested, "error %v", err)
+	inner, outer := filepath.Join(web, composite.FileName), filepath.Join(dir, composite.FileName)
+	assert.Equal(t, inner+" is below "+outer+"; a module's muxt.json files do not nest: move its entries into "+outer+" and delete it", err.Error(), "message")
+	assert.False(t, called, "generate runner called")
+}
+
 // generateJobsOf runs a generate command line in dir and returns the jobs the
 // generate runner is handed. Nothing is loaded.
 func generateJobsOf(t *testing.T, dir, commandLine string) []packageJob {

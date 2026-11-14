@@ -45,7 +45,8 @@ func lookupMuxtJSONEntry(wd string) (entryLookup, error) {
 // requireEntryDirectory returns a *composite.MissingDirectoryError unless dir,
 // the directory of key in f, is a directory, and a
 // *composite.OutsideDirectoryError when it is one that a symbolic link resolves
-// outside f's directory. The errors name dir by its absolute path. It returns
+// outside f's directory, and a *composite.NestedError when a muxt.json sits
+// between it and f's directory. The errors name dir by its absolute path. It returns
 // dir with its symbolic links followed, so a caller can tell two keys apart
 // by the directory they reach.
 func requireEntryDirectory(f *composite.File, key, dir string) (realDir string, err error) {
@@ -62,6 +63,9 @@ func requireEntryDirectory(f *composite.File, key, dir string) (realDir string, 
 	}
 	if !inside {
 		return "", &composite.OutsideDirectoryError{Path: f.Name, Key: key, Dir: dir}
+	}
+	if err := f.CheckNotNested(dir); err != nil {
+		return "", err
 	}
 	return realDir, nil
 }

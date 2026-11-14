@@ -59,8 +59,10 @@ func (f *File) Resolve(key string) (e Entry, found bool) {
 // go.mod is checked for muxt.json and no directory above it is. A muxt.json
 // above the module belongs to another project, so it is not read. When no
 // go.mod is found on the way up, the walk goes to the filesystem root. found is
-// false when the walk ends without a muxt.json. keys says which keys an entry
-// may hold and which are deprecated.
+// false when the walk ends without a muxt.json. Once a file is found the walk
+// goes on to the module root, and a second file there is a *NestedError, since
+// two files on one path would configure a package two ways. keys says which
+// keys an entry may hold and which are deprecated.
 func Find(wd string, keys Keys) (f *File, found bool, err error) {
 	start, err := filepath.Abs(wd)
 	if err != nil {
@@ -70,6 +72,9 @@ func Find(wd string, keys Keys) (f *File, found bool, err error) {
 	for {
 		f, err := read(filepath.Join(dir, FileName), keys)
 		if err == nil {
+			if err := f.requireNoneAbove(); err != nil {
+				return nil, false, err
+			}
 			return f, true, nil
 		}
 		if !errors.Is(err, fs.ErrNotExist) {
@@ -88,9 +93,10 @@ func Find(wd string, keys Keys) (f *File, found bool, err error) {
 
 // Create writes an empty muxt.json into dir, the file a flagless generate
 // reads before any entry is added. It looks for a file the way Find does and
-// fails with an *AlreadyConfiguredError when one configures dir, since a nearer
-// file would shadow it, and with a *NoModuleError when no go.mod is at or above
-// dir, since no command could read the file. keys is as Find takes it.
+// fails with an *AlreadyConfiguredError when one configures dir, with a
+// *NestedError when a muxt.json is below dir in the same module, and with a
+// *NoModuleError when no go.mod is at or above dir, since no command could read
+// the file. keys is as Find takes it.
 func Create(dir string, keys Keys) error {
 	abs, err := filepath.Abs(dir)
 	if err != nil {
@@ -110,6 +116,9 @@ func Create(dir string, keys Keys) error {
 	}
 	if !hasModule {
 		return &NoModuleError{Path: path, Creating: true}
+	}
+	if err := requireNoneBelow(abs, path); err != nil {
+		return err
 	}
 	return writeNew(path, []byte("{\n\t\"packages\": {}\n}\n"))
 }
