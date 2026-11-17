@@ -83,14 +83,24 @@ type headerEntry struct {
 	muxtVersion string
 }
 
+// Entry is what the muxt.json says about a directory.
+type Entry struct {
+	// Configured is whether an entry configures the directory: its generate
+	// command then carries no flags, which generate rejects there.
+	Configured bool
+	// RoutePathsType is the hub's paths type qualified by the hub's package
+	// name, when the muxt.json has a route_paths key and the directory an
+	// entry. The package's own paths type is then the hub's.
+	RoutePathsType string
+}
+
 // NewModule lists the muxt packages of the module that contains
-// workingDirectory: the directories holding a generated file. parseHeader
-// turns the arguments recorded in a header into the package's configuration
-// and reports false when they do not parse, which skips the directory.
-// configured reports whether a muxt.json entry configures a directory: its
-// generate command then carries no flags, which generate rejects there. Its
-// error names the file and the entry, so it is returned as it is.
-func NewModule(workingDirectory string, parseHeader func(args []string) (PackageConfig, bool), configured func(dir string) (bool, error)) (*Module, error) {
+// workingDirectory: the directories holding a generated file other than a
+// hub's. parseHeader turns the arguments recorded in a header into the
+// package's configuration and reports false when they do not parse, which
+// skips the directory. entry says what the muxt.json holds for a directory.
+// Its error names the file and the entry, so it is returned as it is.
+func NewModule(workingDirectory string, parseHeader func(args []string) (PackageConfig, bool), entryOf func(dir string) (Entry, error)) (*Module, error) {
 	mod, err := listModule(workingDirectory)
 	if err != nil {
 		return nil, err
@@ -107,12 +117,15 @@ func NewModule(workingDirectory string, parseHeader func(args []string) (Package
 		if !ok {
 			continue
 		}
-		isConfigured, err := configured(dir)
+		jsonEntry, err := entryOf(dir)
 		if err != nil {
 			return nil, err
 		}
-		if isConfigured {
+		if jsonEntry.Configured {
 			entry.command = ""
+		}
+		if jsonEntry.RoutePathsType != "" {
+			config.TemplateRoutePathsType = jsonEntry.RoutePathsType
 		}
 		info, err := newPackageInfo(mod, entry, config)
 		if err != nil {
@@ -170,7 +183,8 @@ func scanGeneratedHeaders(moduleDir string) (map[string]headerEntry, error) {
 		}
 
 		parsed, ok, err := header.Read(path)
-		if err != nil || !ok {
+		// A hub file is not a routes file: it holds no package of its own.
+		if err != nil || !ok || parsed.IsHub() {
 			return err
 		}
 		dir := filepath.Dir(path)

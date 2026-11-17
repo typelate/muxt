@@ -48,7 +48,7 @@ func exploreModuleCommand(workingDirectory *string, getEnv func(string) string) 
 			if err := checkFormat(cmd); err != nil {
 				return err
 			}
-			result, err := analysis.NewModule(*workingDirectory, parseModuleHeader, configuredHook(getEnv))
+			result, err := analysis.NewModule(*workingDirectory, parseModuleHeader, entryHook(getEnv))
 			if err != nil {
 				return err
 			}
@@ -85,7 +85,7 @@ This command is intended for exploratory use only.`,
 				packageDir = absoluteDir(*workingDirectory, args[0])
 			}
 
-			mod, err := analysis.NewModule(*workingDirectory, parseModuleHeader, configuredHook(getEnv))
+			mod, err := analysis.NewModule(*workingDirectory, parseModuleHeader, entryHook(getEnv))
 			if err != nil {
 				return err
 			}

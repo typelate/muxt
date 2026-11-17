@@ -9,6 +9,7 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"github.com/typelate/muxt/internal/analysis"
 	"github.com/typelate/muxt/internal/check"
 	"github.com/typelate/muxt/internal/composite"
 	"github.com/typelate/muxt/internal/generate"
@@ -284,11 +285,10 @@ func entryVariableError(job packageJob, err error) (entryErr error, ok bool) {
 	return &composite.NoVariableError{Path: job.File, Key: job.Key, Package: missing.Package, Variable: missing.Variable}, true
 }
 
-// configuredHook is analysis.NewModule's answer to whether a muxt.json entry
-// configures a package directory. It asks selectJobs, as every other command
-// does, so an entry that breaks a rule fails here too instead of passing as
-// configured.
-func configuredHook(getEnv func(string) string) func(dir string) (bool, error) {
+// entryHook is analysis.NewModule's answer to what the muxt.json holds for a
+// package directory. It asks selectJobs, as every other command does, so an
+// entry that breaks a rule fails here too instead of passing as configured.
+func entryHook(getEnv func(string) string) func(dir string) (analysis.Entry, error) {
 	spec := jobSpec{
 		Name:  exploreModuleCommandName,
 		Scope: itsEntry,
@@ -296,11 +296,22 @@ func configuredHook(getEnv func(string) string) func(dir string) (bool, error) {
 			return defaultConfiguration(dir, getEnv)
 		},
 	}
-	return func(dir string) (bool, error) {
+	return func(dir string) (analysis.Entry, error) {
 		sel, err := selectJobs(spec, dir, nil, getEnv)
 		if err != nil {
-			return false, err
+			return analysis.Entry{}, err
 		}
-		return sel.Jobs[0].File != "", nil
+		if sel.Jobs[0].File == "" {
+			return analysis.Entry{}, nil
+		}
+		entry := analysis.Entry{Configured: true}
+		if sel.File.RoutePaths != nil {
+			target, err := newRoutePathsTarget(sel.File)
+			if err != nil {
+				return analysis.Entry{}, err
+			}
+			entry.RoutePathsType = target.Hub.PackageName + "." + target.Hub.Names.PathsType()
+		}
+		return entry, nil
 	}
 }
