@@ -47,10 +47,6 @@ type RoutePaths struct {
 	OutputFile string `json:"output_file,omitempty"`
 }
 
-// routePathsKnown is the JSON name of each RoutePaths field. Add a name here
-// when a field is added to RoutePaths, or a muxt.json holding it is rejected.
-var routePathsKnown = []string{"output_file"}
-
 // Resolve returns the entry for key with Defaults applied. A key the entry
 // leaves out takes the default; a key the entry holds, even set to false or an
 // empty list, is kept whole. found is false when f has no entry under key.
@@ -376,6 +372,9 @@ func checkRoutePathsKeys(path string, data []byte) error {
 	if err := json.Unmarshal(data, &top); err != nil {
 		return fmt.Errorf("parsing %s: %w", path, err)
 	}
+	// Each name is the JSON name of a RoutePaths field. Add a name here when a
+	// field is added, or a muxt.json holding it is rejected.
+	routePathsKnown := []string{"output_file"}
 	for _, key := range slices.Sorted(maps.Keys(top.RoutePaths)) {
 		if !slices.Contains(routePathsKnown, key) {
 			return &UnknownKeyError{Path: path, Where: "route_paths", Key: key, Suggestion: closestKey(key, routePathsKnown)}
