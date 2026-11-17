@@ -47,3 +47,20 @@ func TestProfileNamesTheFileTheTemplateWasParsedFrom(t *testing.T) {
 
 	assert.Equal(t, "mode: set\n/abs/pkg/index.gohtml:2.1,2.9 1 1\n", written(t, &p))
 }
+
+// TestProfileLeavesOutBlocksOfATemplateWithNoFile states that a parse name
+// no definition's file carries is left out: a template parsed from a string
+// or a file read at run time has no file to put its blocks in.
+func TestProfileLeavesOutBlocksOfATemplateWithNoFile(t *testing.T) {
+	sources := templatecover.Sources(packageWith(map[string]source.Definition{
+		"index.gohtml": definedIn("/abs/pkg/index.gohtml", "index.gohtml"),
+		"inline":       definedIn("/abs/pkg/page.go", "inline"),
+	}))
+	block := map[templatecover.Block]struct{}{{StartLine: 2, StartCol: 1, EndLine: 2, EndCol: 9}: {}}
+	reached := templatecover.Reached{"inline": block, "read-at-run-time.gohtml": block}
+
+	var p templatecover.Profile
+	p.Add(reached, sources)
+
+	assert.Equal(t, "mode: set\n", written(t, &p))
+}
