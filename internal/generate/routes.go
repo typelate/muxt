@@ -183,6 +183,9 @@ func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, hub *Hub, pk
 		reserved = append(reserved, generated.name)
 	}
 	file := newFile(pkg, reserved...)
+	if hub != nil {
+		file.hubImportPath = hub.ImportPath
+	}
 
 	if err := checkGeneratedNames(config, hub); err != nil {
 		return nil, err

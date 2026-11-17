@@ -1,0 +1,92 @@
+# A hub whose package name is also a name the generated routes file declares
+# (here m, the receiver of the SSETemplateData methods) is imported under a
+# name nothing shadows, so a package with an sse route builds.
+
+muxt generate
+muxt check
+exec go build ./...
+exec go test ./site
+
+-- go.mod --
+module example.com/m
+
+go 1.24
+-- muxt.json --
+{
+	"route_paths": {},
+	"package_defaults": {
+		"use_receiver_type": "Server"
+	},
+	"packages": {
+		"example.com/m/admin": {},
+		"example.com/m/blog": {}
+	}
+}
+-- admin/admin.go --
+package admin
+
+import (
+	"context"
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templateSource embed.FS
+
+var templates = template.Must(template.ParseFS(templateSource, "*.gohtml"))
+
+type Server struct{}
+
+// Stream sends one event and returns so the handler completes.
+func (Server) Stream(ctx context.Context, execute func(data int) error) {
+	_ = execute(42)
+}
+-- admin/events.gohtml --
+{{define "GET /events sse(Stream(ctx, execute))"}}<a href="{{$.Path.Blog.GetArticle .Result}}">article</a>{{end}}
+-- blog/blog.go --
+package blog
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templateSource embed.FS
+
+var templates = template.Must(template.ParseFS(templateSource, "*.gohtml"))
+
+type Server struct{}
+
+func (Server) GetArticle(id int) string { return "article" }
+-- blog/article.gohtml --
+{{define "GET /article/{id} GetArticle(id)"}}<h1>{{.Result}}</h1>{{end}}
+-- site/site_test.go --
+package site
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+
+	"example.com/m/admin"
+	"example.com/m/blog"
+)
+
+func TestEventLinksToBlog(t *testing.T) {
+	mux := http.NewServeMux()
+	admin.TemplateRoutes(mux, admin.Server{})
+	blog.TemplateRoutes(mux, blog.Server{})
+
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/events", nil))
+
+	if got := rec.Result().StatusCode; got != http.StatusOK {
+		t.Errorf("GET /events status = %d, want %d", got, http.StatusOK)
+	}
+	if body, want := rec.Body.String(), `href="/article/42"`; !strings.Contains(body, want) {
+		t.Errorf("GET /events body = %q, want it to contain %q", body, want)
+	}
+}

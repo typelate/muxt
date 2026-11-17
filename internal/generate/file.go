@@ -37,6 +37,9 @@ type File struct {
 	// reserved are the names newFile was passed, for the other files of
 	// the run.
 	reserved []string
+	// hubImportPath is the import path of the hub, whose import is also
+	// kept clear of hubShadowedIdentifiers.
+	hubImportPath string
 	// err is the first thing a generator asked of the file that it cannot
 	// do, such as importing the output package; Err returns it.
 	err error
@@ -67,7 +70,11 @@ func newFile(pkg source.Package, reserved ...string) *File {
 
 // sibling returns a File for another file of the same run: the same
 // package and reserved names, and no imports.
-func (file *File) sibling() *File { return newFile(file.pkg, file.reserved...) }
+func (file *File) sibling() *File {
+	sibling := newFile(file.pkg, file.reserved...)
+	sibling.hubImportPath = file.hubImportPath
+	return sibling
+}
 
 // Identifiers generated code declares in a function where it may spell a
 // type from an imported package.
@@ -141,6 +148,24 @@ var generatedLocalIdentifiers = []string{
 	muxt.TemplateNameScopeIdentifierSignals,
 }
 
+// hubShadowedIdentifiers are the type parameters and the receivers,
+// parameters and locals of the TemplateData and SSETemplateData methods.
+// Their Path and Route methods spell the hub's path types, so the hub's
+// import may not have one of these names. Other imports may: they are
+// not spelled inside those methods.
+var hubShadowedIdentifiers = []string{
+	templateDataReceiverName,
+	sseTemplateDataReceiverName,
+	sseWriterIdent,
+	sseCountIdent,
+	sseNIdent,
+	sseLineIdent,
+	sseRetryBufIdent,
+	"R", "T",
+	"event", "id", "retryMilliseconds", "selector", "mode",
+	"url", "code", "key", "headers", "name", "muxtVersion",
+}
+
 // TypeExpr spells t as the generated file refers to it, importing what it
 // needs.
 func (file *File) TypeExpr(t source.Type) (ast.Expr, error) {
@@ -169,7 +194,12 @@ func (file *File) Import(pkgIdent, pkgPath string) string {
 		}
 		return cmp.Or(pkgIdent, path.Base(pkgPath))
 	}
-	return packageImportName(&file.importSpecs, file.packageIdentifiers, file.taken, pkgPath, pkgIdent)
+	taken := file.taken
+	if name := cmp.Or(pkgIdent, path.Base(pkgPath)); pkgPath == file.hubImportPath && slices.Contains(hubShadowedIdentifiers, name) {
+		taken = maps.Clone(taken)
+		taken[name] = true
+	}
+	return packageImportName(&file.importSpecs, file.packageIdentifiers, taken, pkgPath, pkgIdent)
 }
 
 // Err returns the first thing a generator asked of the file that it
