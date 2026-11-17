@@ -1237,7 +1237,7 @@ func heldOpen(el *htt.HTMLElementNode, path []htt.Node) bool {
 		switch p := path[i].(type) {
 		case *htt.HTMLElementNode:
 			tag := strings.ToLower(p.TagName)
-			if htt.FormattingElements[tag] {
+			if htt.IsFormattingElement(tag) {
 				return true
 			}
 			if specialTags[tag] {
@@ -1331,7 +1331,7 @@ func unsureReopened(root *htt.ListNode, styles analysis.Whitespaces, moved analy
 					mark(r, n)
 				}
 			}
-			if n.Closed || n.Void || !htt.FormattingElements[strings.ToLower(n.TagName)] {
+			if n.Closed || n.Void || !htt.IsFormattingElement(strings.ToLower(n.TagName)) {
 				return
 			}
 			mode = whiteSpaceOf(styles, n)
@@ -1372,7 +1372,7 @@ func hasUnreadFormattingTag(text []byte) bool {
 		for end < len(text) && !isTagNameEnd(text[end]) {
 			end++
 		}
-		if htt.FormattingElements[strings.ToLower(string(text[i+1:end]))] {
+		if htt.IsFormattingElement(strings.ToLower(string(text[i+1 : end]))) {
 			return true
 		}
 	}

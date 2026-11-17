@@ -207,7 +207,7 @@ func checkDeclarationList(css cssText, list *csstree.List[csstree.Node], end int
 				Pos:      css.pos(decl.Loc.Start.Offset),
 				End:      css.pos(decl.Loc.End.Offset),
 				Severity: SeverityWarning,
-				Code:     htt.DiagUnknownCSSProperty,
+				Code:     DiagUnknownCSSProperty,
 				Message:  fmt.Sprintf(msgUnknownCSSProperty, decl.Property),
 			})
 		case errors.As(result.Error, &mismatch):
@@ -219,7 +219,7 @@ func checkDeclarationList(css cssText, list *csstree.List[csstree.Node], end int
 				Pos:      css.pos(start),
 				End:      css.pos(end),
 				Severity: SeverityWarning,
-				Code:     htt.DiagInvalidCSSValue,
+				Code:     DiagInvalidCSSValue,
 				Message:  fmt.Sprintf(msgInvalidCSSValue, mismatch.CSS, decl.Property, mismatch.Syntax),
 			})
 		}

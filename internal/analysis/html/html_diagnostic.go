@@ -28,8 +28,7 @@ func CheckStructure(t *htt.Tree) Diagnostics {
 	diags := append(Diagnostics(nil), t.Diagnostics...)
 	htt.Walk(t, func(_ *htt.Tree, n htt.Node) {
 		elem, ok := n.(*htt.HTMLElementNode)
-		if !ok || elem == nil || elem.Void || elem.Closed ||
-			htt.ImpliedEndTagElements[strings.ToLower(elem.TagName)] ||
+		if !ok || elem == nil || elem.Void || elem.Closed || htt.HasImpliedEndTag(strings.ToLower(elem.TagName)) ||
 			elem.Misnested {
 			return
 		}

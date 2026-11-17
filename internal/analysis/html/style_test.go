@@ -84,18 +84,18 @@ func TestCheckStyleAttributes(t *testing.T) {
 		{
 			name:  "unknown property",
 			input: `<p style="colr: red"></p>`,
-			want:  []want{{htt.DiagUnknownCSSProperty, `colr: red`, `unknown CSS property "colr"`}},
+			want:  []want{{DiagUnknownCSSProperty, `colr: red`, `unknown CSS property "colr"`}},
 		},
 		{
 			name:  "value does not match the property syntax",
 			input: `<p style="margin: 10px foo"></p>`,
-			want:  []want{{htt.DiagInvalidCSSValue, `foo"`, `"10px foo" is not a valid value for CSS property "margin"; want <'margin-top'>{1,4}`}},
+			want:  []want{{DiagInvalidCSSValue, `foo"`, `"10px foo" is not a valid value for CSS property "margin"; want <'margin-top'>{1,4}`}},
 		},
 		{name: "declaration with a template action is not checked", input: `<p style="color: {{.C}}; margin: 0"></p>`},
 		{
 			name:  "static declaration next to a dynamic one is checked",
 			input: `<p style="color: {{.C}}; colr: red"></p>`,
-			want:  []want{{htt.DiagUnknownCSSProperty, `colr: red`, `unknown CSS property "colr"`}},
+			want:  []want{{DiagUnknownCSSProperty, `colr: red`, `unknown CSS property "colr"`}},
 		},
 		{name: "whole value is dynamic", input: `<p style="{{.S}}"></p>`},
 		{name: "custom property and var()", input: `<p style="--gap: 1rem; gap: var(--gap)"></p>`},
@@ -104,12 +104,12 @@ func TestCheckStyleAttributes(t *testing.T) {
 		{
 			name:  "conditional style attribute",
 			input: `<p {{if .X}}style="colr: red"{{end}}></p>`,
-			want:  []want{{htt.DiagUnknownCSSProperty, `colr: red`, `unknown CSS property "colr"`}},
+			want:  []want{{DiagUnknownCSSProperty, `colr: red`, `unknown CSS property "colr"`}},
 		},
 		{
 			name:  "style attribute name is case-insensitive",
 			input: `<p STYLE="colr: red"></p>`,
-			want:  []want{{htt.DiagUnknownCSSProperty, `colr: red`, `unknown CSS property "colr"`}},
+			want:  []want{{DiagUnknownCSSProperty, `colr: red`, `unknown CSS property "colr"`}},
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {

@@ -70,7 +70,7 @@ func CheckCustomProperties(trees []*htt.Tree, sheets []Stylesheet) []StyleDiagno
 			Pos:      r.block.css.pos(r.loc.Start.Offset),
 			End:      r.block.css.pos(r.loc.End.Offset),
 			Severity: SeverityWarning,
-			Code:     htt.DiagUndefinedCSSCustomProperty,
+			Code:     DiagUndefinedCSSCustomProperty,
 			Message:  fmt.Sprintf(msgUndefinedCSSCustomProperty, r.name),
 		}))
 	}

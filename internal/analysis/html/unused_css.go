@@ -164,7 +164,7 @@ func checkRule(css cssText, rule *csstree.Rule, parent string, roots []htt.Node,
 			Pos:      css.pos(list.Loc.Start.Offset),
 			End:      css.pos(list.Loc.End.Offset),
 			Severity: SeverityWarning,
-			Code:     htt.DiagUnusedCSSRule,
+			Code:     DiagUnusedCSSRule,
 			Message:  fmt.Sprintf(msgUnusedCSSRule, css.source(list.Loc)),
 		})
 	} else {
@@ -173,7 +173,7 @@ func checkRule(css cssText, rule *csstree.Rule, parent string, roots []htt.Node,
 				Pos:      css.pos(sel.Loc.Start.Offset),
 				End:      css.pos(sel.Loc.End.Offset),
 				Severity: SeverityWarning,
-				Code:     htt.DiagUnusedCSSSelector,
+				Code:     DiagUnusedCSSSelector,
 				Message:  fmt.Sprintf(msgUnusedCSSSelector, css.source(sel.Loc)),
 			})
 		}

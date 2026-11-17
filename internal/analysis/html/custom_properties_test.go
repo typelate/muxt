@@ -97,8 +97,8 @@ func TestCheckCustomProperties(t *testing.T) {
 			}
 			for i, w := range test.want {
 				d := diags[i]
-				if d.Code != htt.DiagUndefinedCSSCustomProperty {
-					t.Errorf("diagnostic %d code = %q, want %q", i, d.Code, htt.DiagUndefinedCSSCustomProperty)
+				if d.Code != DiagUndefinedCSSCustomProperty {
+					t.Errorf("diagnostic %d code = %q, want %q", i, d.Code, DiagUndefinedCSSCustomProperty)
 				}
 				if d.Severity != SeverityWarning {
 					t.Errorf("diagnostic %d severity = %v, want %v", i, d.Severity, SeverityWarning)

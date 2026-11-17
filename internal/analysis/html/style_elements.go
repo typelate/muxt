@@ -89,7 +89,7 @@ func checkAtruleName(css cssText, rule *csstree.Atrule, diags *Diagnostics) {
 		Pos:      css.pos(start),
 		End:      css.pos(end),
 		Severity: SeverityWarning,
-		Code:     htt.DiagUnknownCSSAtRule,
+		Code:     DiagUnknownCSSAtRule,
 		Message:  fmt.Sprintf(msgUnknownCSSAtRule, "@"+rule.Name),
 	})
 }
