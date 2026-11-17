@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -218,6 +219,43 @@ func TestTestGivesEachJobItsOwnCoverDirectory(t *testing.T) {
 		want := template.CoverEnv + "=" + filepath.Join(run.Prepare[i], "profiles")
 		assert.Contains(t, call.Env, want, "go test %d environment", i)
 	}
+}
+
+// TestTestNamesEachKeyedPackage states that a run over every entry of a
+// muxt.json writes each entry's key on its own line before that package's
+// go test output, so a reader can tell whose output follows.
+func TestTestNamesEachKeyedPackage(t *testing.T) {
+	run := newTestRun(t)
+	run.Write = func(call int, stdout, _ io.Writer) {
+		_, _ = io.WriteString(stdout, "ok "+strconv.Itoa(call)+"\n")
+	}
+	jobs := []packageJob{
+		{Key: "example.com/a", Dir: "/work/a", Keyed: true},
+		{Key: "example.com/b", Dir: "/work/b", Keyed: true},
+	}
+	stdout, stderr, err := run.run(jobs, testConfiguration{})
+	require.NoError(t, err, "muxt test")
+
+	assert.Equal(t, "example.com/a\nok 0\nexample.com/b\nok 1\n", stdout, "stdout")
+	assert.Empty(t, stderr, "stderr")
+}
+
+// TestTestNamesNoKeyWhenGoTestWritesJSON states that with -json after -- the
+// output stays a stream of JSON events: a key line would break every
+// reader of it.
+func TestTestNamesNoKeyWhenGoTestWritesJSON(t *testing.T) {
+	run := newTestRun(t)
+	run.Write = func(_ int, stdout, _ io.Writer) {
+		_, _ = io.WriteString(stdout, "{}\n")
+	}
+	jobs := []packageJob{
+		{Key: "example.com/a", Dir: "/work/a", Keyed: true},
+		{Key: "example.com/b", Dir: "/work/b", Keyed: true},
+	}
+	stdout, _, err := run.run(jobs, testConfiguration{GoTestArgs: []string{"-json"}})
+	require.NoError(t, err, "muxt test")
+
+	assert.Equal(t, "{}\n{}\n", stdout, "stdout")
 }
 
 // TestTestPassesNoPackagePattern states that with nothing after -- go test

@@ -41,6 +41,20 @@ func runGoTest(ctx context.Context, dir string, env, args []string, stdout, stde
 	return cmd.Run()
 }
 
+// writesJSON reports whether go test is asked for its JSON event stream,
+// which a line of muxt's would corrupt. A later -json=false wins.
+func writesJSON(goTestArgs []string) bool {
+	json := false
+	for f := range templatecover.Flags(goTestArgs) {
+		if f.Name != "json" {
+			continue
+		}
+		on, err := strconv.ParseBool(f.Value)
+		json = !f.HasValue || (err == nil && on)
+	}
+	return json
+}
+
 // testRunner runs each job's tests on muxt's template engine. The go test
 // of a job is separate from the others', so a profile line can be
 // attributed to the files of the package it came from.
@@ -70,6 +84,11 @@ func testRunner(goTest goTestFunc, prepare prepareFunc) func(*cobra.Command, []p
 			// replayed pass cannot leave a package out of the profile.
 			args := append([]string{"test", "-count=1"}, engine.Flags()...)
 			args = append(args, config.GoTestArgs...)
+			if job.Keyed && !writesJSON(config.GoTestArgs) {
+				if _, err := fmt.Fprintln(cmd.OutOrStdout(), job.Key); err != nil {
+					return fmt.Errorf("writing the package key: %w", err)
+				}
+			}
 			if err := goTest(ctx, job.Dir, engine.Environ(nil), args, cmd.OutOrStdout(), cmd.ErrOrStderr()); err != nil {
 				if ctxErr := ctx.Err(); ctxErr != nil {
 					// Whatever the interrupted run said, it was not a verdict.
