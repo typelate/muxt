@@ -70,8 +70,7 @@ func checkTestGoTestArgs(args []string) error {
 	}
 	walk := slices.Collect(templatecover.Flags(args))
 	for i, f := range walk {
-		switch f.Name {
-		case "C":
+		if f.Name == "C" {
 			// go test reads -C only as its first flag, and muxt puts its
 			// own flags first, so muxt's -C is the one that can work. The
 			// shared walk does not read -C's next argument as its value,
@@ -85,10 +84,9 @@ func checkTestGoTestArgs(args []string) error {
 				return errors.New("-C after -- cannot reach go test, which takes it only as its first flag; use muxt's own -C before test")
 			}
 			return fmt.Errorf("-C after -- cannot reach go test, which takes it only as its first flag; use muxt -C %s test", dir)
-		case "overlay", "mod", "modfile", "coverpkg":
-			if err := templatecover.Refuse(f, purpose); err != nil {
-				return err
-			}
+		}
+		if err := templatecover.Refuse(f, purpose); err != nil {
+			return err
 		}
 	}
 	return nil
