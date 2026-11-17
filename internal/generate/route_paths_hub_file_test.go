@@ -25,6 +25,40 @@ func hubTestPackage(t *testing.T, namespace, goSource, templates string) RoutePa
 	return RoutePathsPackage{Namespace: namespace, Config: config, Pkg: pkg, Defs: defs}
 }
 
+// TestRoutePathsFileDeclaresStaticAssetsPath gives a package a static assets
+// path and reads its namespace on the hub as Go.
+func TestRoutePathsFileDeclaresStaticAssetsPath(t *testing.T) {
+	blog := hubTestPackage(t, "Blog", `package server
+
+type T struct{}
+
+func (T) GetArticle(id int) string { return "" }
+`, `{{define "GET /article/{id} GetArticle(id)"}}{{end}}`)
+	blog.Config.StaticAssetsDirectory = "assets"
+	blog.Config.StaticAssetsPath = "/static"
+
+	file, err := RoutePathsFile(RoutePaths{ImportPath: "example.com/hub", PackageName: "hub", Packages: []RoutePathsPackage{blog}})
+	require.NoError(t, err)
+	fset := token.NewFileSet()
+	parsed, err := parser.ParseFile(fset, "route_paths.go", file.Content, 0)
+	require.NoError(t, err)
+	pkg, err := (&types.Config{Importer: importer.ForCompiler(fset, "source", nil)}).Check("example.com/hub", fset, []*ast.File{parsed}, nil)
+	require.NoError(t, err, file.Content)
+
+	bare := func(*types.Package) string { return "" }
+	for _, tc := range []struct{ typeName, want string }{
+		{"BlogTemplateRoutePaths", "func() string"},
+		{"BlogTemplateRouteBuilder", "func() TemplateRoute"},
+	} {
+		obj := pkg.Scope().Lookup(tc.typeName)
+		require.NotNil(t, obj, tc.typeName)
+		m, _, _ := types.LookupFieldOrMethod(obj.Type(), false, pkg, "ReadStatic")
+		if assert.NotNil(t, m, "%s.ReadStatic", tc.typeName) {
+			assert.Equal(t, tc.want, types.TypeString(m.Type(), bare), "%s.ReadStatic", tc.typeName)
+		}
+	}
+}
+
 // TestRoutePathsFileDeclaresEachPackagesHelpers generates the hub file for two
 // packages and reads the result as Go.
 func TestRoutePathsFileDeclaresEachPackagesHelpers(t *testing.T) {

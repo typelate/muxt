@@ -280,7 +280,10 @@ func staticAssetsHandler(file *File) ast.Expr {
 //	func (routePaths TemplateRoutePaths) ReadStatic() string {
 //		return routePaths.routes.ReadStatic().Path()
 //	}
-func staticAssetsPathMethods(file *File, config RoutesFileConfiguration) []ast.Decl {
+//
+// names are the types the methods are declared on: the package's own, or
+// its namespace's on the hub.
+func staticAssetsPathMethods(file *File, config RoutesFileConfiguration, names pathTypeNames) []ast.Decl {
 	prefix := StaticAssetsPrefix(config.StaticAssetsPath)
 	joined := &ast.BinaryExpr{
 		X:  astgen.Call(file, "path", "path", "Join", pathPrefixOrRoot(file), astgen.String(strings.Trim(prefix, "/"))),
@@ -288,13 +291,12 @@ func staticAssetsPathMethods(file *File, config RoutesFileConfiguration) []ast.D
 		Y:  astgen.String("/"),
 	}
 	route := &ast.CompositeLit{
-		Type: ast.NewIdent(routeTypeName(config)),
+		Type: ast.NewIdent(names.Route),
 		Elts: []ast.Expr{
 			&ast.KeyValueExpr{Key: ast.NewIdent(routeMethodFieldName), Value: astgen.HTTPMethod(file, http.MethodGet)},
 			&ast.KeyValueExpr{Key: ast.NewIdent(routePathFieldName), Value: joined},
 		},
 	}
-	names := configPathTypeNames(config)
 	builder := routeBuilderMethod(names, muxt.StaticAssetsPathIdentifier(prefix), nil, results(ast.NewIdent(names.Route)), returnExprs(route))
 	return []ast.Decl{builder, routePathWrapper(names, builder)}
 }

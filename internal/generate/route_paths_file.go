@@ -65,6 +65,9 @@ func RoutePathsFile(r RoutePaths) (GeneratedFile, error) {
 			return GeneratedFile{}, fmt.Errorf("package %s: %w", p.Namespace, err)
 		}
 		decls = append(decls, packageDecls...)
+		if p.Config.StaticAssetsDirectory != "" {
+			decls = append(decls, staticAssetsPathMethods(file, p.Config, names)...)
+		}
 	}
 	if err := file.Err(); err != nil {
 		return GeneratedFile{}, err

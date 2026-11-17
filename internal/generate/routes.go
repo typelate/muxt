@@ -243,7 +243,7 @@ func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, hub *Hub, pk
 	if config.StaticAssetsDirectory != "" {
 		routesFunc.Body.List = append(routesFunc.Body.List, staticAssetsStatements(file, config)...)
 		if hub == nil {
-			routePathDecls = append(routePathDecls, staticAssetsPathMethods(file, config)...)
+			routePathDecls = append(routePathDecls, staticAssetsPathMethods(file, config, configPathTypeNames(config))...)
 		}
 	}
 	routesFunc.Body.List = append(routesFunc.Body.List, returnRoutePaths(file, config, hub))

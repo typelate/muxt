@@ -1,0 +1,86 @@
+# A package with a static assets path keeps serving its files from its own
+# routes file, and its path method lives on the hub under the package's
+# namespace, so another package can link to the asset.
+
+muxt generate
+muxt check
+exec go build ./...
+exec go test ./site
+
+-- go.mod --
+module example.com/m
+
+go 1.22
+-- muxt.json --
+{
+	"route_paths": {},
+	"package_defaults": {
+		"use_receiver_type": "Server"
+	},
+	"packages": {
+		"example.com/m/admin": {},
+		"example.com/m/blog": {
+			"input_static_assets_directory": "assets",
+			"output_static_assets_path": "/static"
+		}
+	}
+}
+-- admin/admin.go --
+package admin
+
+import "html/template"
+
+var templates = template.Must(template.New("GET /admin Dashboard()").Parse(`<link id="css" rel="stylesheet" href="{{$.Path.Blog.ReadStatic}}app.css">`))
+
+type Server struct{}
+
+func (Server) Dashboard() string { return "dashboard" }
+-- blog/blog.go --
+package blog
+
+import "html/template"
+
+var templates = template.Must(template.New("GET /article/{id} GetArticle(id)").Parse(`<h1>{{.Result}}</h1>`))
+
+type Server struct{}
+
+func (Server) GetArticle(id int) string { return "article" }
+-- blog/assets/app.css --
+p{color:red}
+-- site/site_test.go --
+package site
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"regexp"
+	"testing"
+
+	"example.com/m/admin"
+	"example.com/m/blog"
+)
+
+func TestAdminLinksToBlogAsset(t *testing.T) {
+	mux := http.NewServeMux()
+	admin.TemplateRoutes(mux, admin.Server{})
+	blog.TemplateRoutes(mux, blog.Server{})
+
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/admin", nil))
+	if got := rec.Result().StatusCode; got != http.StatusOK {
+		t.Fatalf("GET /admin status = %d, want %d", got, http.StatusOK)
+	}
+	match := regexp.MustCompile(`href="([^"]+)"`).FindStringSubmatch(rec.Body.String())
+	if match == nil {
+		t.Fatalf("GET /admin body = %q, want an href", rec.Body.String())
+	}
+
+	rec = httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, match[1], nil))
+	if got := rec.Result().StatusCode; got != http.StatusOK {
+		t.Fatalf("GET %s status = %d, want %d", match[1], got, http.StatusOK)
+	}
+	if got, want := rec.Body.String(), "p{color:red}\n"; got != want {
+		t.Errorf("GET %s body = %q, want %q", match[1], got, want)
+	}
+}
