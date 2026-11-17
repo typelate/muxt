@@ -1,0 +1,85 @@
+# The hub directory may hold hand-written Go files, a type and a go:generate
+# line among them. muxt generate writes route_paths.go and leaves them alone,
+# every time it runs.
+
+muxt generate
+exists route_paths.go
+muxt check
+exec go build ./...
+cmp types.go types.go.orig
+cmp generate.go generate.go.orig
+
+muxt generate
+cmp types.go types.go.orig
+cmp generate.go generate.go.orig
+exec go build ./...
+
+-- go.mod --
+module example.com/m
+
+go 1.22
+-- muxt.json --
+{
+	"route_paths": {},
+	"package_defaults": {
+		"use_receiver_type": "Server"
+	},
+	"packages": {
+		"example.com/m/admin": {},
+		"example.com/m/blog": {}
+	}
+}
+-- types.go --
+package m
+
+// Shared is declared by hand in the hub.
+type Shared struct{ Name string }
+-- types.go.orig --
+package m
+
+// Shared is declared by hand in the hub.
+type Shared struct{ Name string }
+-- generate.go --
+package m
+
+//go:generate muxt generate
+-- generate.go.orig --
+package m
+
+//go:generate muxt generate
+-- admin/admin.go --
+package admin
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templateSource embed.FS
+
+var templates = template.Must(template.ParseFS(templateSource, "*.gohtml"))
+
+type Server struct{}
+
+func (Server) Dashboard() []int { return []int{42} }
+-- admin/dashboard.gohtml --
+{{define "GET /admin Dashboard()"}}{{range .Result}}<a href="{{$.Path.Blog.GetArticle .}}">article</a>{{end}}{{end}}
+-- blog/blog.go --
+package blog
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templateSource embed.FS
+
+var templates = template.Must(template.ParseFS(templateSource, "*.gohtml"))
+
+type Server struct{}
+
+func (Server) GetArticle(id int) string { return "article" }
+-- blog/article.gohtml --
+{{define "GET /article/{id} GetArticle(id)"}}<h1>{{.Result}}</h1>{{end}}

@@ -1,0 +1,87 @@
+# A template links to a route of its own package the same way it links to any
+# other: {{$.Path.Admin.Dashboard}} in a template of admin holds admin's own URL.
+
+muxt generate
+muxt check
+exec go build ./...
+exec go test ./site
+
+-- go.mod --
+module example.com/m
+
+go 1.22
+-- muxt.json --
+{
+	"route_paths": {},
+	"package_defaults": {
+		"use_receiver_type": "Server"
+	},
+	"packages": {
+		"example.com/m/admin": {},
+		"example.com/m/blog": {}
+	}
+}
+-- admin/admin.go --
+package admin
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templateSource embed.FS
+
+var templates = template.Must(template.ParseFS(templateSource, "*.gohtml"))
+
+type Server struct{}
+
+func (Server) Dashboard() string { return "dashboard" }
+-- admin/dashboard.gohtml --
+{{define "GET /admin Dashboard()"}}<a id="self" href="{{$.Path.Admin.Dashboard}}">{{.Result}}</a>{{end}}
+-- blog/blog.go --
+package blog
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templateSource embed.FS
+
+var templates = template.Must(template.ParseFS(templateSource, "*.gohtml"))
+
+type Server struct{}
+
+func (Server) GetArticle(id int) string { return "article" }
+-- blog/article.gohtml --
+{{define "GET /article/{id} GetArticle(id)"}}<h1>{{.Result}}</h1>{{end}}
+-- site/site_test.go --
+package site
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+
+	"example.com/m/admin"
+	"example.com/m/blog"
+)
+
+func TestOwnPackageLink(t *testing.T) {
+	mux := http.NewServeMux()
+	admin.TemplateRoutes(mux, admin.Server{})
+	blog.TemplateRoutes(mux, blog.Server{})
+
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/admin", nil))
+	if got := rec.Result().StatusCode; got != http.StatusOK {
+		t.Errorf("GET /admin status = %d, want %d", got, http.StatusOK)
+	}
+	want := `id="self" href="/admin"`
+	if body := rec.Body.String(); !strings.Contains(body, want) {
+		t.Errorf("GET /admin body = %q, want it to contain %q", body, want)
+	}
+}

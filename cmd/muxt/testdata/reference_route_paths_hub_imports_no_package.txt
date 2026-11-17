@@ -1,0 +1,63 @@
+# The hub imports none of the packages it holds path helpers for, so each of
+# them can import the hub without an import cycle.
+
+muxt generate
+muxt check
+exec go build ./...
+cd $WORK
+exec go list -deps .
+! stdout 'example.com/m/admin'
+! stdout 'example.com/m/blog'
+stdout 'example.com/m'
+
+-- go.mod --
+module example.com/m
+
+go 1.22
+-- muxt.json --
+{
+	"route_paths": {},
+	"package_defaults": {
+		"use_receiver_type": "Server"
+	},
+	"packages": {
+		"example.com/m/admin": {},
+		"example.com/m/blog": {}
+	}
+}
+-- admin/admin.go --
+package admin
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templateSource embed.FS
+
+var templates = template.Must(template.ParseFS(templateSource, "*.gohtml"))
+
+type Server struct{}
+
+func (Server) Dashboard() []int { return []int{42} }
+-- admin/dashboard.gohtml --
+{{define "GET /admin Dashboard()"}}{{range .Result}}<a href="{{$.Path.Blog.GetArticle .}}">article</a>{{end}}{{end}}
+-- blog/blog.go --
+package blog
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templateSource embed.FS
+
+var templates = template.Must(template.ParseFS(templateSource, "*.gohtml"))
+
+type Server struct{}
+
+func (Server) GetArticle(id int) string { return "article" }
+-- blog/article.gohtml --
+{{define "GET /article/{id} GetArticle(id)"}}<h1>{{.Result}}</h1><a href="{{.Path.Admin.Dashboard}}">admin</a>{{end}}

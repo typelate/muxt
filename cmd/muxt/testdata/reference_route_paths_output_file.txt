@@ -1,0 +1,67 @@
+# route_paths takes output_file to name the file the hub's path helpers go in.
+# The default route_paths.go is not written, on the first run or the second.
+
+muxt generate
+exists paths_gen.go
+! exists route_paths.go
+exec go build ./...
+muxt check
+
+muxt generate
+exists paths_gen.go
+! exists route_paths.go
+exec go build ./...
+
+-- go.mod --
+module example.com/m
+
+go 1.22
+-- muxt.json --
+{
+	"route_paths": {
+		"output_file": "paths_gen.go"
+	},
+	"package_defaults": {
+		"use_receiver_type": "Server"
+	},
+	"packages": {
+		"example.com/m/admin": {},
+		"example.com/m/blog": {}
+	}
+}
+-- admin/admin.go --
+package admin
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templateSource embed.FS
+
+var templates = template.Must(template.ParseFS(templateSource, "*.gohtml"))
+
+type Server struct{}
+
+func (Server) Dashboard() []int { return []int{42} }
+-- admin/dashboard.gohtml --
+{{define "GET /admin Dashboard()"}}{{range .Result}}<a href="{{$.Path.Blog.GetArticle .}}">article</a>{{end}}{{end}}
+-- blog/blog.go --
+package blog
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templateSource embed.FS
+
+var templates = template.Must(template.ParseFS(templateSource, "*.gohtml"))
+
+type Server struct{}
+
+func (Server) GetArticle(id int) string { return "article" }
+-- blog/article.gohtml --
+{{define "GET /article/{id} GetArticle(id)"}}<h1>{{.Result}}</h1>{{end}}

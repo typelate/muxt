@@ -1,0 +1,98 @@
+# {{$.Route.Blog.GetArticle 42}} in a template of admin prints blog's article
+# URL, and in Go the hub's route builder returns a route that knows its method.
+
+muxt generate
+muxt check
+exec go build ./...
+exec go test ./site
+
+-- go.mod --
+module example.com/m
+
+go 1.22
+-- muxt.json --
+{
+	"route_paths": {},
+	"package_defaults": {
+		"use_receiver_type": "Server"
+	},
+	"packages": {
+		"example.com/m/admin": {},
+		"example.com/m/blog": {}
+	}
+}
+-- admin/admin.go --
+package admin
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templateSource embed.FS
+
+var templates = template.Must(template.ParseFS(templateSource, "*.gohtml"))
+
+type Server struct{}
+
+func (Server) Dashboard() string { return "dashboard" }
+-- admin/dashboard.gohtml --
+{{define "GET /admin Dashboard()"}}<a id="route" href="{{$.Route.Blog.GetArticle 42}}">{{.Result}}</a>{{end}}
+-- blog/blog.go --
+package blog
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templateSource embed.FS
+
+var templates = template.Must(template.ParseFS(templateSource, "*.gohtml"))
+
+type Server struct{}
+
+func (Server) GetArticle(id int) string { return "article" }
+-- blog/article.gohtml --
+{{define "GET /article/{id} GetArticle(id)"}}<h1>{{.Result}}</h1>{{end}}
+-- site/site_test.go --
+package site
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+
+	"example.com/m"
+	"example.com/m/admin"
+	"example.com/m/blog"
+)
+
+func TestRouteLink(t *testing.T) {
+	mux := http.NewServeMux()
+	admin.TemplateRoutes(mux, admin.Server{})
+	blog.TemplateRoutes(mux, blog.Server{})
+
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/admin", nil))
+	if got := rec.Result().StatusCode; got != http.StatusOK {
+		t.Errorf("GET /admin status = %d, want %d", got, http.StatusOK)
+	}
+	want := `id="route" href="/article/42"`
+	if body := rec.Body.String(); !strings.Contains(body, want) {
+		t.Errorf("GET /admin body = %q, want it to contain %q", body, want)
+	}
+}
+
+func TestHubRouteMethod(t *testing.T) {
+	route := m.NewTemplateRouteBuilder("").Blog().GetArticle(42)
+	if got, want := route.Method(), http.MethodGet; got != want {
+		t.Errorf("route.Method() = %q, want %q", got, want)
+	}
+	if got, want := route.Path(), "/article/42"; got != want {
+		t.Errorf("route.Path() = %q, want %q", got, want)
+	}
+}
