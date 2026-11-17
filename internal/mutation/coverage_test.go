@@ -150,7 +150,7 @@ func TestTemplateCoverageWarnsOfARaisedGoLine(t *testing.T) {
 	got, _, err := templateCoverage(t.Context(), config.toolchain(dir), t.TempDir(), config.goTest(dir).coverage, &warnings)
 	require.NoError(t, err)
 	assert.NotNil(t, got, "the coverage is used; warnings:\n%s", warnings.String())
-	assert.Equal(t, "warning: template coverage was computed at go 1.27.0 (your go.mod says go 1.24): branches that depend on the older language semantics may be reported unreached\n", warnings.String(), "warnings")
+	assert.Equal(t, "warning: template coverage was computed at go 1.27 (your go.mod says go 1.24): branches that depend on the older language semantics may be reported unreached\n", warnings.String(), "warnings")
 }
 
 // TestWarnRaisedGoLine states when a raised go line is worth a warning: a

@@ -336,7 +336,7 @@ These edge cases apply to the [coverage pre-pass](#coverage-pre-pass).
   The run then warns once and still uses the coverage:
 
   ```text
-  warning: template coverage was computed at go 1.27.0 (your go.mod says go 1.24): branches that depend on the older language semantics may be reported unreached
+  warning: template coverage was computed at go 1.27 (your go.mod says go 1.24): branches that depend on the older language semantics may be reported unreached
   ```
 
   All of this applies only to the pre-pass. The baseline and the kill runs build with your `go.mod` as written.
