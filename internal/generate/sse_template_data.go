@@ -9,9 +9,9 @@ import (
 )
 
 // sseTemplateDataRouteMethod is templateDataRouteMethod for SSETemplateData.
-func sseTemplateDataRouteMethod(config RoutesFileConfiguration) *ast.FuncDecl {
-	return sseMethod(config.SSETemplateDataType, routeFieldName, nil, results(ast.NewIdent(routeBuilderTypeName(config))),
-		returnExprs(routeBuilderLiteral(config, selector(sseTemplateDataReceiverName, pathPrefixPathsStructFieldName))))
+func sseTemplateDataRouteMethod(file *File, config RoutesFileConfiguration, hub *Hub) *ast.FuncDecl {
+	return sseMethod(config.SSETemplateDataType, routeFieldName, nil, results(builderTypeExpr(file, config, hub)),
+		returnExprs(routeBuilderLiteral(file, config, hub, selector(sseTemplateDataReceiverName, pathPrefixPathsStructFieldName))))
 }
 
 const (
@@ -34,9 +34,9 @@ const (
 // argument. The generated type mirrors TemplateData but renders Server-Sent
 // Event frames: methods set the id/event/retry metadata and WriteTo serializes
 // the buffered template output as one or more `data:` lines.
-func sseTemplateDataDecls(file *File, config RoutesFileConfiguration) []ast.Decl {
+func sseTemplateDataDecls(file *File, config RoutesFileConfiguration, hub *Hub) []ast.Decl {
 	if config.OutputDatastar {
-		return datastarSSETemplateDataDecls(file, config)
+		return datastarSSETemplateDataDecls(file, config, hub)
 	}
 	typeIdent := config.SSETemplateDataType
 	return []ast.Decl{
@@ -49,8 +49,8 @@ func sseTemplateDataDecls(file *File, config RoutesFileConfiguration) []ast.Decl
 		sseTemplateDataEventMethod(typeIdent),
 		sseTemplateDataIDMethod(typeIdent),
 		sseTemplateDataRetryMethod(typeIdent),
-		sseTemplateDataPathMethod(config),
-		sseTemplateDataRouteMethod(config),
+		sseTemplateDataPathMethod(file, config, hub),
+		sseTemplateDataRouteMethod(file, config, hub),
 		sseTemplateDataWriteToMethod(file, typeIdent),
 	}
 }
@@ -59,7 +59,7 @@ func sseTemplateDataDecls(file *File, config RoutesFileConfiguration) []ast.Decl
 // package: the shared surface plus the patch option setters, with WriteTo
 // framing every event as datastar-patch-elements. The event name is fixed by
 // the protocol, so there is no Event setter.
-func datastarSSETemplateDataDecls(file *File, config RoutesFileConfiguration) []ast.Decl {
+func datastarSSETemplateDataDecls(file *File, config RoutesFileConfiguration, hub *Hub) []ast.Decl {
 	typeIdent := config.SSETemplateDataType
 	return []ast.Decl{
 		datastarSSETemplateDataType(file, typeIdent),
@@ -70,8 +70,8 @@ func datastarSSETemplateDataDecls(file *File, config RoutesFileConfiguration) []
 		sseTemplateDataErrMethod(file, typeIdent),
 		sseTemplateDataIDMethod(typeIdent),
 		sseTemplateDataRetryMethod(typeIdent),
-		sseTemplateDataPathMethod(config),
-		sseTemplateDataRouteMethod(config),
+		sseTemplateDataPathMethod(file, config, hub),
+		sseTemplateDataRouteMethod(file, config, hub),
 		sseTemplateDataPointerSetterMethod(typeIdent, "Selector", "selector", "string", sseTemplateDataFieldSelector),
 		sseTemplateDataPointerSetterMethod(typeIdent, "Mode", "mode", "string", sseTemplateDataFieldMode),
 		sseTemplateDataBoolSetterMethod(typeIdent, "UseViewTransition", sseTemplateDataFieldUseViewTransition),
@@ -201,9 +201,9 @@ func sseTemplateDataRetryMethod(typeIdent string) *ast.FuncDecl {
 	return sseTemplateDataPointerSetterMethod(typeIdent, "Retry", "retryMilliseconds", "int", sseTemplateDataFieldRetry)
 }
 
-func sseTemplateDataPathMethod(config RoutesFileConfiguration) *ast.FuncDecl {
-	return sseMethod(config.SSETemplateDataType, "Path", nil, results(ast.NewIdent(config.TemplateRoutePathsTypeName)),
-		returnExprs(templatePathsLiteral(config, sseTemplateDataReceiverName)))
+func sseTemplateDataPathMethod(file *File, config RoutesFileConfiguration, hub *Hub) *ast.FuncDecl {
+	return sseMethod(config.SSETemplateDataType, "Path", nil, results(pathsTypeExpr(file, config, hub)),
+		returnExprs(templatePathsLiteral(file, config, hub, sseTemplateDataReceiverName)))
 }
 
 const (

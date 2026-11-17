@@ -162,7 +162,7 @@ type Loggers struct {
 // TemplateRoutesFiles generates the routes files for pkg, written into wd:
 // the package the files belong to, which is the one in the output file's
 // directory. defs are pkg's route definitions, resolved by muxt.ResolveDefinitions.
-func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, pkg source.Package, defs []muxt.Definition, logs Loggers) ([]GeneratedFile, error) {
+func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, hub *Hub, pkg source.Package, defs []muxt.Definition, logs Loggers) ([]GeneratedFile, error) {
 	if logs.Progress == nil {
 		logs.Progress = log.New(io.Discard, "", 0)
 	}
@@ -199,7 +199,7 @@ func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, pkg source.P
 
 	receiverInterface := &ast.InterfaceType{Methods: new(ast.FieldList)}
 	routesFunc := routesFuncDecl(file, config, config.RoutesFunction, config.ReceiverInterface, config.PathPrefix)
-	routesFunc.Type.Results = fieldList(results(ast.NewIdent(config.TemplateRoutePathsTypeName)))
+	routesFunc.Type.Results = fieldList(results(pathsTypeExpr(file, config, hub)))
 	routesFunc.Body.List = routesFuncPrelude(file, config)
 
 	var generatedFiles []GeneratedFile
@@ -231,20 +231,20 @@ func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, pkg source.P
 		routesFunc.Body.List = append(routesFunc.Body.List, staticAssetsStatements(file, config)...)
 		routePathDecls = append(routePathDecls, staticAssetsPathMethods(file, config)...)
 	}
-	routesFunc.Body.List = append(routesFunc.Body.List, returnRoutePaths(config))
+	routesFunc.Body.List = append(routesFunc.Body.List, returnRoutePaths(file, config, hub))
 
 	var decls []ast.Decl
 	if config.StaticAssetsDirectory != "" {
 		decls = append(decls, staticAssetsDecl(file, config))
 	}
 	decls = append(decls, receiverInterfaceDecl(config.ReceiverInterface, receiverInterface), routesFunc)
-	decls = append(decls, templateDataDecls(file, config)...)
+	decls = append(decls, templateDataDecls(file, config, hub)...)
 	// The SSETemplateData type and its methods are only needed when a route uses
 	// the sse render callback, so emit them conditionally to avoid unused imports.
 	if slices.ContainsFunc(groups.all, func(definition muxt.Definition) bool {
 		return definition.Representation == muxt.RepresentationSSE
 	}) {
-		decls = append(decls, sseTemplateDataDecls(file, config)...)
+		decls = append(decls, sseTemplateDataDecls(file, config, hub)...)
 	}
 	decls = append(decls, routePathDecls...)
 
@@ -340,8 +340,8 @@ func handleFuncStatement(file *File, config RoutesFileConfiguration, def muxt.De
 	return callHandleFunc(file, def, handlerFunc, config), nil
 }
 
-func returnRoutePaths(config RoutesFileConfiguration) *ast.ReturnStmt {
-	return returnExprs(pathsLiteral(config, ast.NewIdent(pathPrefixPathsStructFieldName)))
+func returnRoutePaths(file *File, config RoutesFileConfiguration, hub *Hub) *ast.ReturnStmt {
+	return returnExprs(pathsLiteral(file, config, hub, ast.NewIdent(pathPrefixPathsStructFieldName)))
 }
 
 func receiverInterfaceDecl(name string, receiverInterface *ast.InterfaceType) *ast.GenDecl {

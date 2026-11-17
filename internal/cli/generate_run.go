@@ -125,7 +125,7 @@ func resolveJob(cmd *cobra.Command, l *load.Loaded, job packageJob, keyed bool) 
 	if keyed {
 		logs.Notes.SetPrefix(job.Key + ": ")
 	}
-	files, err := generate.TemplateRoutesFiles(job.Dir, config, pkg, defs, logs)
+	files, err := generate.TemplateRoutesFiles(job.Dir, config, nil, pkg, defs, logs)
 	if err != nil {
 		report(err)
 		return nil, err

@@ -49,18 +49,28 @@ func configPathTypeNames(config RoutesFileConfiguration) pathTypeNames {
 	}
 }
 
+// pathsTypeExpr is the paths type as the file being generated names it.
+func pathsTypeExpr(f *File, config RoutesFileConfiguration, hub *Hub) ast.Expr {
+	return ast.NewIdent(config.TemplateRoutePathsTypeName)
+}
+
+// builderTypeExpr is the route builder type as the file being generated names it.
+func builderTypeExpr(f *File, config RoutesFileConfiguration, hub *Hub) ast.Expr {
+	return ast.NewIdent(routeBuilderTypeName(config))
+}
+
 // routeBuilderLiteral is the route builder for a path prefix expression.
-func routeBuilderLiteral(config RoutesFileConfiguration, prefix ast.Expr) *ast.CompositeLit {
+func routeBuilderLiteral(f *File, config RoutesFileConfiguration, hub *Hub, prefix ast.Expr) ast.Expr {
 	return &ast.CompositeLit{
-		Type: ast.NewIdent(routeBuilderTypeName(config)),
+		Type: builderTypeExpr(f, config, hub),
 		Elts: []ast.Expr{&ast.KeyValueExpr{Key: ast.NewIdent(pathPrefixPathsStructFieldName), Value: prefix}},
 	}
 }
 
 // pathsLiteral is the paths value for a path prefix expression.
-func pathsLiteral(config RoutesFileConfiguration, prefix ast.Expr) *ast.CompositeLit {
-	return &ast.CompositeLit{Type: ast.NewIdent(config.TemplateRoutePathsTypeName), Elts: []ast.Expr{
-		&ast.KeyValueExpr{Key: ast.NewIdent(routesPathsFieldName), Value: routeBuilderLiteral(config, prefix)},
+func pathsLiteral(f *File, config RoutesFileConfiguration, hub *Hub, prefix ast.Expr) ast.Expr {
+	return &ast.CompositeLit{Type: pathsTypeExpr(f, config, hub), Elts: []ast.Expr{
+		&ast.KeyValueExpr{Key: ast.NewIdent(routesPathsFieldName), Value: routeBuilderLiteral(f, config, hub, prefix)},
 	}}
 }
 

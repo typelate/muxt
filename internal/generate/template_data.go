@@ -102,8 +102,8 @@ func returnExprs(exprs ...ast.Expr) *ast.ReturnStmt {
 	return &ast.ReturnStmt{Results: exprs}
 }
 
-func templatePathsLiteral(config RoutesFileConfiguration, recv string) *ast.CompositeLit {
-	return pathsLiteral(config, selector(recv, pathPrefixPathsStructFieldName))
+func templatePathsLiteral(file *File, config RoutesFileConfiguration, hub *Hub, recv string) ast.Expr {
+	return pathsLiteral(file, config, hub, selector(recv, pathPrefixPathsStructFieldName))
 }
 
 func dataMethod(typeIdent, name string, params, results []*ast.Field, body ...ast.Stmt) *ast.FuncDecl {
@@ -190,16 +190,16 @@ func templateDataMuxtVersionMethod(config RoutesFileConfiguration) *ast.FuncDecl
 	)
 }
 
-func templateDataPathMethod(config RoutesFileConfiguration) *ast.FuncDecl {
-	return dataMethod(config.TemplateDataType, "Path", nil, results(ast.NewIdent(config.TemplateRoutePathsTypeName)),
-		returnExprs(templatePathsLiteral(config, templateDataReceiverName)))
+func templateDataPathMethod(file *File, config RoutesFileConfiguration, hub *Hub) *ast.FuncDecl {
+	return dataMethod(config.TemplateDataType, "Path", nil, results(pathsTypeExpr(file, config, hub)),
+		returnExprs(templatePathsLiteral(file, config, hub, templateDataReceiverName)))
 }
 
 // templateDataRouteMethod emits the Route method, which returns the route
 // builder for the data's path prefix.
-func templateDataRouteMethod(config RoutesFileConfiguration) *ast.FuncDecl {
-	return dataMethod(config.TemplateDataType, routeFieldName, nil, results(ast.NewIdent(routeBuilderTypeName(config))),
-		returnExprs(routeBuilderLiteral(config, selector(templateDataReceiverName, pathPrefixPathsStructFieldName))))
+func templateDataRouteMethod(file *File, config RoutesFileConfiguration, hub *Hub) *ast.FuncDecl {
+	return dataMethod(config.TemplateDataType, routeFieldName, nil, results(builderTypeExpr(file, config, hub)),
+		returnExprs(routeBuilderLiteral(file, config, hub, selector(templateDataReceiverName, pathPrefixPathsStructFieldName))))
 }
 
 func templateDataResultMethod(typeIdent string) *ast.FuncDecl {
@@ -402,7 +402,7 @@ func templateDataDatastarRequestMethod(typeIdent string) *ast.FuncDecl {
 	return htmxRequestHeaderBoolTrueMethod(typeIdent, "DatastarRequest", "Datastar-Request")
 }
 
-func templateDataDecls(file *File, config RoutesFileConfiguration) []ast.Decl {
+func templateDataDecls(file *File, config RoutesFileConfiguration, hub *Hub) []ast.Decl {
 	decls := []ast.Decl{
 		templateDataType(file, config.TemplateDataType),
 	}
@@ -410,8 +410,8 @@ func templateDataDecls(file *File, config RoutesFileConfiguration) []ast.Decl {
 		decls = append(decls, templateDataMuxtVersionMethod(config))
 	}
 	decls = append(decls,
-		templateDataPathMethod(config),
-		templateDataRouteMethod(config),
+		templateDataPathMethod(file, config, hub),
+		templateDataRouteMethod(file, config, hub),
 		templateDataResultMethod(config.TemplateDataType),
 		templateDataRequestMethod(file, config.TemplateDataType),
 		templateDataStatusCodeMethod(config.TemplateDataType),

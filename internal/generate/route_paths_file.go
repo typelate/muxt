@@ -8,6 +8,13 @@ import (
 	"github.com/ettle/strcase"
 )
 
+// Hub is the package that holds the shared path helpers, as one routes file sees it.
+type Hub struct {
+	ImportPath  string
+	PackageName string
+	Namespace   string // of the package being generated
+}
+
 // CheckNamespaces reports the first two packages that would share a namespace.
 func CheckNamespaces(importPaths []string, hubImportPath string) error {
 	sorted := slices.Clone(importPaths)

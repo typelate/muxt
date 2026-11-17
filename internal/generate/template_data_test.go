@@ -77,12 +77,12 @@ func TestTemplateDataMethods(t *testing.T) {
 		},
 		{
 			name: "path",
-			decl: templateDataPathMethod(config),
+			decl: templateDataPathMethod(file, config, nil),
 			want: "func (data *TemplateData[R, T]) Path() TemplateRoutePaths {\n\treturn TemplateRoutePaths{routes: TemplateRouteBuilder{pathsPrefix: data.pathsPrefix}}\n}",
 		},
 		{
 			name: "route",
-			decl: templateDataRouteMethod(config),
+			decl: templateDataRouteMethod(file, config, nil),
 			want: "func (data *TemplateData[R, T]) Route() TemplateRouteBuilder {\n\treturn TemplateRouteBuilder{pathsPrefix: data.pathsPrefix}\n}",
 		},
 		{
@@ -107,12 +107,12 @@ func TestTemplateDataMethods(t *testing.T) {
 		},
 		{
 			name: "sse path",
-			decl: sseTemplateDataPathMethod(config),
+			decl: sseTemplateDataPathMethod(file, config, nil),
 			want: "func (m *SSETemplateData[R, T]) Path() TemplateRoutePaths {\n\treturn TemplateRoutePaths{routes: TemplateRouteBuilder{pathsPrefix: m.pathsPrefix}}\n}",
 		},
 		{
 			name: "sse route",
-			decl: sseTemplateDataRouteMethod(config),
+			decl: sseTemplateDataRouteMethod(file, config, nil),
 			want: "func (m *SSETemplateData[R, T]) Route() TemplateRouteBuilder {\n\treturn TemplateRouteBuilder{pathsPrefix: m.pathsPrefix}\n}",
 		},
 	} {
