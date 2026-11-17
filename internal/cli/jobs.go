@@ -118,7 +118,14 @@ func newRoutePathsTarget(f *composite.File) (*routePathsTarget, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &routePathsTarget{Hub: generate.Hub{ImportPath: importPath, PackageName: name}, Dir: f.Dir, OutputFile: outputFile}, nil
+	names := generate.HubTypeNames{
+		Paths:                     f.RoutePaths.OutputPathsType,
+		RouteBuilder:              f.RoutePaths.OutputRouteBuilderType,
+		Route:                     f.RoutePaths.OutputRouteType,
+		PackagePathsSuffix:        f.RoutePaths.OutputPackagePathsTypeSuffix,
+		PackageRouteBuilderSuffix: f.RoutePaths.OutputPackageRouteBuilderTypeSuffix,
+	}
+	return &routePathsTarget{Hub: generate.Hub{ImportPath: importPath, PackageName: name, Names: names}, Dir: f.Dir, OutputFile: outputFile}, nil
 }
 
 // selection is what selectJobs chose.

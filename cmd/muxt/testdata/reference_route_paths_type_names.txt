@@ -1,0 +1,109 @@
+# route_paths names the hub's types: output_paths_type, output_route_builder_type
+# and output_route_type name the three types the hub declares, and the two
+# suffix members name each package's types after its namespace. A constructor is
+# New and the type's name.
+
+muxt generate
+exists route_paths.go
+muxt check
+exec go build ./...
+exec go test ./site
+
+-- go.mod --
+module example.com/m
+
+go 1.22
+-- muxt.json --
+{
+	"route_paths": {
+		"output_paths_type": "Paths",
+		"output_route_builder_type": "Routes",
+		"output_route_type": "Route",
+		"output_package_paths_type_suffix": "Paths",
+		"output_package_route_builder_type_suffix": "Routes"
+	},
+	"package_defaults": {
+		"use_receiver_type": "Server"
+	},
+	"packages": {
+		"example.com/m/admin": {},
+		"example.com/m/blog": {}
+	}
+}
+-- admin/admin.go --
+package admin
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templateSource embed.FS
+
+var templates = template.Must(template.ParseFS(templateSource, "*.gohtml"))
+
+type Server struct{}
+
+func (Server) Dashboard() []int { return []int{42} }
+-- admin/dashboard.gohtml --
+{{define "GET /admin Dashboard()"}}{{range .Result}}<a id="self" href="{{$.Path.Admin.Dashboard}}">admin</a><a id="path" href="{{$.Path.Blog.GetArticle .}}">article</a><a id="route" href="{{$.Route.Blog.GetArticle .}}">article</a>{{end}}{{end}}
+-- blog/blog.go --
+package blog
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templateSource embed.FS
+
+var templates = template.Must(template.ParseFS(templateSource, "*.gohtml"))
+
+type Server struct{}
+
+func (Server) GetArticle(id int) string { return "article" }
+-- blog/article.gohtml --
+{{define "GET /article/{id} GetArticle(id)"}}<h1>{{.Result}}</h1><a href="{{.Path.Admin.Dashboard}}">admin</a>{{end}}
+-- site/site_test.go --
+package site
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+
+	"example.com/m"
+	"example.com/m/admin"
+	"example.com/m/blog"
+)
+
+func TestNamedTypes(t *testing.T) {
+	mux := http.NewServeMux()
+	var paths m.Paths = admin.TemplateRoutes(mux, admin.Server{})
+	blog.TemplateRoutes(mux, blog.Server{})
+	var blogPaths m.BlogPaths = paths.Blog()
+	if got, want := blogPaths.GetArticle(7), "/article/7"; got != want {
+		t.Errorf("blogPaths.GetArticle(7) = %q, want %q", got, want)
+	}
+	var routes m.Routes = m.NewRoutes("")
+	var blogRoutes m.BlogRoutes = routes.Blog()
+	var route m.Route = blogRoutes.GetArticle(42)
+	if got, want := route.Path(), "/article/42"; got != want {
+		t.Errorf("route.Path() = %q, want %q", got, want)
+	}
+	if got, want := m.NewPaths("/x").Blog().GetArticle(1), "/x/article/1"; got != want {
+		t.Errorf("m.NewPaths(%q).Blog().GetArticle(1) = %q, want %q", "/x", got, want)
+	}
+
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/admin", nil))
+	if got := rec.Result().StatusCode; got != http.StatusOK {
+		t.Errorf("GET /admin status = %d, want %d", got, http.StatusOK)
+	}
+	if body := rec.Body.String(); !strings.Contains(body, "/article/42") {
+		t.Errorf("GET /admin body = %q, want it to contain /article/42", body)
+	}
+}

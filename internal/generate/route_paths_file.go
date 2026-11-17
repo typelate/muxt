@@ -18,11 +18,32 @@ import (
 // DefaultRoutePathsFileName is the base name of the hub file when none is set.
 const DefaultRoutePathsFileName = "route_paths.go"
 
-const (
-	hubPathsTypeName   = "TemplateRoutePaths"
-	hubBuilderTypeName = "TemplateRouteBuilder"
-	hubRouteTypeName   = "TemplateRoute"
-)
+// HubTypeNames are the names of the types the hub file declares. A zero field takes its default.
+type HubTypeNames struct {
+	Paths, RouteBuilder, Route                    string
+	PackagePathsSuffix, PackageRouteBuilderSuffix string
+}
+
+// PathsType is the name of the hub's paths type.
+func (n HubTypeNames) PathsType() string { return cmp.Or(n.Paths, "TemplateRoutePaths") }
+
+// RouteBuilderType is the name of the hub's route builder type.
+func (n HubTypeNames) RouteBuilderType() string {
+	return cmp.Or(n.RouteBuilder, "TemplateRouteBuilder")
+}
+
+// RouteType is the name of the hub's route type.
+func (n HubTypeNames) RouteType() string { return cmp.Or(n.Route, "TemplateRoute") }
+
+// PackagePathsType is the name of the paths type of the package with namespace.
+func (n HubTypeNames) PackagePathsType(namespace string) string {
+	return namespace + cmp.Or(n.PackagePathsSuffix, "TemplateRoutePaths")
+}
+
+// PackageRouteBuilderType is the name of the route builder type of the package with namespace.
+func (n HubTypeNames) PackageRouteBuilderType(namespace string) string {
+	return namespace + cmp.Or(n.PackageRouteBuilderSuffix, "TemplateRouteBuilder")
+}
 
 // hubConstructorName is the name of the function that makes the hub type typeName.
 func hubConstructorName(typeName string) string { return "New" + typeName }
@@ -31,6 +52,7 @@ func hubConstructorName(typeName string) string { return "New" + typeName }
 type RoutePaths struct {
 	ImportPath, PackageName string
 	OutputFile              string // base name; empty means DefaultRoutePathsFileName
+	Names                   HubTypeNames
 	Packages                []RoutePathsPackage
 }
 
@@ -49,17 +71,18 @@ func RoutePathsFile(r RoutePaths) (GeneratedFile, error) {
 	})
 	file := newFile(source.Package{Types: types.NewPackage(r.ImportPath, r.PackageName)})
 
-	decls := hubBaseDecls(packages, hubPathsTypeName, func(ns string) ast.Expr {
-		return &ast.CompositeLit{Type: ast.NewIdent(ns + hubPathsTypeName), Elts: []ast.Expr{
-			&ast.KeyValueExpr{Key: ast.NewIdent(routesPathsFieldName), Value: hubPrefixedLiteral(ns+hubBuilderTypeName, routePathsReceiverName)},
+	hub := r.Names
+	decls := hubBaseDecls(packages, hub.PathsType(), routePathsReceiverName, func(ns string) ast.Expr {
+		return &ast.CompositeLit{Type: ast.NewIdent(hub.PackagePathsType(ns)), Elts: []ast.Expr{
+			&ast.KeyValueExpr{Key: ast.NewIdent(routesPathsFieldName), Value: hubPrefixedLiteral(hub.PackageRouteBuilderType(ns), routePathsReceiverName)},
 		}}
-	})
-	decls = append(decls, hubBaseDecls(packages, hubBuilderTypeName, func(ns string) ast.Expr {
-		return hubPrefixedLiteral(ns+hubBuilderTypeName, routeBuilderReceiverName)
-	})...)
-	decls = append(decls, routeTypeDecls(pathTypeNames{Route: hubRouteTypeName})...)
+	}, hub.PackagePathsType)
+	decls = append(decls, hubBaseDecls(packages, hub.RouteBuilderType(), routeBuilderReceiverName, func(ns string) ast.Expr {
+		return hubPrefixedLiteral(hub.PackageRouteBuilderType(ns), routeBuilderReceiverName)
+	}, hub.PackageRouteBuilderType)...)
+	decls = append(decls, routeTypeDecls(pathTypeNames{Route: hub.RouteType()})...)
 	for _, p := range packages {
-		names := pathTypeNames{Paths: p.Namespace + hubPathsTypeName, Builder: p.Namespace + hubBuilderTypeName, Route: hubRouteTypeName}
+		names := pathTypeNames{Paths: hub.PackagePathsType(p.Namespace), Builder: hub.PackageRouteBuilderType(p.Namespace), Route: hub.RouteType()}
 		packageDecls, err := routePathTypeAndMethods(file, p.Config, names, p.Defs)
 		if err != nil {
 			return GeneratedFile{}, fmt.Errorf("package %s: %w", p.Namespace, err)
@@ -93,12 +116,8 @@ func hubPrefixedLiteral(typeName, receiver string) ast.Expr {
 
 // hubBaseDecls declares a base type holding the path prefix, its constructor,
 // and one accessor per package. accessed builds the value an accessor returns
-// for a namespace.
-func hubBaseDecls(packages []RoutePathsPackage, typeName string, accessed func(namespace string) ast.Expr) []ast.Decl {
-	receiver := routeBuilderReceiverName
-	if typeName == hubPathsTypeName {
-		receiver = routePathsReceiverName
-	}
+// for a namespace, and accessedType names the type that is returned.
+func hubBaseDecls(packages []RoutePathsPackage, typeName, receiver string, accessed func(namespace string) ast.Expr, accessedType func(namespace string) string) []ast.Decl {
 	decls := []ast.Decl{
 		&ast.GenDecl{Tok: token.TYPE, Specs: []ast.Spec{
 			&ast.TypeSpec{Name: ast.NewIdent(typeName), Type: &ast.StructType{Fields: &ast.FieldList{List: []*ast.Field{
@@ -117,7 +136,7 @@ func hubBaseDecls(packages []RoutePathsPackage, typeName string, accessed func(n
 		decls = append(decls, &ast.FuncDecl{
 			Name: ast.NewIdent(p.Namespace),
 			Recv: &ast.FieldList{List: []*ast.Field{param(ast.NewIdent(typeName), receiver)}},
-			Type: &ast.FuncType{Params: &ast.FieldList{}, Results: fieldList(results(ast.NewIdent(p.Namespace + typeName)))},
+			Type: &ast.FuncType{Params: &ast.FieldList{}, Results: fieldList(results(ast.NewIdent(accessedType(p.Namespace))))},
 			Body: &ast.BlockStmt{List: []ast.Stmt{returnExprs(accessed(p.Namespace))}},
 		})
 	}
@@ -129,6 +148,7 @@ type Hub struct {
 	ImportPath  string
 	PackageName string
 	Namespace   string // of the package being generated
+	Names       HubTypeNames
 }
 
 // CheckNamespaces reports the first two packages that would share a namespace.

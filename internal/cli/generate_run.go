@@ -134,6 +134,7 @@ func writeHubFile(stdout io.Writer, hub *routePathsTarget, version string, packa
 		ImportPath:  hub.Hub.ImportPath,
 		PackageName: hub.Hub.PackageName,
 		OutputFile:  hub.OutputFile,
+		Names:       hub.Hub.Names,
 		Packages:    packages,
 	})
 	if err != nil {

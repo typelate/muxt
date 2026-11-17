@@ -133,3 +133,53 @@ func (T) GetArticle(id int) string { return "" }
 	reordered, _ := generated(blog, admin)
 	assert.Equal(t, content, reordered, "output with packages in the other order")
 }
+
+// TestRoutePathsFileUsesConfiguredTypeNames names the hub's types and reads
+// the generated file as Go.
+func TestRoutePathsFileUsesConfiguredTypeNames(t *testing.T) {
+	blog := hubTestPackage(t, "Blog", `package server
+
+type T struct{}
+
+func (T) GetArticle(id int) string { return "" }
+`, `{{define "GET /article/{id} GetArticle(id)"}}{{end}}`)
+
+	for _, tc := range []struct {
+		name        string
+		names       HubTypeNames
+		declared    []string
+		notDeclared []string
+	}{
+		{
+			name: "all five",
+			names: HubTypeNames{
+				Paths: "Paths", RouteBuilder: "Routes", Route: "Route",
+				PackagePathsSuffix: "Paths", PackageRouteBuilderSuffix: "Routes",
+			},
+			declared:    []string{"Paths", "Routes", "Route", "NewPaths", "NewRoutes", "BlogPaths", "BlogRoutes"},
+			notDeclared: []string{"TemplateRoutePaths", "TemplateRouteBuilder", "TemplateRoute", "BlogTemplateRoutePaths"},
+		},
+		{
+			name:        "only the package paths suffix",
+			names:       HubTypeNames{PackagePathsSuffix: "Paths"},
+			declared:    []string{"TemplateRoutePaths", "TemplateRouteBuilder", "TemplateRoute", "BlogPaths", "BlogTemplateRouteBuilder"},
+			notDeclared: []string{"BlogTemplateRoutePaths"},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			file, err := RoutePathsFile(RoutePaths{ImportPath: "example.com/hub", PackageName: "hub", Names: tc.names, Packages: []RoutePathsPackage{blog}})
+			require.NoError(t, err)
+			fset := token.NewFileSet()
+			parsed, err := parser.ParseFile(fset, "route_paths.go", file.Content, 0)
+			require.NoError(t, err)
+			pkg, err := (&types.Config{Importer: importer.ForCompiler(fset, "source", nil)}).Check("example.com/hub", fset, []*ast.File{parsed}, nil)
+			require.NoError(t, err, file.Content)
+			for _, name := range tc.declared {
+				assert.NotNil(t, pkg.Scope().Lookup(name), "%s declared", name)
+			}
+			for _, name := range tc.notDeclared {
+				assert.Nil(t, pkg.Scope().Lookup(name), "%s declared", name)
+			}
+		})
+	}
+}
