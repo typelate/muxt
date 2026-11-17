@@ -39,6 +39,8 @@ func (w *shapeWalker) file() error {
 		switch name {
 		case "package_defaults":
 			return w.object("package_defaults", "a JSON object", w.skipMember)
+		case "route_paths":
+			return w.object("route_paths", "a JSON object", w.skipMember)
 		case "packages":
 			return w.object("packages", "an object keyed by import path", func(key string) error {
 				return w.object(fmt.Sprintf("packages[%q]", key), "a JSON object", w.skipMember)

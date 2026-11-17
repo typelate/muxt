@@ -334,6 +334,33 @@ func TestResolveKeepsAnEntryListWhole(t *testing.T) {
 	assert.JSONEq(t, `["a", "b"]`, string(f.Defaults["use_templates"]), "the defaults are not changed")
 }
 
+// TestFindRejectsARoutePathsKeyThatIsNotAnObject states that a route_paths
+// value that is not a JSON object is a *composite.ShapeError naming the key
+// and the position of the value.
+func TestFindRejectsARoutePathsKeyThatIsNotAnObject(t *testing.T) {
+	for _, tt := range []struct {
+		name, value string
+	}{
+		{name: "true", value: `true`},
+		{name: "string", value: `"x"`},
+		{name: "number", value: `3`},
+		{name: "list", value: `[]`},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := writeFile(t, `{"route_paths": `+tt.value+`, "packages": {}}`)
+
+			_, _, err := composite.Find(dir, testKeys())
+
+			var typed *composite.ShapeError
+			require.ErrorAs(t, err, &typed, "Find error %v", err)
+			path := filepath.Join(dir, composite.FileName)
+			want := fmt.Sprintf("%s:1:17: route_paths must be a JSON object", path)
+			assert.Equal(t, want, err.Error(), "message")
+			assert.Equal(t, path, typed.Path, "path")
+		})
+	}
+}
+
 // TestFindAcceptsARoutePathsKey states that a top-level route_paths object is
 // read, and that the File says whether the key is there at all.
 func TestFindAcceptsARoutePathsKey(t *testing.T) {
