@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"go/token"
 	"io/fs"
 	"maps"
 	"os"
@@ -422,15 +423,37 @@ func checkRoutePathsKinds(path string, data []byte) error {
 	return checkEntryKinds(path, "route_paths", top.RoutePaths, kinds)
 }
 
-// checkRoutePathsValues returns a *RouteValueError for an output_file that is
-// not a Go file name. The generator joins the name onto the muxt.json directory,
-// so a name with a directory part would write outside it. An absent or empty
-// output_file is fine: the default is used.
+// checkRoutePathsValues returns a *RouteValueError for the first member of
+// route_paths whose value cannot be the name it configures, in the order the
+// RoutePaths fields are declared. An output_file must be a Go file name: the
+// generator joins it onto the muxt.json directory, so a name with a directory
+// part would write outside it. The three type names must be exported Go
+// identifiers, since other packages name them. The two suffixes follow a
+// package's namespace, so they hold identifier characters only. An absent or
+// empty member is fine: the default is used.
 func checkRoutePathsValues(path string, rp *RoutePaths) error {
-	if rp == nil || rp.OutputFile == "" || isGoFileName(rp.OutputFile) {
+	if rp == nil {
 		return nil
 	}
-	return &RouteValueError{Path: path, Where: "route_paths", Key: "output_file", Value: rp.OutputFile, Rule: "must be a Go file name in this directory"}
+	exported := func(s string) bool { return token.IsIdentifier(s) && token.IsExported(s) }
+	suffix := func(s string) bool { return token.IsIdentifier("X" + s) }
+	checks := []struct {
+		key, value, rule string
+		valid            func(string) bool
+	}{
+		{"output_file", rp.OutputFile, "must be a Go file name in this directory", isGoFileName},
+		{"output_paths_type", rp.OutputPathsType, "must be an exported Go identifier", exported},
+		{"output_route_builder_type", rp.OutputRouteBuilderType, "must be an exported Go identifier", exported},
+		{"output_route_type", rp.OutputRouteType, "must be an exported Go identifier", exported},
+		{"output_package_paths_type_suffix", rp.OutputPackagePathsTypeSuffix, "must be letters, digits and underscores", suffix},
+		{"output_package_route_builder_type_suffix", rp.OutputPackageRouteBuilderTypeSuffix, "must be letters, digits and underscores", suffix},
+	}
+	for _, c := range checks {
+		if c.value != "" && !c.valid(c.value) {
+			return &RouteValueError{Path: path, Where: "route_paths", Key: c.key, Value: c.value, Rule: c.rule}
+		}
+	}
+	return nil
 }
 
 // isGoFileName reports whether name is a plain file name ending in ".go", with

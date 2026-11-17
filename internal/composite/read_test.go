@@ -428,6 +428,46 @@ func TestFindAcceptsARoutePathsKey(t *testing.T) {
 	}
 }
 
+// TestFindChecksARoutePathsTypeName states that a type name member of
+// route_paths is a *composite.RouteValueError naming the member and the value
+// when the value cannot be the name it configures, and that a valid name is read.
+func TestFindChecksARoutePathsTypeName(t *testing.T) {
+	for _, tt := range []struct {
+		member, value string
+		wantErr       bool
+	}{
+		{member: "output_paths_type", value: "not an identifier", wantErr: true},
+		{member: "output_paths_type", value: "paths", wantErr: true},
+		{member: "output_paths_type", value: "func", wantErr: true},
+		{member: "output_paths_type", value: "9Paths", wantErr: true},
+		{member: "output_paths_type", value: "Paths", wantErr: false},
+		{member: "output_route_builder_type", value: "route-builder", wantErr: true},
+		{member: "output_route_type", value: "route", wantErr: true},
+		{member: "output_package_paths_type_suffix", value: "-Paths", wantErr: true},
+		{member: "output_package_paths_type_suffix", value: "Paths Type", wantErr: true},
+		{member: "output_package_paths_type_suffix", value: "Paths", wantErr: false},
+		{member: "output_package_paths_type_suffix", value: "_v2", wantErr: false},
+		{member: "output_package_paths_type_suffix", value: "2", wantErr: false},
+		{member: "output_package_route_builder_type_suffix", value: "Builder!", wantErr: true},
+	} {
+		t.Run(tt.member+"="+tt.value, func(t *testing.T) {
+			dir := writeFile(t, `{"route_paths": {"`+tt.member+`": `+fmt.Sprintf("%q", tt.value)+`}, "packages": {}}`)
+
+			_, _, err := composite.Find(dir, testKeys())
+
+			if !tt.wantErr {
+				require.NoError(t, err, "Find")
+				return
+			}
+			var typed *composite.RouteValueError
+			require.ErrorAs(t, err, &typed, "Find error %v", err)
+			assert.Equal(t, "route_paths", typed.Where, "Where = got %q, want %q", typed.Where, "route_paths")
+			assert.Equal(t, tt.member, typed.Key, "Key = got %q, want %q", typed.Key, tt.member)
+			assert.Equal(t, tt.value, typed.Value, "Value = got %q, want %q", typed.Value, tt.value)
+		})
+	}
+}
+
 // TestFindAcceptsARoutePathsName states that each name member of route_paths
 // set to a string is read onto its RoutePaths field.
 func TestFindAcceptsARoutePathsName(t *testing.T) {
