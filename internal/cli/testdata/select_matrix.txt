@@ -2,7 +2,7 @@
 # one line per job, or the error it ended in. Paths are relative to the module
 # directory; $BASE in an error is the module directory.
 #
-# Fields of a job line (generate, routes, check, calls, callers, mutations):
+# Fields of a job line (generate, routes, check, calls, callers, test, mutations):
 #   key               the muxt.json packages key of the entry, "" without one
 #   file              the muxt.json the entry came from, "" without one
 #   dir               the package directory the job runs in
@@ -33,6 +33,8 @@ load root="." dirs=["."] patterns=[""]
 error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: the selection test loads no package
 == no muxt.json, root: mutations test-template-mutations --dry-run
 mutations dir="." templates=[templates]
+== no muxt.json, root: test test
+test key="" file="" dir="."
 == no muxt.json, package: generate generate -v
 generate key="" file="" dir="contacts" receiver="" receiver-package="" templates=[templates] output="template_routes.go" htmx=false logger=false verbose=true
 == no muxt.json, package: muxt
@@ -48,6 +50,8 @@ load root="contacts" dirs=["contacts"] patterns=[""]
 error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: the selection test loads no package
 == no muxt.json, package: mutations test-template-mutations --dry-run
 mutations dir="contacts" templates=[templates]
+== no muxt.json, package: test test
+test key="" file="" dir="contacts"
 == entries, file directory: generate generate -v
 generate key="example.com/fieldkit/contacts" file="muxt.json" dir="contacts" receiver="Server" receiver-package="example.com/fieldkit/types" templates=[templates] output="template_routes.go" htmx=true logger=false verbose=true
 generate key="example.com/fieldkit/inventory" file="muxt.json" dir="inventory" receiver="Catalog" receiver-package="example.com/fieldkit/types" templates=[catalogTemplates] output="template_routes.go" htmx=true logger=false verbose=true
@@ -73,6 +77,10 @@ load root="." dirs=["."] patterns=[""]
 error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: the selection test loads no package
 == entries, file directory: mutations test-template-mutations --dry-run
 error: $BASE/muxt.json: test-template-mutations tests one package; pass one of: contacts inventory tasks
+== entries, file directory: test test
+test key="example.com/fieldkit/contacts" file="muxt.json" dir="contacts"
+test key="example.com/fieldkit/inventory" file="muxt.json" dir="inventory"
+test key="example.com/fieldkit/tasks" file="muxt.json" dir="tasks"
 == entries and root entry, file directory: generate generate -v
 generate key="example.com/fieldkit" file="muxt.json" dir="." receiver="Server" receiver-package="" templates=[templates] output="template_routes.go" htmx=true logger=false verbose=true
 generate key="example.com/fieldkit/contacts" file="muxt.json" dir="contacts" receiver="Server" receiver-package="" templates=[templates] output="template_routes.go" htmx=true logger=false verbose=true
@@ -103,6 +111,11 @@ load root="." dirs=["."] patterns=[""]
 error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: the selection test loads no package
 == entries and root entry, file directory: mutations test-template-mutations --dry-run
 mutations dir="." templates=[templates]
+== entries and root entry, file directory: test test
+test key="example.com/fieldkit" file="muxt.json" dir="."
+test key="example.com/fieldkit/contacts" file="muxt.json" dir="contacts"
+test key="example.com/fieldkit/inventory" file="muxt.json" dir="inventory"
+test key="example.com/fieldkit/tasks" file="muxt.json" dir="tasks"
 == entries, contacts: generate generate -v
 generate key="example.com/fieldkit/contacts" file="muxt.json" dir="contacts" receiver="Server" receiver-package="example.com/fieldkit/types" templates=[templates] output="template_routes.go" htmx=true logger=false verbose=true
 == entries, contacts: muxt
@@ -118,6 +131,8 @@ load root="contacts" dirs=["contacts"] patterns=["example.com/fieldkit/types"]
 error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: the selection test loads no package
 == entries, contacts: mutations test-template-mutations --dry-run
 mutations dir="contacts" templates=[templates]
+== entries, contacts: test test
+test key="example.com/fieldkit/contacts" file="muxt.json" dir="contacts"
 == entries, inventory: generate generate -v
 generate key="example.com/fieldkit/inventory" file="muxt.json" dir="inventory" receiver="Catalog" receiver-package="example.com/fieldkit/types" templates=[catalogTemplates] output="template_routes.go" htmx=true logger=false verbose=true
 == entries, inventory: muxt
@@ -133,6 +148,8 @@ load root="inventory" dirs=["inventory"] patterns=["example.com/fieldkit/types"]
 error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: the selection test loads no package
 == entries, inventory: mutations test-template-mutations --dry-run
 mutations dir="inventory" templates=[catalogTemplates]
+== entries, inventory: test test
+test key="example.com/fieldkit/inventory" file="muxt.json" dir="inventory"
 == entries, tasks: generate generate -v
 generate key="example.com/fieldkit/tasks" file="muxt.json" dir="tasks" receiver="Server" receiver-package="example.com/fieldkit/types" templates=[templates] output="tasks_routes.go" htmx=true logger=true verbose=true
 == entries, tasks: muxt
@@ -148,6 +165,8 @@ load root="tasks" dirs=["tasks"] patterns=["example.com/fieldkit/types"]
 error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: the selection test loads no package
 == entries, tasks: mutations test-template-mutations --dry-run
 mutations dir="tasks" templates=[templates]
+== entries, tasks: test test
+test key="example.com/fieldkit/tasks" file="muxt.json" dir="tasks"
 == entries, no entry for extra: generate generate -v
 error: $BASE/muxt.json: no packages entry "example.com/fieldkit/extra"; add one to generate this directory
 == entries, no entry for extra: muxt
@@ -163,6 +182,8 @@ load root="extra" dirs=["extra"] patterns=[""]
 error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: the selection test loads no package
 == entries, no entry for extra: mutations test-template-mutations --dry-run
 mutations dir="extra" templates=[templates]
+== entries, no entry for extra: test test
+test key="" file="" dir="extra"
 == setting flags, contacts has an entry: generate generate -v --use-receiver-type=Server --use-templates-variable=templates
 error: configure generate with fields in $BASE/muxt.json instead of flags: --use-receiver-type (use_receiver_type), --use-templates-variable (use_templates_variable)
 == setting flags, contacts has an entry: muxt --use-receiver-type=Server --use-templates-variable=templates
@@ -177,6 +198,8 @@ error: configure list-template-callers with fields in $BASE/muxt.json instead of
 error: configure generate def with fields in $BASE/muxt.json instead of flags: --use-receiver-type (use_receiver_type)
 == setting flags, contacts has an entry: mutations test-template-mutations --dry-run --use-templates-variable=templates
 error: configure test-template-mutations with fields in $BASE/muxt.json instead of flags: --use-templates-variable (use_templates_variable)
+== setting flags, contacts has an entry: test test
+test key="example.com/fieldkit/contacts" file="muxt.json" dir="contacts"
 == setting flags, entry names no receiver: generate generate -v --use-receiver-type=Server --use-templates-variable=templates
 error: configure generate with fields in $BASE/muxt.json instead of flags: --use-receiver-type (use_receiver_type), --use-templates-variable (use_templates_variable)
 == setting flags, entry names no receiver: muxt --use-receiver-type=Server --use-templates-variable=templates
@@ -192,6 +215,8 @@ load root="contacts" dirs=["contacts"] patterns=[""]
 error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: the selection test loads no package
 == setting flags, entry names no receiver: mutations test-template-mutations --dry-run --use-templates-variable=templates
 error: configure test-template-mutations with fields in $BASE/muxt.json instead of flags: --use-templates-variable (use_templates_variable)
+== setting flags, entry names no receiver: test test
+test key="example.com/fieldkit/contacts" file="muxt.json" dir="contacts"
 == setting flags, file directory is not an entry: generate generate -v --use-receiver-type=Server
 generate key="" file="" dir="." receiver="Server" receiver-package="" templates=[templates] output="template_routes.go" htmx=false logger=false verbose=true
 == setting flags, file directory is not an entry: muxt --use-templates-variable=templates
@@ -207,6 +232,10 @@ load root="." dirs=["."] patterns=[""]
 error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: the selection test loads no package
 == setting flags, file directory is not an entry: mutations test-template-mutations --dry-run --use-templates-variable=pages
 mutations dir="." templates=[pages]
+== setting flags, file directory is not an entry: test test
+test key="example.com/fieldkit/contacts" file="muxt.json" dir="contacts"
+test key="example.com/fieldkit/inventory" file="muxt.json" dir="inventory"
+test key="example.com/fieldkit/tasks" file="muxt.json" dir="tasks"
 == setting flags, extra has no entry: generate generate -v --use-receiver-type=Server
 generate key="" file="" dir="extra" receiver="Server" receiver-package="" templates=[templates] output="template_routes.go" htmx=false logger=false verbose=true
 == setting flags, extra has no entry: muxt --use-templates-variable=templates
@@ -222,6 +251,8 @@ load root="extra" dirs=["extra"] patterns=[""]
 error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: the selection test loads no package
 == setting flags, extra has no entry: mutations test-template-mutations --dry-run --use-templates-variable=pages
 mutations dir="extra" templates=[pages]
+== setting flags, extra has no entry: test test
+test key="" file="" dir="extra"
 == empty packages, file directory: generate generate -v
 error: $BASE/muxt.json: packages is empty; add a package with: muxt generate package NAME
 == empty packages, file directory: muxt
@@ -237,6 +268,8 @@ load root="." dirs=["."] patterns=[""]
 error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: the selection test loads no package
 == empty packages, file directory: mutations test-template-mutations --dry-run
 mutations dir="." templates=[templates]
+== empty packages, file directory: test test
+test key="" file="" dir="."
 == empty packages, contacts: generate generate -v
 error: $BASE/muxt.json: no packages entry "example.com/fieldkit/contacts"; add one to generate this directory
 == empty packages, contacts: muxt
@@ -252,6 +285,8 @@ load root="contacts" dirs=["contacts"] patterns=[""]
 error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: the selection test loads no package
 == empty packages, contacts: mutations test-template-mutations --dry-run
 mutations dir="contacts" templates=[templates]
+== empty packages, contacts: test test
+test key="" file="" dir="contacts"
 == stale entry, file directory: generate generate -v
 error: $BASE/muxt.json: packages["example.com/fieldkit/ghost"]: directory $BASE/ghost does not exist
 == stale entry, file directory: muxt
@@ -267,6 +302,8 @@ load root="." dirs=["."] patterns=[""]
 error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: the selection test loads no package
 == stale entry, file directory: mutations test-template-mutations --dry-run
 error: $BASE/muxt.json: test-template-mutations tests one package; pass one of: contacts ghost
+== stale entry, file directory: test test
+error: $BASE/muxt.json: packages["example.com/fieldkit/ghost"]: directory $BASE/ghost does not exist
 == stale entry, contacts: generate generate -v
 generate key="example.com/fieldkit/contacts" file="muxt.json" dir="contacts" receiver="Server" receiver-package="" templates=[templates] output="template_routes.go" htmx=false logger=false verbose=true
 == stale entry, contacts: muxt
@@ -282,6 +319,8 @@ load root="contacts" dirs=["contacts"] patterns=[""]
 error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: the selection test loads no package
 == stale entry, contacts: mutations test-template-mutations --dry-run
 mutations dir="contacts" templates=[templates]
+== stale entry, contacts: test test
+test key="example.com/fieldkit/contacts" file="muxt.json" dir="contacts"
 == listed directory that does not exist: generate generate -v
 generate key="" file="" dir="ghost" receiver="" receiver-package="" templates=[templates] output="template_routes.go" htmx=false logger=false verbose=true
 == listed directory that does not exist: muxt
@@ -297,6 +336,8 @@ load root="ghost" dirs=["ghost"] patterns=[""]
 error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: the selection test loads no package
 == listed directory that does not exist: mutations test-template-mutations --dry-run
 mutations dir="ghost" templates=[templates]
+== listed directory that does not exist: test test
+test key="" file="" dir="ghost"
 == listed directory that does not exist, flags: generate generate -v --use-receiver-type=Server
 generate key="" file="" dir="ghost" receiver="Server" receiver-package="" templates=[templates] output="template_routes.go" htmx=false logger=false verbose=true
 == listed directory that does not exist, flags: muxt --use-templates-variable=templates
@@ -312,6 +353,8 @@ load root="ghost" dirs=["ghost"] patterns=[""]
 error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: the selection test loads no package
 == listed directory that does not exist, flags: mutations test-template-mutations --dry-run --use-templates-variable=pages
 mutations dir="ghost" templates=[pages]
+== listed directory that does not exist, flags: test test
+test key="" file="" dir="ghost"
 == -C module: generate generate -v
 generate key="example.com/fieldkit/contacts" file="muxt.json" dir="contacts" receiver="Server" receiver-package="example.com/fieldkit/types" templates=[templates] output="template_routes.go" htmx=true logger=false verbose=true
 generate key="example.com/fieldkit/inventory" file="muxt.json" dir="inventory" receiver="Catalog" receiver-package="example.com/fieldkit/types" templates=[catalogTemplates] output="template_routes.go" htmx=true logger=false verbose=true
@@ -337,6 +380,10 @@ load root="." dirs=["."] patterns=[""]
 error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: the selection test loads no package
 == -C module: mutations test-template-mutations --dry-run
 error: $BASE/muxt.json: test-template-mutations tests one package; pass one of: contacts inventory tasks
+== -C module: test test
+test key="example.com/fieldkit/contacts" file="muxt.json" dir="contacts"
+test key="example.com/fieldkit/inventory" file="muxt.json" dir="inventory"
+test key="example.com/fieldkit/tasks" file="muxt.json" dir="tasks"
 == -C inventory: generate generate -v
 generate key="example.com/fieldkit/inventory" file="muxt.json" dir="inventory" receiver="Catalog" receiver-package="example.com/fieldkit/types" templates=[catalogTemplates] output="template_routes.go" htmx=true logger=false verbose=true
 == -C inventory: muxt
@@ -352,6 +399,8 @@ load root="inventory" dirs=["inventory"] patterns=["example.com/fieldkit/types"]
 error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: the selection test loads no package
 == -C inventory: mutations test-template-mutations --dry-run
 mutations dir="inventory" templates=[catalogTemplates]
+== -C inventory: test test
+test key="example.com/fieldkit/inventory" file="muxt.json" dir="inventory"
 == -C extra: generate generate -v
 error: $BASE/muxt.json: no packages entry "example.com/fieldkit/extra"; add one to generate this directory
 == -C extra: muxt
@@ -367,6 +416,8 @@ load root="extra" dirs=["extra"] patterns=[""]
 error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: the selection test loads no package
 == -C extra: mutations test-template-mutations --dry-run
 mutations dir="extra" templates=[templates]
+== -C extra: test test
+test key="" file="" dir="extra"
 == -C directory that does not exist, below the file: generate generate -v
 generate key="" file="" dir="typo" receiver="" receiver-package="" templates=[templates] output="template_routes.go" htmx=false logger=false verbose=true
 == -C directory that does not exist, below the file: muxt
@@ -382,6 +433,8 @@ load root="typo" dirs=["typo"] patterns=[""]
 error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: the selection test loads no package
 == -C directory that does not exist, below the file: mutations test-template-mutations --dry-run
 mutations dir="typo" templates=[templates]
+== -C directory that does not exist, below the file: test test
+test key="" file="" dir="typo"
 == -C directory that does not exist, no muxt.json: generate generate -v
 generate key="" file="" dir="typo" receiver="" receiver-package="" templates=[templates] output="template_routes.go" htmx=false logger=false verbose=true
 == -C directory that does not exist, no muxt.json: muxt
@@ -397,6 +450,8 @@ load root="typo" dirs=["typo"] patterns=[""]
 error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: the selection test loads no package
 == -C directory that does not exist, no muxt.json: mutations test-template-mutations --dry-run
 mutations dir="typo" templates=[templates]
+== -C directory that does not exist, no muxt.json: test test
+test key="" file="" dir="typo"
 == -C directory that does not exist, flag: generate generate -v --use-receiver-type=Server
 generate key="" file="" dir="typo" receiver="Server" receiver-package="" templates=[templates] output="template_routes.go" htmx=false logger=false verbose=true
 == -C directory that does not exist, flag: muxt --use-templates-variable=templates
@@ -412,6 +467,8 @@ load root="typo" dirs=["typo"] patterns=[""]
 error: cannot check whether "GET /things/{id} GetThing(ctx, id)" is already defined: the selection test loads no package
 == -C directory that does not exist, flag: mutations test-template-mutations --dry-run --use-templates-variable=pages
 mutations dir="typo" templates=[pages]
+== -C directory that does not exist, flag: test test
+test key="" file="" dir="typo"
 == .: check inventory
 check dir="inventory" templates=[catalogTemplates] allow-unused=false
 == .: list-template-calls inventory

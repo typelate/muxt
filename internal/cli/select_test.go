@@ -120,7 +120,7 @@ const selectionHeader = `# Each cell is "== situation: command line", then what 
 # one line per job, or the error it ended in. Paths are relative to the module
 # directory; $BASE in an error is the module directory.
 #
-# Fields of a job line (generate, routes, check, calls, callers, mutations):
+# Fields of a job line (generate, routes, check, calls, callers, test, mutations):
 #   key               the muxt.json packages key of the entry, "" without one
 #   file              the muxt.json the entry came from, "" without one
 #   dir               the package directory the job runs in
@@ -185,6 +185,12 @@ func recordSelection(base, wd string, args ...string) (string, error) {
 			}
 			return nil
 		},
+		test: func(_ *cobra.Command, jobs []packageJob, _ testConfiguration) error {
+			for _, job := range jobs {
+				r.line("test key=%q file=%q dir=%q", job.Key, r.rel(job.File), r.rel(job.Dir))
+			}
+			return nil
+		},
 		mutations: func(_ *cobra.Command, dir string, c mutation.Configuration) error {
 			r.line("mutations dir=%q templates=%v", r.rel(dir), c.TemplatesVariables)
 			return nil
@@ -220,7 +226,7 @@ type selectionCell struct {
 	args  []string
 }
 
-// selectionCommands are the seven commands whose runners record, each with the
+// selectionCommands are the eight commands whose runners record, each with the
 // arguments that make it run flagless.
 func selectionCommands() []selectionCell {
 	return []selectionCell{
@@ -231,6 +237,7 @@ func selectionCommands() []selectionCell {
 		{name: "callers", args: []string{"list-template-callers"}},
 		{name: "def", args: []string{"generate", "def", defRoute}},
 		{name: "mutations", args: []string{"test-template-mutations", "--dry-run"}},
+		{name: "test", args: []string{"test"}},
 	}
 }
 
