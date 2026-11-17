@@ -56,3 +56,43 @@ func TestNamespace(t *testing.T) {
 		assert.Equal(t, tc.want, got, "Namespace(%q, %q) = %q, want %q", tc.importPath, tc.hubImportPath, got, tc.want)
 	}
 }
+
+func TestCheckNamespaces(t *testing.T) {
+	const hub = "example.com/m"
+	clashing := []string{"example.com/m/admin_users", "example.com/m/admin/users"}
+	for _, tc := range []struct {
+		name        string
+		importPaths []string
+		wantErr     bool
+	}{
+		{
+			name:        "no clash",
+			importPaths: []string{"example.com/m/blog", "example.com/m/admin/users"},
+		},
+		{
+			name:        "clash in given order",
+			importPaths: clashing,
+			wantErr:     true,
+		},
+		{
+			name:        "clash in reverse order",
+			importPaths: []string{clashing[1], clashing[0]},
+			wantErr:     true,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := generate.CheckNamespaces(tc.importPaths, hub)
+			if !tc.wantErr {
+				require.NoError(t, err)
+				return
+			}
+			var sameErr *generate.SameNamespaceError
+			require.ErrorAs(t, err, &sameErr)
+			assert.Equal(t, "AdminUsers", sameErr.Namespace)
+			assert.Equal(t, [2]string{"example.com/m/admin/users", "example.com/m/admin_users"}, sameErr.ImportPaths)
+			assert.Equal(t,
+				`packages "example.com/m/admin/users" and "example.com/m/admin_users" both get the route paths namespace "AdminUsers"; rename one of them`,
+				err.Error())
+		})
+	}
+}
