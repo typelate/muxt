@@ -105,6 +105,24 @@ func TestProfileLeavesOutAParseNameTwoFilesShare(t *testing.T) {
 	assert.Equal(t, "mode: set\n/abs/pkg/nav.gohtml:1.1,1.4 1 1\n", written(t, &p))
 }
 
+// TestProfileKeepsTwoPackagesSameBaseNameApart states that each package is
+// attributed through its own sources, so two packages that each have an
+// index.gohtml put their blocks in their own file.
+func TestProfileKeepsTwoPackagesSameBaseNameApart(t *testing.T) {
+	a := templatecover.Sources(packageWith(map[string]source.Definition{"index": definedIn("/abs/a/index.gohtml", "index.gohtml")}))
+	b := templatecover.Sources(packageWith(map[string]source.Definition{"index": definedIn("/abs/b/index.gohtml", "index.gohtml")}))
+
+	var p templatecover.Profile
+	assert.Empty(t, p.Add(templatecover.Reached{"index.gohtml": {{StartLine: 2, StartCol: 1, EndLine: 2, EndCol: 3}: {}}}, a))
+	assert.Empty(t, p.Add(templatecover.Reached{"index.gohtml": {{StartLine: 5, StartCol: 1, EndLine: 5, EndCol: 4}: {}}}, b))
+
+	got := written(t, &p)
+	assert.Contains(t, got, "/abs/a/index.gohtml:2.1,2.3 1 1\n")
+	assert.Contains(t, got, "/abs/b/index.gohtml:5.1,5.4 1 1\n")
+	assert.NotContains(t, got, "/abs/a/index.gohtml:5.")
+	assert.NotContains(t, got, "/abs/b/index.gohtml:2.")
+}
+
 // TestAmbiguousNameErrorNamesEveryFile states the one-line message.
 func TestAmbiguousNameErrorNamesEveryFile(t *testing.T) {
 	for _, tt := range []struct {
