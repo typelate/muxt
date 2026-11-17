@@ -1,6 +1,6 @@
 //go:build unix
 
-package mutation
+package templatecover
 
 import (
 	"errors"

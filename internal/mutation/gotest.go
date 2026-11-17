@@ -9,7 +9,6 @@ import (
 	"regexp"
 	"slices"
 	"strings"
-	"time"
 
 	"github.com/typelate/htt/template"
 
@@ -62,19 +61,7 @@ func (t goTest) args(flags ...string) []string {
 // When ctx is done the run is interrupted, along with the compilers and
 // test binaries it started, and the error is ctx's.
 func (t goTest) run(ctx context.Context, limit int, flags ...string) (*goTestOutput, error) {
-	cmd := exec.CommandContext(ctx, "go", t.args(flags...)...)
-	interruptTogether(cmd)
-	// A go test that ignores the interrupt is killed after this long.
-	cmd.WaitDelay = 10 * time.Second
-	cmd.Dir = t.dir
-	if t.env != nil {
-		// os/exec points PWD at Dir only when it supplies the environment
-		// itself. The go command addresses files the way PWD says, and an
-		// overlay keyed on the paths the loader reported is ignored when
-		// the two disagree -- every mutant then builds unmutated and is
-		// reported as a mutation no test caught.
-		cmd.Env = append(slices.Clip(t.env), "PWD="+t.dir)
-	}
+	cmd := templatecover.Command(ctx, t.dir, t.env, t.args(flags...)...)
 	out := &goTestOutput{limit: limit}
 	// One writer for both streams is one pipe, so lines arrive whole and
 	// in the order go test wrote them.
