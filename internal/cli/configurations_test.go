@@ -872,6 +872,7 @@ func TestCommandLineRejections(t *testing.T) {
 		{name: "a go test flag muxt needs for itself", args: "test-template-mutations -- -overlay=other.json", wantErr: "go test flag -overlay cannot be passed through: muxt uses -overlay to deliver each mutant"},
 		{name: "test with a package directory", args: "test web", wantErr: "test takes no arguments before --; pass go test flags after --: web"},
 		{name: "test with a package directory before go test flags", args: "test web other -- -count=2", wantErr: "test takes no arguments before --; pass go test flags after --: web other"},
+		{name: "test with an overlay of its own", args: "test -- -overlay=x.json", wantErr: "go test flag -overlay cannot be passed through: muxt test uses -overlay to put its template engine in place of html/template"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := configurationOf(t, tt.args, nil)

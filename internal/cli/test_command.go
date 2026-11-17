@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/typelate/muxt/internal/generate"
+	"github.com/typelate/muxt/internal/templatecover"
 )
 
 // testConfiguration is what the command line gives muxt test.
@@ -37,6 +38,9 @@ func testCommand(workingDirectory *string, getEnv func(string) string, run func(
 			if len(before) > 0 {
 				return fmt.Errorf("%s takes no arguments before --; pass go test flags after --: %s", testCommandName, strings.Join(before, " "))
 			}
+			if err := checkTestGoTestArgs(config.GoTestArgs); err != nil {
+				return err
+			}
 			spec := jobSpec{
 				Name:  testCommandName,
 				Scope: eachEntry,
@@ -53,4 +57,19 @@ func testCommand(workingDirectory *string, getEnv func(string) string, run func(
 	}
 
 	return cmd
+}
+
+// checkTestGoTestArgs refuses a go test flag that would undo the engine
+// muxt test puts in place, before any package loads.
+func checkTestGoTestArgs(args []string) error {
+	purpose := templatecover.Purpose{
+		Overlay: "muxt test uses -overlay to put its template engine in place of html/template",
+	}
+	for f := range templatecover.Flags(args) {
+		switch f.Name {
+		case "overlay":
+			return templatecover.Refuse(f, purpose)
+		}
+	}
+	return nil
 }
