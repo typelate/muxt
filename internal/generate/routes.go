@@ -235,10 +235,13 @@ func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, hub *Hub, pk
 
 	var routePathDecls []ast.Decl
 	if hub == nil {
-		routePathDecls, err = routePathTypeAndMethods(file, config, configPathTypeNames(config), groups.all, true)
+		names := configPathTypeNames(config)
+		methods, err := routePathMethodDecls(file, config, names, groups.all)
 		if err != nil {
 			return nil, err
 		}
+		routePathDecls = append(pathTypeDecls(names), routeTypeDecls(names)...)
+		routePathDecls = append(routePathDecls, methods...)
 	}
 	if config.StaticAssetsDirectory != "" {
 		routesFunc.Body.List = append(routesFunc.Body.List, staticAssetsStatements(file, config)...)

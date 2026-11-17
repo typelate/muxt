@@ -136,11 +136,19 @@ func routeLiteral(file *File, names pathTypeNames, def *muxt.Definition, path as
 	}
 }
 
-// routePathTypeAndMethods declares the path types and their methods. The route
-// type is declared with them unless the caller declares it, as the hub file
-// does once for all packages.
-func routePathTypeAndMethods(imports *File, config RoutesFileConfiguration, names pathTypeNames, defs []muxt.Definition, declareRoute bool) ([]ast.Decl, error) {
-	decls := []ast.Decl{
+// routePathTypeAndMethods declares the path types and their methods. It does
+// not declare the route type: the caller does, once, with routeTypeDecls.
+func routePathTypeAndMethods(imports *File, config RoutesFileConfiguration, names pathTypeNames, defs []muxt.Definition) ([]ast.Decl, error) {
+	methods, err := routePathMethodDecls(imports, config, names, defs)
+	if err != nil {
+		return nil, err
+	}
+	return append(pathTypeDecls(names), methods...), nil
+}
+
+// pathTypeDecls declares the paths type and the route builder type.
+func pathTypeDecls(names pathTypeNames) []ast.Decl {
+	return []ast.Decl{
 		&ast.GenDecl{
 			Tok: token.TYPE,
 			Specs: []ast.Spec{
@@ -162,12 +170,14 @@ func routePathTypeAndMethods(imports *File, config RoutesFileConfiguration, name
 			},
 		},
 	}
-	if declareRoute {
-		decls = append(decls, routeTypeDecls(names)...)
-	}
+}
+
+// routePathMethodDecls declares the route path methods and the escapers they use.
+func routePathMethodDecls(imports *File, config RoutesFileConfiguration, names pathTypeNames, defs []muxt.Definition) ([]ast.Decl, error) {
 	if err := muxt.CheckPathMethodCollisions(defs); err != nil {
 		return nil, err
 	}
+	var decls []ast.Decl
 	var used escaperUse
 	for _, t := range defs {
 		decl, escapers, err := routePathFunc(imports, config, names, &t)

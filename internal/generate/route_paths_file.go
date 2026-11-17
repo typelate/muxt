@@ -60,7 +60,7 @@ func RoutePathsFile(r RoutePaths) (GeneratedFile, error) {
 	decls = append(decls, routeTypeDecls(pathTypeNames{Route: hubRouteTypeName})...)
 	for _, p := range packages {
 		names := pathTypeNames{Paths: p.Namespace + hubPathsTypeName, Builder: p.Namespace + hubBuilderTypeName, Route: hubRouteTypeName}
-		packageDecls, err := routePathTypeAndMethods(file, p.Config, names, p.Defs, false)
+		packageDecls, err := routePathTypeAndMethods(file, p.Config, names, p.Defs)
 		if err != nil {
 			return GeneratedFile{}, fmt.Errorf("package %s: %w", p.Namespace, err)
 		}
