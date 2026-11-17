@@ -139,6 +139,29 @@ func TestTestFailsWhenTheTestsFail(t *testing.T) {
 	assert.Empty(t, stderr.String(), "stderr")
 }
 
+// TestTestStopsAtTheFirstFailingPackage states that a failure ends the run:
+// the packages after it are not tested.
+func TestTestStopsAtTheFirstFailingPackage(t *testing.T) {
+	run := newTestRun(t)
+	run.Result = func(call int) error {
+		if call == 1 {
+			return &exec.ExitError{}
+		}
+		return nil
+	}
+	jobs := []packageJob{
+		{Key: "example.com/a", Dir: "/work/a", Keyed: true},
+		{Key: "example.com/b", Dir: "/work/b", Keyed: true},
+		{Key: "example.com/c", Dir: "/work/c", Keyed: true},
+	}
+	stdout, _, err := run.run(jobs, testConfiguration{})
+
+	require.Error(t, err, "muxt test")
+	require.Len(t, run.Calls, 2, "go test runs")
+	assert.Equal(t, "/work/b", run.Calls[1].Dir, "the last package tested")
+	assert.NotContains(t, stdout, "example.com/c", "stdout names the package that never ran")
+}
+
 // TestTestRemovesItsScratchDirectory states that the engine files and
 // profiles are gone when the command returns, however it ends.
 func TestTestRemovesItsScratchDirectory(t *testing.T) {
