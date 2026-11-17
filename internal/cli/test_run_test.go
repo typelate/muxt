@@ -162,6 +162,30 @@ func TestTestStopsAtTheFirstFailingPackage(t *testing.T) {
 	assert.NotContains(t, stdout, "example.com/c", "stdout names the package that never ran")
 }
 
+// TestTestNamesTheFailingKeyedPackage states that when one of several
+// packages fails, the last line of stderr says which, because go test's own
+// report may have scrolled away.
+func TestTestNamesTheFailingKeyedPackage(t *testing.T) {
+	run := newTestRun(t)
+	run.Result = func(call int) error {
+		if call == 1 {
+			return &exec.ExitError{}
+		}
+		return nil
+	}
+	base := newFieldkit(t, fieldkitEntries)
+	var stdout, stderr bytes.Buffer
+	err := commands(base, []string{testCommandName}, func(string) string { return "" }, cliVersion, strings.NewReader(""), &stdout, &stderr, runners{
+		test: testRunner(run.goTest, run.prepare),
+	})
+
+	require.Error(t, err, "muxt test")
+	failure, ok := errors.AsType[*goTestFailure](err)
+	require.True(t, ok, "the error is a *goTestFailure, got %T: %v", err, err)
+	assert.Equal(t, "example.com/fieldkit/inventory", failure.Key, "failing package")
+	assert.Equal(t, "Error: example.com/fieldkit/inventory: go test failed\n", stderr.String(), "stderr")
+}
+
 // TestTestRemovesItsScratchDirectory states that the engine files and
 // profiles are gone when the command returns, however it ends.
 func TestTestRemovesItsScratchDirectory(t *testing.T) {

@@ -25,12 +25,20 @@ type goTestFunc func(ctx context.Context, dir string, env, args []string, stdout
 type prepareFunc func(ctx context.Context, tc overlay.Toolchain, dir string) (templatecover.Engine, error)
 
 // goTestFailure is go test exiting with a failure: a test failed or a
-// package did not build. go test printed which.
+// package did not build. go test printed which. Key is the muxt.json key of
+// the package in a keyed run, where several packages' reports are on screen
+// and the last line must say whose failed; it is empty otherwise.
 type goTestFailure struct {
+	Key string
 	Err *exec.ExitError
 }
 
-func (e *goTestFailure) Error() string { return "go test failed" }
+func (e *goTestFailure) Error() string {
+	if e.Key == "" {
+		return "go test failed"
+	}
+	return e.Key + ": go test failed"
+}
 
 func (e *goTestFailure) Unwrap() error { return e.Err }
 
@@ -99,9 +107,10 @@ func testRunner(goTest goTestFunc, prepare prepareFunc) func(*cobra.Command, []p
 					return fmt.Errorf("running go test in %s: %w", job.Dir, err)
 				}
 				// go test said why; cobra repeating that it failed would
-				// only bury it.
-				cmd.SilenceErrors = true
-				return &goTestFailure{Err: exit}
+				// only bury it, unless the run covered several packages and
+				// the line must name the one that did.
+				cmd.SilenceErrors = !job.Keyed
+				return &goTestFailure{Key: job.Key, Err: exit}
 			}
 		}
 		return nil

@@ -24,10 +24,12 @@ muxt refuses these before anything runs:
 
 ## Failures
 
-When `go test` fails, `muxt test` exits `1` and adds nothing to what `go test` printed. Every failure exits `1`, `go test`'s `2` included.
+When `go test` fails, `muxt test` exits `1` and adds nothing to what `go test` printed, except in a run over several entries ([Selection](#selection)). Every failure exits `1`, `go test`'s `2` included.
 
 ## Selection
 
 With a [muxt.json](../muxt-json.md) in the working directory, every entry runs, in key order, one `go test` each. Anywhere else the package directory runs alone, as `muxt check` selects it.
 
 A run over every entry writes the entry's key on its own line before that package's output. With `-json` after `--` it writes no key, so the output stays a stream of JSON events.
+
+The first package that fails ends the run; the entries after it are not tested. Its last line is `Error: <key>: go test failed`.
