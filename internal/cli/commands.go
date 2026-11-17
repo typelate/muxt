@@ -25,6 +25,7 @@ const (
 	generateFakeServerCommandName  = "generate-fake-server"
 	testTemplateMutationsName      = "test-template-mutations"
 	fmtCommandName                 = "fmt"
+	testCommandName                = "test"
 )
 
 func Commands(wd string, args []string, getEnv func(string) string, stdin io.Reader, stdout, stderr io.Writer) error {
