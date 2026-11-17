@@ -5,6 +5,7 @@ import (
 	"context"
 	"io"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/spf13/cobra"
@@ -94,4 +95,17 @@ func TestTestRunsGoTestOnTheEngine(t *testing.T) {
 		"-run", "TestIndex",
 	}
 	assert.Equal(t, want, run.Calls[0].Args, "go test arguments")
+}
+
+// TestTestPassesNoPackagePattern states that with nothing after -- go test
+// is given no package pattern, so it tests the package in the directory.
+func TestTestPassesNoPackagePattern(t *testing.T) {
+	run := newTestRun(t)
+	_, _, err := run.run([]packageJob{{Dir: "/work/pkg"}}, testConfiguration{})
+	require.NoError(t, err, "muxt test")
+
+	require.Len(t, run.Calls, 1, "go test runs")
+	for _, arg := range run.Calls[0].Args[1:] {
+		assert.True(t, strings.HasPrefix(arg, "-"), "go test argument %q is not a flag, want no package pattern", arg)
+	}
 }
