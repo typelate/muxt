@@ -1,0 +1,58 @@
+package generate_test
+
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/typelate/muxt/internal/generate"
+)
+
+func TestNamespace(t *testing.T) {
+	for _, tc := range []struct {
+		importPath    string
+		hubImportPath string
+		want          string
+		wantErr       bool
+	}{
+		{
+			importPath:    "example.com/m/internal/hypertext/blog",
+			hubImportPath: "example.com/m/internal/hypertext",
+			want:          "Blog",
+		},
+		{
+			importPath:    "example.com/m/internal/hypertext/admin_v2",
+			hubImportPath: "example.com/m/internal/hypertext",
+			want:          "AdminV2",
+		},
+		{
+			importPath:    "example.com/m/internal/hypertext/admin/users",
+			hubImportPath: "example.com/m/internal/hypertext",
+			want:          "AdminUsers",
+		},
+		{
+			importPath:    "example.com/m/internal/hypertext/api",
+			hubImportPath: "example.com/m/internal/hypertext",
+			want:          "API",
+		},
+		{
+			importPath:    "example.com/m/blog",
+			hubImportPath: "example.com/m",
+			want:          "Blog",
+		},
+		{
+			importPath:    "example.com/other/blog",
+			hubImportPath: "example.com/m/internal/hypertext",
+			wantErr:       true,
+		},
+	} {
+		got, err := generate.Namespace(tc.importPath, tc.hubImportPath)
+		if tc.wantErr {
+			assert.Error(t, err, "Namespace(%q, %q) should fail", tc.importPath, tc.hubImportPath)
+			continue
+		}
+		require.NoError(t, err, "Namespace(%q, %q)", tc.importPath, tc.hubImportPath)
+		assert.Equal(t, tc.want, got, "Namespace(%q, %q) = %q, want %q", tc.importPath, tc.hubImportPath, got, tc.want)
+	}
+}
