@@ -38,6 +38,13 @@ type File struct {
 	// itself. It is a separate object so one shared value is written once.
 	Defaults Entry            `json:"package_defaults,omitempty"`
 	Packages map[string]Entry `json:"packages"`
+	// RoutePaths is the route_paths object. nil means the key is absent.
+	RoutePaths *RoutePaths `json:"route_paths,omitempty"`
+}
+
+// RoutePaths is the route_paths object of a muxt.json.
+type RoutePaths struct {
+	OutputFile string `json:"output_file,omitempty"`
 }
 
 // Resolve returns the entry for key with Defaults applied. A key the entry
@@ -281,7 +288,7 @@ func read(path string, keys Keys) (*File, error) {
 	if err := checkKinds(path, raw, keys); err != nil {
 		return nil, err
 	}
-	f := File{Defaults: raw.PackageDefaults, Packages: raw.Packages}
+	f := File{Defaults: raw.PackageDefaults, Packages: raw.Packages, RoutePaths: raw.RoutePaths}
 	f.Dir = filepath.Dir(path)
 	f.Name = path
 	var hasModule bool
@@ -342,7 +349,7 @@ func checkTopKeys(path string, data []byte) error {
 	if err := json.Unmarshal(data, &top); err != nil {
 		return fmt.Errorf("parsing %s: %w", path, err)
 	}
-	topKnown := []string{"package_defaults", "packages"}
+	topKnown := []string{"package_defaults", "packages", "route_paths"}
 	for _, key := range slices.Sorted(maps.Keys(top)) {
 		if !slices.Contains(topKnown, key) {
 			return &UnknownKeyError{Path: path, Key: key, Suggestion: closestKey(key, topKnown)}
@@ -510,6 +517,7 @@ func (f *File) spelledOnDisk(key string) (string, error) {
 type rawFile struct {
 	PackageDefaults Entry            `json:"package_defaults"`
 	Packages        map[string]Entry `json:"packages"`
+	RoutePaths      *RoutePaths      `json:"route_paths"`
 }
 
 // readRaw decodes data into the entries as written. It fails with a

@@ -333,3 +333,34 @@ func TestResolveKeepsAnEntryListWhole(t *testing.T) {
 	assert.JSONEq(t, "true", string(entry["output_htmx"]), "output_htmx of the resolved entry")
 	assert.JSONEq(t, `["a", "b"]`, string(f.Defaults["use_templates"]), "the defaults are not changed")
 }
+
+// TestFindAcceptsARoutePathsKey states that a top-level route_paths object is
+// read, and that the File says whether the key is there at all.
+func TestFindAcceptsARoutePathsKey(t *testing.T) {
+	for _, tt := range []struct {
+		name, file string
+		want       bool
+	}{
+		{
+			name: "present",
+			file: `{"route_paths": {}, "packages": {}}`,
+			want: true,
+		},
+		{
+			name: "absent",
+			file: `{"packages": {}}`,
+			want: false,
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := writeFile(t, tt.file)
+
+			f, found, err := composite.Find(dir, testKeys())
+
+			require.NoError(t, err, "Find")
+			require.True(t, found, "found")
+			got := f.RoutePaths != nil
+			assert.Equal(t, tt.want, got, "RoutePaths present = %t, want %t", got, tt.want)
+		})
+	}
+}
