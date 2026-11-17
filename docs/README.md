@@ -38,6 +38,7 @@ These pages document muxt in four kinds: tutorials, how-to guides, reference and
   - [`muxt generate`](reference/commands/generate.md)
   - [`muxt check`](reference/commands/check.md)
   - [`muxt fmt`](reference/commands/fmt.md)
+  - [`muxt test`](reference/commands/test.md)
   - [`muxt test-template-mutations`](reference/commands/test-template-mutations.md)
   - [`muxt list-template-callers`](reference/commands/list-template-callers.md)
   - [`muxt list-template-calls`](reference/commands/list-template-calls.md)

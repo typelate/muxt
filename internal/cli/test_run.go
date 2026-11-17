@@ -45,7 +45,7 @@ func testRunner(goTest goTestFunc, prepare prepareFunc) func(*cobra.Command, []p
 			// replayed pass cannot leave a package out of the profile.
 			args := append([]string{"test", "-count=1"}, engine.Flags()...)
 			args = append(args, config.GoTestArgs...)
-			if err := goTest(cmd.Context(), job.Dir, engine.Environ(nil), args, io.Discard, io.Discard); err != nil {
+			if err := goTest(cmd.Context(), job.Dir, engine.Environ(nil), args, cmd.OutOrStdout(), cmd.ErrOrStderr()); err != nil {
 				return fmt.Errorf("running go test in %s: %w", job.Dir, err)
 			}
 		}

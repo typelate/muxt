@@ -98,6 +98,22 @@ func TestTestRunsGoTestOnTheEngine(t *testing.T) {
 	assert.Equal(t, want, run.Calls[0].Args, "go test arguments")
 }
 
+// TestTestPassesGoTestOutputThrough states that what go test writes is what
+// the command writes, byte for byte, and nothing else.
+func TestTestPassesGoTestOutputThrough(t *testing.T) {
+	run := newTestRun(t)
+	run.Write = func(_ int, stdout, stderr io.Writer) {
+		_, _ = io.WriteString(stdout, "ok  \texample.com/pkg\t0.003s\n")
+		_, _ = io.WriteString(stderr, "# example.com/pkg\r\nwarning\n")
+		_, _ = io.WriteString(stdout, "no final newline")
+	}
+	stdout, stderr, err := run.run([]packageJob{{Dir: "/work/pkg"}}, testConfiguration{})
+	require.NoError(t, err, "muxt test")
+
+	assert.Equal(t, "ok  \texample.com/pkg\t0.003s\nno final newline", stdout, "stdout")
+	assert.Equal(t, "# example.com/pkg\r\nwarning\n", stderr, "stderr")
+}
+
 // TestTestGivesEachJobItsOwnCoverDirectory states that two packages' test
 // binaries never write profiles to the same place, so a profile line is
 // the package's whose go test wrote it.

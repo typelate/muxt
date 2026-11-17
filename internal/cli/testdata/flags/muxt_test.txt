@@ -3,7 +3,9 @@ muxt test
 flags:
 
 --help:
-Run go test on muxt's template engine
+Runs `go test` with muxt's template engine in place of `html/template`.
+
+Full reference: muxt documentation docs/reference/commands/test.md
 
 Usage:
   muxt test [-- go test flags] [flags]
