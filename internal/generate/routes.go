@@ -223,7 +223,7 @@ func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, pkg source.P
 	}
 	routesFunc.Body.List = append(routesFunc.Body.List, handlers...)
 
-	routePathDecls, err := routePathTypeAndMethods(file, config, groups.all)
+	routePathDecls, err := routePathTypeAndMethods(file, config, configPathTypeNames(config), groups.all)
 	if err != nil {
 		return nil, err
 	}

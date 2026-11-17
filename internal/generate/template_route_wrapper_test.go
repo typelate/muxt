@@ -52,9 +52,9 @@ func TestRoutePathWrapper(t *testing.T) {
 			checker := fake.StandInChecker(t, pkg).ParsesFromText(id).FormatsAsText(id).Fake()
 			defs, err := muxt.ResolveDefinitions(src, fake.Lookup(t, pkg, "T").(*types.Named), checker)
 			require.NoError(t, err)
-			builder, _, err := routePathFunc(newFile(src), testConfig(), &defs[0])
+			builder, _, err := routePathFunc(newFile(src), testConfig(), configPathTypeNames(testConfig()), &defs[0])
 			require.NoError(t, err)
-			wrapper := routePathWrapper(testConfig(), builder)
+			wrapper := routePathWrapper(configPathTypeNames(testConfig()), builder)
 			assert.Equal(t, tt.want, astgen.Format(wrapper))
 
 			// The two declarations are separate nodes in the file:

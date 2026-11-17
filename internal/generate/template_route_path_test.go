@@ -175,7 +175,7 @@ func TestRoutePathFunc(t *testing.T) {
 			require.NoError(t, err)
 			config := testConfig()
 			config.PathPrefix = tt.pathPrefix
-			decl, escapers, err := routePathFunc(newFile(src), config, &defs[0])
+			decl, escapers, err := routePathFunc(newFile(src), config, configPathTypeNames(config), &defs[0])
 			require.NoError(t, err)
 			assert.Equal(t, tt.want, astgen.Format(decl), "routePathFunc(%q)", tt.pattern)
 			assert.Equal(t, tt.escapers, escapers, "routePathFunc(%q) escapers", tt.pattern)
@@ -263,7 +263,7 @@ func (route Link) HasMethod() bool {
 			config := testConfig()
 			config.TemplateRouteTypeName = tt.typeName
 			var got []string
-			for _, decl := range routeTypeDecls(config) {
+			for _, decl := range routeTypeDecls(configPathTypeNames(config)) {
 				got = append(got, astgen.Format(decl))
 			}
 			assert.Equal(t, tt.want, strings.Join(got, "\n\n"), "routeTypeDecls()")

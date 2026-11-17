@@ -294,6 +294,7 @@ func staticAssetsPathMethods(file *File, config RoutesFileConfiguration) []ast.D
 			&ast.KeyValueExpr{Key: ast.NewIdent(routePathFieldName), Value: joined},
 		},
 	}
-	builder := routeBuilderMethod(config, muxt.StaticAssetsPathIdentifier(prefix), nil, results(ast.NewIdent(routeTypeName(config))), returnExprs(route))
-	return []ast.Decl{builder, routePathWrapper(config, builder)}
+	names := configPathTypeNames(config)
+	builder := routeBuilderMethod(names, muxt.StaticAssetsPathIdentifier(prefix), nil, results(ast.NewIdent(names.Route)), returnExprs(route))
+	return []ast.Decl{builder, routePathWrapper(names, builder)}
 }
