@@ -46,6 +46,16 @@ type File struct {
 // RoutePaths is the route_paths object of a muxt.json.
 type RoutePaths struct {
 	OutputFile string `json:"output_file,omitempty"`
+	// OutputPathsType names the hub's paths type. Its default is TemplateRoutePaths.
+	OutputPathsType string `json:"output_paths_type,omitempty"`
+	// OutputRouteBuilderType names the hub's route builder type. Its default is TemplateRouteBuilder.
+	OutputRouteBuilderType string `json:"output_route_builder_type,omitempty"`
+	// OutputRouteType names the hub's route type. Its default is TemplateRoute.
+	OutputRouteType string `json:"output_route_type,omitempty"`
+	// OutputPackagePathsTypeSuffix is the suffix a package's paths type takes after its namespace. Its default is TemplateRoutePaths.
+	OutputPackagePathsTypeSuffix string `json:"output_package_paths_type_suffix,omitempty"`
+	// OutputPackageRouteBuilderTypeSuffix is the suffix a package's route builder type takes after its namespace. Its default is TemplateRouteBuilder.
+	OutputPackageRouteBuilderTypeSuffix string `json:"output_package_route_builder_type_suffix,omitempty"`
 }
 
 // Resolve returns the entry for key with Defaults applied. A key the entry
@@ -381,7 +391,7 @@ func checkRoutePathsKeys(path string, data []byte) error {
 	}
 	// Each name is the JSON name of a RoutePaths field. Add a name here when a
 	// field is added, or a muxt.json holding it is rejected.
-	routePathsKnown := []string{"output_file"}
+	routePathsKnown := []string{"output_file", "output_paths_type", "output_route_builder_type", "output_route_type", "output_package_paths_type_suffix", "output_package_route_builder_type_suffix"}
 	for _, key := range slices.Sorted(maps.Keys(top.RoutePaths)) {
 		if !slices.Contains(routePathsKnown, key) {
 			return &UnknownKeyError{Path: path, Where: "route_paths", Key: key, Suggestion: closestKey(key, routePathsKnown)}
@@ -401,7 +411,14 @@ func checkRoutePathsKinds(path string, data []byte) error {
 	if err := json.Unmarshal(data, &top); err != nil {
 		return fmt.Errorf("parsing %s: %w", path, err)
 	}
-	kinds := Keys{Kinds: map[string]Kind{"output_file": KindString}}
+	kinds := Keys{Kinds: map[string]Kind{
+		"output_file":                              KindString,
+		"output_paths_type":                        KindString,
+		"output_route_builder_type":                KindString,
+		"output_route_type":                        KindString,
+		"output_package_paths_type_suffix":         KindString,
+		"output_package_route_builder_type_suffix": KindString,
+	}}
 	return checkEntryKinds(path, "route_paths", top.RoutePaths, kinds)
 }
 

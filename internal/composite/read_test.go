@@ -428,6 +428,55 @@ func TestFindAcceptsARoutePathsKey(t *testing.T) {
 	}
 }
 
+// TestFindAcceptsARoutePathsName states that each name member of route_paths
+// set to a string is read onto its RoutePaths field.
+func TestFindAcceptsARoutePathsName(t *testing.T) {
+	for _, tt := range []struct {
+		member string
+		field  func(*composite.RoutePaths) string
+	}{
+		{member: "output_paths_type", field: func(rp *composite.RoutePaths) string { return rp.OutputPathsType }},
+		{member: "output_route_builder_type", field: func(rp *composite.RoutePaths) string { return rp.OutputRouteBuilderType }},
+		{member: "output_route_type", field: func(rp *composite.RoutePaths) string { return rp.OutputRouteType }},
+		{member: "output_package_paths_type_suffix", field: func(rp *composite.RoutePaths) string { return rp.OutputPackagePathsTypeSuffix }},
+		{member: "output_package_route_builder_type_suffix", field: func(rp *composite.RoutePaths) string { return rp.OutputPackageRouteBuilderTypeSuffix }},
+	} {
+		t.Run(tt.member, func(t *testing.T) {
+			dir := writeFile(t, `{"route_paths": {"`+tt.member+`": "X"}, "packages": {}}`)
+
+			f, found, err := composite.Find(dir, testKeys())
+
+			require.NoError(t, err, "Find")
+			require.True(t, found, "found")
+			got := tt.field(f.RoutePaths)
+			assert.Equal(t, "X", got, "got %q, want %q", got, "X")
+		})
+	}
+}
+
+// TestFindRejectsARoutePathsNameThatIsNotAString states that a name member of
+// route_paths set to a value other than a JSON string is a *composite.ValueTypeError
+// naming that member.
+func TestFindRejectsARoutePathsNameThatIsNotAString(t *testing.T) {
+	for _, member := range []string{
+		"output_paths_type",
+		"output_route_builder_type",
+		"output_route_type",
+		"output_package_paths_type_suffix",
+		"output_package_route_builder_type_suffix",
+	} {
+		t.Run(member, func(t *testing.T) {
+			dir := writeFile(t, `{"route_paths": {"`+member+`": 1}, "packages": {}}`)
+
+			_, _, err := composite.Find(dir, testKeys())
+
+			var typed *composite.ValueTypeError
+			require.ErrorAs(t, err, &typed, "Find error %v", err)
+			assert.Equal(t, member, typed.Key, "Key = got %q, want %q", typed.Key, member)
+		})
+	}
+}
+
 // TestFindRejectsARoutePathsOutputFileThatIsNotAString states that an
 // output_file that is not a JSON string is a *composite.ValueTypeError naming
 // the key and the type it takes.

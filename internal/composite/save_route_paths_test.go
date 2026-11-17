@@ -24,6 +24,11 @@ func TestSaveKeepsTheRoutePathsKey(t *testing.T) {
 			want: "{\n\t\"packages\": {},\n\t\"route_paths\": {\n\t\t\"output_file\": \"paths_gen.go\"\n\t}\n}\n",
 		},
 		{
+			name: "a name member is kept",
+			file: `{"packages": {}, "route_paths": {"output_paths_type": "Paths"}}`,
+			want: "{\n\t\"packages\": {},\n\t\"route_paths\": {\n\t\t\"output_paths_type\": \"Paths\"\n\t}\n}\n",
+		},
+		{
 			name: "an empty object is kept",
 			file: `{"packages": {}, "route_paths": {}}`,
 			want: "{\n\t\"packages\": {},\n\t\"route_paths\": {}\n}\n",
