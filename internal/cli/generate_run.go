@@ -50,7 +50,7 @@ func generateRunner(loadPackages packageLoader) func(*cobra.Command, []packageJo
 				// It names the entry already.
 				return entryErr
 			}
-			if keyed {
+			if job.Named() {
 				return fmt.Errorf("%s: %w", job.Key, err)
 			}
 			return err
@@ -98,13 +98,16 @@ func generateRunner(loadPackages packageLoader) func(*cobra.Command, []packageJo
 				}
 			},
 			Visit: func(_ int, job packageJob, l *load.Loaded, keyed bool) (bool, error) {
-				result, err := resolveJob(cmd, l, job, keyed, namespaces[job.Key])
+				result, err := resolveJob(cmd, l, job, job.Named(), namespaces[job.Key])
 				if err != nil {
 					return false, failed(job, err)
 				}
 				files := result.Files
 				if result.Paths != nil {
 					hubPackages = append(hubPackages, *result.Paths)
+				}
+				if job.ReadOnly {
+					return false, nil
 				}
 				jobStderr := stderr
 				if keyed {
@@ -185,6 +188,10 @@ func resolveJob(cmd *cobra.Command, l *load.Loaded, job packageJob, keyed bool, 
 	logs := generate.Loggers{Progress: log.New(cmd.OutOrStdout(), "", 0), Notes: log.New(cmd.OutOrStdout(), "", 0)}
 	if keyed {
 		logs.Notes.SetPrefix(job.Key + ": ")
+	}
+	if job.ReadOnly {
+		// Nothing of this package is written, so its progress is not news.
+		logs = generate.Loggers{Progress: log.New(io.Discard, "", 0), Notes: log.New(io.Discard, "", 0)}
 	}
 	var hub *generate.Hub
 	if job.RoutePaths != nil {

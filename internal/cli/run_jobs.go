@@ -66,7 +66,7 @@ func runJobs(cmd *cobra.Command, loadPackages packageLoader, jobs []packageJob, 
 		}
 		if graph.ImportsAny(i, written) {
 			if l, err = loadPackages(jobs[0].Dir, dirs, patterns); err != nil {
-				if job.Keyed {
+				if job.Named() {
 					return fmt.Errorf("%s: %w", job.Key, err)
 				}
 				return err

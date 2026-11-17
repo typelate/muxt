@@ -1,0 +1,109 @@
+# With a route_paths key, muxt generate in a listed package's own directory
+# still keeps the hub current: it writes that package's routes file and
+# regenerates route_paths.go from every listed package, so another package can
+# link to a route that was just added.
+
+muxt generate
+exec go build ./...
+
+# Add a route to blog, and a link to it from admin.
+cp blog/list.gohtml.new blog/list.gohtml
+cp admin/dashboard.gohtml.new admin/dashboard.gohtml
+
+cd blog
+muxt generate
+cd ..
+
+muxt check
+exec go build ./...
+exec go test ./site
+
+-- go.mod --
+module example.com/m
+
+go 1.22
+-- muxt.json --
+{
+	"route_paths": {},
+	"package_defaults": {
+		"use_receiver_type": "Server"
+	},
+	"packages": {
+		"example.com/m/admin": {},
+		"example.com/m/blog": {}
+	}
+}
+-- admin/admin.go --
+package admin
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templateSource embed.FS
+
+var templates = template.Must(template.ParseFS(templateSource, "*.gohtml"))
+
+type Server struct{}
+
+func (Server) Dashboard() string { return "dashboard" }
+-- admin/dashboard.gohtml --
+{{define "GET /admin Dashboard()"}}<h1>{{.Result}}</h1><a id="article" href="{{.Path.Blog.GetArticle 42}}">article</a>{{end}}
+-- admin/dashboard.gohtml.new --
+{{define "GET /admin Dashboard()"}}<h1>{{.Result}}</h1><a id="article" href="{{.Path.Blog.GetArticle 42}}">article</a><a id="list" href="{{.Path.Blog.ListArticles}}">articles</a>{{end}}
+-- blog/blog.go --
+package blog
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templateSource embed.FS
+
+var templates = template.Must(template.ParseFS(templateSource, "*.gohtml"))
+
+type Server struct{}
+
+func (Server) GetArticle(id int) string { return "article" }
+
+func (Server) ListArticles() string { return "articles" }
+-- blog/article.gohtml --
+{{define "GET /article/{id} GetArticle(id)"}}<h1>{{.Result}}</h1>{{end}}
+-- blog/list.gohtml.new --
+{{define "GET /articles ListArticles()"}}<h1>{{.Result}}</h1>{{end}}
+-- site/site_test.go --
+package site
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+
+	"example.com/m/admin"
+	"example.com/m/blog"
+)
+
+func TestAdminLinksToTheNewBlogRoute(t *testing.T) {
+	mux := http.NewServeMux()
+	admin.TemplateRoutes(mux, admin.Server{})
+	blog.TemplateRoutes(mux, blog.Server{})
+
+	for target, want := range map[string]string{
+		"/admin":    `id="list" href="/articles"`,
+		"/articles": `<h1>articles</h1>`,
+	} {
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, target, nil))
+		if got := rec.Result().StatusCode; got != http.StatusOK {
+			t.Errorf("GET %s status = %d, want %d", target, got, http.StatusOK)
+		}
+		if body := rec.Body.String(); !strings.Contains(body, want) {
+			t.Errorf("GET %s body = %q, want it to contain %q", target, body, want)
+		}
+	}
+}

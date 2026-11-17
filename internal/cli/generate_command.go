@@ -69,6 +69,8 @@ func generateSpec(config *generate.RoutesFileConfiguration, flags *pflag.FlagSet
 		RequireEntry: true,
 		Verbose:      config.Verbose,
 		Version:      version,
+
+		KeepsHubCurrent: true,
 		Fallback: func(dir string) (generate.RoutesFileConfiguration, error) {
 			env := generateEnv{Dir: dir, DeprecatedTemplatesVar: deprecatedTemplatesVar, GetEnv: getEnv, Version: version}
 			if err := finalizeGenerate(config, givenFlags(flags, settings), fromCommandLine, env); err != nil {

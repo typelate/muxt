@@ -54,6 +54,10 @@ type jobSpec struct {
 	// Fallback is the configuration the command's own flags and defaults give
 	// dir.
 	Fallback func(dir string) (generate.RoutesFileConfiguration, error)
+	// KeepsHubCurrent makes a flagless run in a listed package's own directory
+	// also select every other entry, to be read and not written, when the file
+	// has a route_paths key, so the hub file can be built from all of them.
+	KeepsHubCurrent bool
 }
 
 // onePackageWording is how a command that acts on one package says so, and how
@@ -83,7 +87,15 @@ type packageJob struct {
 	// RoutePaths is the hub the muxt.json's route_paths key names, on every job
 	// of a keyed run; nil without the key and in every other run.
 	RoutePaths *routePathsTarget
+	// ReadOnly is set on the jobs of a run in one package's directory that are
+	// not that package: they are loaded and resolved for the hub file, and
+	// their directories are not written.
+	ReadOnly bool
 }
+
+// Named is whether a failure of the job says which package it is, since the
+// run has more than one.
+func (j packageJob) Named() bool { return j.Keyed || j.ReadOnly }
 
 // routePathsTarget is the package that holds route_paths.go and where the file
 // goes. Hub has no Namespace: each package's own is made from its import path.
@@ -162,12 +174,17 @@ func selectJobs(spec jobSpec, dir string, flags *pflag.FlagSet, getEnv func(stri
 	}
 	keys := []string{lookup.Key}
 	keyed := false
+	hubFromChild := false
 	if lookup.Key != ownKey {
 		if !lookup.HasEntry {
 			if spec.RequireEntry {
 				return selection{}, &composite.MissingEntryError{Path: f.Name, Key: lookup.Key}
 			}
 			return fallbackSelection(spec, dir, f, nil)
+		}
+		if spec.KeepsHubCurrent && f.RoutePaths != nil {
+			keys = f.Keys()
+			hubFromChild = true
 		}
 	} else {
 		if len(f.Packages) == 0 {
@@ -196,7 +213,7 @@ func selectJobs(spec jobSpec, dir string, flags *pflag.FlagSet, getEnv func(stri
 		version = noVersion
 	}
 	var routePaths *routePathsTarget
-	if keyed && f.RoutePaths != nil {
+	if (keyed || hubFromChild) && f.RoutePaths != nil {
 		if routePaths, err = newRoutePathsTarget(f); err != nil {
 			return selection{}, err
 		}
@@ -219,7 +236,7 @@ func selectJobs(spec jobSpec, dir string, flags *pflag.FlagSet, getEnv func(stri
 			return selection{}, &composite.InvalidEntryError{Path: f.Name, Where: fmt.Sprintf("packages[%q]", key), Err: err}
 		}
 		config.Verbose = spec.Verbose
-		jobs = append(jobs, packageJob{File: f.Name, Key: key, Dir: entryDir, Config: config, Keyed: keyed, RoutePaths: routePaths})
+		jobs = append(jobs, packageJob{File: f.Name, Key: key, Dir: entryDir, Config: config, Keyed: keyed, RoutePaths: routePaths, ReadOnly: hubFromChild && key != lookup.Key})
 	}
 	return selection{File: f, Jobs: jobs}, nil
 }
