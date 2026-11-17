@@ -67,8 +67,13 @@ func generateRunner(loadPackages packageLoader) func(*cobra.Command, []packageJo
 				return err
 			}
 			namespaces = make(map[string]string, len(jobs))
-			for _, key := range keys {
+			hubPackageList := make([]generate.HubPackage, len(keys))
+			for i, key := range keys {
 				namespaces[key], _ = generate.Namespace(key, hub.Hub.ImportPath)
+				hubPackageList[i] = generate.HubPackage{ImportPath: key, Namespace: namespaces[key]}
+			}
+			if err := generate.CheckHubTypeNames(hub.Hub.Names, hubPackageList); err != nil {
+				return err
 			}
 		}
 		err := runJobs(cmd, loadPackages, jobs, jobVisitor{

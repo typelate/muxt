@@ -1,0 +1,49 @@
+# Two declarations of route_paths.go that would get one name fail muxt generate.
+# The error names the name and the two settings, and nothing is written.
+
+! muxt generate
+cmpenv stderr want-err.txt
+! exists route_paths.go
+! exists admin/template_routes.go
+! exists blog/template_routes.go
+
+-- go.mod --
+module example.com/m
+
+go 1.22
+-- muxt.json --
+{
+	"route_paths": {
+		"output_paths_type": "AdminPaths",
+		"output_package_paths_type_suffix": "Paths"
+	},
+	"package_defaults": {
+		"use_receiver_type": "Server"
+	},
+	"packages": {
+		"example.com/m/admin": {},
+		"example.com/m/blog": {}
+	}
+}
+-- admin/admin.go --
+package admin
+
+import "html/template"
+
+var templates = template.Must(template.New("GET /a Index()").Parse(`<h1>{{.Result}}</h1>`))
+
+type Server struct{}
+
+func (Server) Index() string { return "a" }
+-- blog/blog.go --
+package blog
+
+import "html/template"
+
+var templates = template.Must(template.New("GET /b Index()").Parse(`<h1>{{.Result}}</h1>`))
+
+type Server struct{}
+
+func (Server) Index() string { return "b" }
+-- want-err.txt --
+Error: route paths name "AdminPaths" is made by both output_paths_type and output_package_paths_type_suffix for package "example.com/m/admin"; change one of them
