@@ -54,6 +54,20 @@ func Format(args []string, version string) string {
 	return sb.String()
 }
 
+// hubCommand is the command a hub file's header records in place of flags: the
+// file belongs to no package's flags, so no run's flags can read it.
+const hubCommand = "route_paths"
+
+// FormatHub returns the header of the route paths file of a hub package.
+func FormatHub(version string) string {
+	return Format([]string{hubCommand}, version)
+}
+
+// IsHub reports whether the header is the one FormatHub writes.
+func (h Header) IsHub() bool {
+	return h.Command == hubCommand
+}
+
 // Parse reads the first two lines of a file. It reports false unless first
 // is a muxt header line.
 //

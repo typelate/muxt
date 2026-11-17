@@ -49,6 +49,9 @@ func ownedGeneratedFiles(dir, routesFunction string, logger *log.Logger) (map[st
 	}
 	owned := make(map[string]bool, len(generated))
 	for path, h := range generated {
+		if h.IsHub() {
+			continue
+		}
 		config, err := headerConfiguration(h.Args())
 		if err != nil {
 			logger.Printf("WARNING: ignored generated file %s because arguments failed to parse: %s", path, err)
@@ -94,6 +97,9 @@ func recordedStaticAssets(dir string) ([]generate.RoutesFileConfiguration, error
 	byPrefix := make(map[string]generate.RoutesFileConfiguration)
 	conflicting := make(map[string]bool)
 	for _, h := range generated {
+		if h.IsHub() {
+			continue
+		}
 		var (
 			config     generate.RoutesFileConfiguration
 			deprecated string

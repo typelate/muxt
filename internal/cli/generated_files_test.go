@@ -73,6 +73,8 @@ func TestOwnedGeneratedFiles(t *testing.T) {
 	unexported := generated("unexported.go", "--output-exported-default-identifiers=false")
 	writeTestFile(t, dir, "handwritten.go", "package main\n")
 	writeTestFile(t, dir, "notes.txt", header.Format(nil, ""))
+	// The hub file is no package's routes file, whatever routes function a run has.
+	writeTestFile(t, dir, "route_paths.go", header.FormatHub("v1")+"package main\n")
 
 	t.Run("the default routes function", func(t *testing.T) {
 		got, err := ownedGeneratedFiles(dir, "TemplateRoutes", log.New(io.Discard, "", 0))

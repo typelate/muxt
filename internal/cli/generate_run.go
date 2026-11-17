@@ -8,12 +8,14 @@ import (
 	"log"
 	"maps"
 	"os"
+	"path/filepath"
 	"slices"
 
 	"github.com/spf13/cobra"
 
 	"github.com/typelate/muxt/internal/composite"
 	"github.com/typelate/muxt/internal/generate"
+	"github.com/typelate/muxt/internal/header"
 	"github.com/typelate/muxt/internal/load"
 	"github.com/typelate/muxt/internal/muxt"
 )
@@ -53,7 +55,23 @@ func generateRunner(loadPackages packageLoader) func(*cobra.Command, []packageJo
 			}
 			return err
 		}
-		return runJobs(cmd, loadPackages, jobs, jobVisitor{
+		hub := jobs[0].RoutePaths
+		var namespaces map[string]string // by packages key
+		var hubPackages []generate.RoutePathsPackage
+		if hub != nil {
+			keys := make([]string, len(jobs))
+			for i, job := range jobs {
+				keys[i] = job.Key
+			}
+			if err := generate.CheckNamespaces(keys, hub.Hub.ImportPath); err != nil {
+				return err
+			}
+			namespaces = make(map[string]string, len(jobs))
+			for _, key := range keys {
+				namespaces[key], _ = generate.Namespace(key, hub.Hub.ImportPath)
+			}
+		}
+		err := runJobs(cmd, loadPackages, jobs, jobVisitor{
 			// The first load already holds a package that did not load, so it
 			// is refused before an earlier entry is written.
 			Ready: func(_ int, job packageJob, l *load.Loaded) error {
@@ -80,9 +98,13 @@ func generateRunner(loadPackages packageLoader) func(*cobra.Command, []packageJo
 				}
 			},
 			Visit: func(_ int, job packageJob, l *load.Loaded, keyed bool) (bool, error) {
-				files, err := resolveJob(cmd, l, job, keyed)
+				result, err := resolveJob(cmd, l, job, keyed, namespaces[job.Key])
 				if err != nil {
 					return false, failed(job, err)
+				}
+				files := result.Files
+				if result.Paths != nil {
+					hubPackages = append(hubPackages, *result.Paths)
 				}
 				jobStderr := stderr
 				if keyed {
@@ -95,14 +117,53 @@ func generateRunner(loadPackages packageLoader) func(*cobra.Command, []packageJo
 				return wrote, nil
 			},
 		})
+		if err != nil || hub == nil {
+			return err
+		}
+		return writeHubFile(wroteTo, hub, jobs[0].Config.MuxtVersion, hubPackages)
 	}
 }
 
-// resolveJob returns the files job generates from the loaded packages l. A
+// writeHubFile writes the file that holds the path helpers of packages into
+// the hub's directory, after the header of a hub file.
+func writeHubFile(stdout io.Writer, hub *routePathsTarget, version string, packages []generate.RoutePathsPackage) error {
+	file, err := generate.RoutePathsFile(generate.RoutePaths{
+		ImportPath:  hub.Hub.ImportPath,
+		PackageName: hub.Hub.PackageName,
+		OutputFile:  hub.OutputFile,
+		Packages:    packages,
+	})
+	if err != nil {
+		return fmt.Errorf("%s: %w", hub.OutputFile, err)
+	}
+	routes := 0
+	for _, p := range packages {
+		routes += len(p.Defs)
+	}
+	file.Path = filepath.Join(hub.Dir, file.Path)
+	file.Content = header.FormatHub(version) + file.Content
+	file.Routes = routes
+	_, err = replaceFile(file.Path, []byte(file.Content))
+	if err != nil {
+		return err
+	}
+	_, _ = fmt.Fprintf(stdout, "wrote %s: %s\n", filepath.Base(file.Path), plural(file.Routes, "route"))
+	return nil
+}
+
+// jobResult is what resolving a job generates: the files of its own
+// directory and, in a run with a hub, its part of the hub's file.
+type jobResult struct {
+	Files []generate.GeneratedFile
+	Paths *generate.RoutePathsPackage
+}
+
+// resolveJob returns what job generates from the loaded packages l. namespace
+// is the job's name in the hub's file, empty without a hub. A
 // failure that explains itself over several lines is printed before it is
 // returned, after job's key in a keyed run, since that printed text
 // replaces the returned error.
-func resolveJob(cmd *cobra.Command, l *load.Loaded, job packageJob, keyed bool) ([]generate.GeneratedFile, error) {
+func resolveJob(cmd *cobra.Command, l *load.Loaded, job packageJob, keyed bool, namespace string) (jobResult, error) {
 	report := func(err error) {
 		if _, ok := errors.AsType[muxt.MultiLineError](err); ok && keyed {
 			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "%s:\n", job.Key)
@@ -113,24 +174,34 @@ func resolveJob(cmd *cobra.Command, l *load.Loaded, job packageJob, keyed bool) 
 	pkg, receiver, err := l.PackageWithReceiver(config.OutputDirectory(job.Dir), load.ReceiverName{Package: config.ReceiverPackage, Type: config.ReceiverType}, config.TemplatesVariables)
 	if err != nil {
 		report(err)
-		return nil, err
+		return jobResult{}, err
 	}
 	defs, err := muxt.ResolveDefinitions(pkg, receiver, l.StandardLibrary())
 	if err != nil {
 		report(err)
-		return nil, err
+		return jobResult{}, err
 	}
 	// Several jobs share one stream, so each note says whose it is.
 	logs := generate.Loggers{Progress: log.New(cmd.OutOrStdout(), "", 0), Notes: log.New(cmd.OutOrStdout(), "", 0)}
 	if keyed {
 		logs.Notes.SetPrefix(job.Key + ": ")
 	}
-	files, err := generate.TemplateRoutesFiles(job.Dir, config, nil, pkg, defs, logs)
+	var hub *generate.Hub
+	if job.RoutePaths != nil {
+		h := job.RoutePaths.Hub
+		h.Namespace = namespace
+		hub = &h
+	}
+	files, err := generate.TemplateRoutesFiles(job.Dir, config, hub, pkg, defs, logs)
 	if err != nil {
 		report(err)
-		return nil, err
+		return jobResult{}, err
 	}
-	return files, nil
+	result := jobResult{Files: files}
+	if hub != nil {
+		result.Paths = &generate.RoutePathsPackage{Namespace: namespace, Config: config, Pkg: pkg, Defs: defs}
+	}
+	return result, nil
 }
 
 // writeJob writes files to job's directory and removes the generated files of

@@ -1,0 +1,100 @@
+# Hub and spoke: with a route_paths key in muxt.json, muxt generate writes the
+# path helpers of every listed package into the package in the muxt.json
+# directory, and the packages import it. A template names the package it links
+# to: {{$.Path.Blog.GetArticle 42}}, its own included.
+
+muxt generate
+exists route_paths.go
+muxt check
+exec go build ./...
+exec go test ./site
+
+-- go.mod --
+module example.com/m
+
+go 1.22
+-- muxt.json --
+{
+	"route_paths": {},
+	"package_defaults": {
+		"use_receiver_type": "Server"
+	},
+	"packages": {
+		"example.com/m/admin": {},
+		"example.com/m/blog": {}
+	}
+}
+-- admin/admin.go --
+package admin
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templateSource embed.FS
+
+var templates = template.Must(template.ParseFS(templateSource, "*.gohtml"))
+
+type Server struct{}
+
+func (Server) Dashboard() []int { return []int{42} }
+-- admin/dashboard.gohtml --
+{{define "GET /admin Dashboard()"}}{{range .Result}}<a id="self" href="{{$.Path.Admin.Dashboard}}">admin</a><a id="path" href="{{$.Path.Blog.GetArticle .}}">article</a><a id="route" href="{{$.Route.Blog.GetArticle .}}">article</a>{{end}}{{end}}
+-- blog/blog.go --
+package blog
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templateSource embed.FS
+
+var templates = template.Must(template.ParseFS(templateSource, "*.gohtml"))
+
+type Server struct{}
+
+func (Server) GetArticle(id int) string { return "article" }
+-- blog/article.gohtml --
+{{define "GET /article/{id} GetArticle(id)"}}<h1>{{.Result}}</h1><a href="{{.Path.Admin.Dashboard}}">admin</a>{{end}}
+-- site/site_test.go --
+package site
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+
+	"example.com/m"
+	"example.com/m/admin"
+	"example.com/m/blog"
+)
+
+func TestLinksCrossPackages(t *testing.T) {
+	mux := http.NewServeMux()
+	var paths m.TemplateRoutePaths = admin.TemplateRoutes(mux, admin.Server{})
+	blog.TemplateRoutes(mux, blog.Server{})
+
+	if got, want := paths.Blog().GetArticle(7), "/article/7"; got != want {
+		t.Errorf("paths.Blog().GetArticle(7) = %q, want %q", got, want)
+	}
+	for target, wants := range map[string][]string{
+		"/admin":      {`id="self" href="/admin"`, `id="path" href="/article/42"`, `id="route" href="/article/42"`},
+		"/article/42": {`href="/admin"`},
+	} {
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, target, nil))
+		if got := rec.Result().StatusCode; got != http.StatusOK {
+			t.Errorf("GET %s status = %d, want %d", target, got, http.StatusOK)
+		}
+		for _, want := range wants {
+			if body := rec.Body.String(); !strings.Contains(body, want) {
+				t.Errorf("GET %s body = %q, want it to contain %q", target, body, want)
+			}
+		}
+	}
+}

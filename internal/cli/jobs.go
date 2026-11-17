@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"os"
@@ -11,6 +12,7 @@ import (
 	"github.com/typelate/muxt/internal/check"
 	"github.com/typelate/muxt/internal/composite"
 	"github.com/typelate/muxt/internal/generate"
+	"github.com/typelate/muxt/internal/load"
 )
 
 // scope is what a flagless run in the muxt.json's own directory acts on.
@@ -78,6 +80,33 @@ type packageJob struct {
 	// configured, does not. Choosing by the entry count instead would change
 	// the output shape of a run when an entry is added.
 	Keyed bool
+	// RoutePaths is the hub the muxt.json's route_paths key names, on every job
+	// of a keyed run; nil without the key and in every other run.
+	RoutePaths *routePathsTarget
+}
+
+// routePathsTarget is the package that holds route_paths.go and where the file
+// goes. Hub has no Namespace: each package's own is made from its import path.
+type routePathsTarget struct {
+	Hub generate.Hub
+	// Dir is the hub package's directory, and OutputFile the base name of the
+	// file written there.
+	Dir        string
+	OutputFile string
+}
+
+// newRoutePathsTarget reads the hub of f, the package in its own directory.
+func newRoutePathsTarget(f *composite.File) (*routePathsTarget, error) {
+	importPath, err := f.KeyFor(f.Dir)
+	if err != nil {
+		return nil, fmt.Errorf("muxt.json entry for %s: %w", f.Dir, err)
+	}
+	outputFile := cmp.Or(f.RoutePaths.OutputFile, generate.DefaultRoutePathsFileName)
+	name, err := load.HubPackageName(f.Dir, importPath, outputFile)
+	if err != nil {
+		return nil, err
+	}
+	return &routePathsTarget{Hub: generate.Hub{ImportPath: importPath, PackageName: name}, Dir: f.Dir, OutputFile: outputFile}, nil
 }
 
 // selection is what selectJobs chose.
@@ -166,6 +195,12 @@ func selectJobs(spec jobSpec, dir string, flags *pflag.FlagSet, getEnv func(stri
 	if version == nil {
 		version = noVersion
 	}
+	var routePaths *routePathsTarget
+	if keyed && f.RoutePaths != nil {
+		if routePaths, err = newRoutePathsTarget(f); err != nil {
+			return selection{}, err
+		}
+	}
 	var jobs []packageJob
 	keyOf := map[string]string{} // a real directory to the first key that reached it
 	for _, key := range keys {
@@ -184,7 +219,7 @@ func selectJobs(spec jobSpec, dir string, flags *pflag.FlagSet, getEnv func(stri
 			return selection{}, &composite.InvalidEntryError{Path: f.Name, Where: fmt.Sprintf("packages[%q]", key), Err: err}
 		}
 		config.Verbose = spec.Verbose
-		jobs = append(jobs, packageJob{File: f.Name, Key: key, Dir: entryDir, Config: config, Keyed: keyed})
+		jobs = append(jobs, packageJob{File: f.Name, Key: key, Dir: entryDir, Config: config, Keyed: keyed, RoutePaths: routePaths})
 	}
 	return selection{File: f, Jobs: jobs}, nil
 }
