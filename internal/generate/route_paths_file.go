@@ -180,6 +180,17 @@ func (e *SameNamespaceError) Error() string {
 		e.ImportPaths[0], e.ImportPaths[1], e.Namespace)
 }
 
+// InvalidNamespaceError is a listed package whose namespace is not an exported Go identifier.
+type InvalidNamespaceError struct {
+	ImportPath string
+	Namespace  string
+}
+
+func (e *InvalidNamespaceError) Error() string {
+	return fmt.Sprintf("package %q gets the route paths namespace %q, which is not an exported Go identifier; rename its directory",
+		e.ImportPath, e.Namespace)
+}
+
 // Namespace returns the name a package's routes have on the hub's paths type.
 func Namespace(importPath, hubImportPath string) (string, error) {
 	rest, ok := strings.CutPrefix(importPath, hubImportPath+"/")
@@ -190,5 +201,9 @@ func Namespace(importPath, hubImportPath string) (string, error) {
 	for _, elem := range strings.Split(rest, "/") {
 		sb.WriteString(strcase.ToGoPascal(elem))
 	}
-	return sb.String(), nil
+	namespace := sb.String()
+	if !token.IsIdentifier(namespace) || !token.IsExported(namespace) {
+		return "", &InvalidNamespaceError{ImportPath: importPath, Namespace: namespace}
+	}
+	return namespace, nil
 }

@@ -1,6 +1,7 @@
 package generate_test
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -46,6 +47,11 @@ func TestNamespace(t *testing.T) {
 			hubImportPath: "example.com/m/internal/hypertext",
 			wantErr:       true,
 		},
+		{
+			importPath:    "example.com/m/internal/hypertext/api/2024",
+			hubImportPath: "example.com/m/internal/hypertext",
+			want:          "API2024",
+		},
 	} {
 		got, err := generate.Namespace(tc.importPath, tc.hubImportPath)
 		if tc.wantErr {
@@ -54,6 +60,26 @@ func TestNamespace(t *testing.T) {
 		}
 		require.NoError(t, err, "Namespace(%q, %q)", tc.importPath, tc.hubImportPath)
 		assert.Equal(t, tc.want, got, "Namespace(%q, %q) = %q, want %q", tc.importPath, tc.hubImportPath, got, tc.want)
+	}
+}
+
+func TestNamespaceIsNotExportedIdentifier(t *testing.T) {
+	const hub = "example.com/m"
+	for _, tc := range []struct {
+		importPath string
+		namespace  string
+	}{
+		{importPath: "example.com/m/_1", namespace: "1"},
+		{importPath: "example.com/m/123", namespace: "123"},
+	} {
+		_, err := generate.Namespace(tc.importPath, hub)
+		var nsErr *generate.InvalidNamespaceError
+		require.ErrorAs(t, err, &nsErr, "Namespace(%q, %q)", tc.importPath, hub)
+		assert.Equal(t, tc.importPath, nsErr.ImportPath)
+		assert.Equal(t, tc.namespace, nsErr.Namespace)
+		assert.Equal(t,
+			fmt.Sprintf(`package %q gets the route paths namespace %q, which is not an exported Go identifier; rename its directory`, tc.importPath, tc.namespace),
+			err.Error())
 	}
 }
 

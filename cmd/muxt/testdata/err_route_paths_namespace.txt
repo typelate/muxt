@@ -1,0 +1,46 @@
+# A listed package whose path below the hub makes no exported Go identifier fails
+# muxt generate before anything is written. The error names the package and the
+# namespace it would get.
+
+! muxt generate
+cmpenv stderr want-err.txt
+! exists route_paths.go
+! exists blog/template_routes.go
+
+-- go.mod --
+module example.com/m
+
+go 1.22
+-- muxt.json --
+{
+	"route_paths": {},
+	"package_defaults": {
+		"use_receiver_type": "Server"
+	},
+	"packages": {
+		"example.com/m/_1": {},
+		"example.com/m/blog": {}
+	}
+}
+-- _1/one.go --
+package one
+
+import "html/template"
+
+var templates = template.Must(template.New("GET /a Index()").Parse(`<h1>{{.Result}}</h1>`))
+
+type Server struct{}
+
+func (Server) Index() string { return "a" }
+-- blog/blog.go --
+package blog
+
+import "html/template"
+
+var templates = template.Must(template.New("GET /b Index()").Parse(`<h1>{{.Result}}</h1>`))
+
+type Server struct{}
+
+func (Server) Index() string { return "b" }
+-- want-err.txt --
+Error: package "example.com/m/_1" gets the route paths namespace "1", which is not an exported Go identifier; rename its directory
