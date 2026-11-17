@@ -63,11 +63,12 @@ func testCommand(workingDirectory *string, getEnv func(string) string, run func(
 // muxt test puts in place, before any package loads.
 func checkTestGoTestArgs(args []string) error {
 	purpose := templatecover.Purpose{
-		Overlay: "muxt test uses -overlay to put its template engine in place of html/template",
+		Overlay:   "muxt test uses -overlay to put its template engine in place of html/template",
+		ModSetter: "muxt test",
 	}
 	for f := range templatecover.Flags(args) {
 		switch f.Name {
-		case "overlay":
+		case "overlay", "mod":
 			return templatecover.Refuse(f, purpose)
 		}
 	}
