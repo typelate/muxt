@@ -422,13 +422,17 @@ func (o *goTestOutput) String() string {
 // instrumentation reads the packages it instruments from disk, which
 // would undo it.
 func CheckGoTestArgs(args []string) error {
+	purpose := templatecover.Purpose{
+		Overlay:   "muxt uses -overlay to deliver each mutant",
+		ModSetter: "the coverage pre-pass",
+	}
 	// The walk ends at -args: everything after it belongs to the test
 	// binary.
 	for f := range templatecover.Flags(args) {
 		if f.Name == "json" {
 			return errors.New("go test flag -json cannot be passed through: muxt reads go test's text output to tell a failed test from a failed build")
 		}
-		if err := templatecover.Refuse(f); err != nil {
+		if err := templatecover.Refuse(f, purpose); err != nil {
 			return err
 		}
 	}

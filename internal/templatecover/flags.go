@@ -1,7 +1,6 @@
 package templatecover
 
 import (
-	"errors"
 	"fmt"
 	"iter"
 	"regexp"
@@ -78,12 +77,22 @@ func Flags(args []string) iter.Seq[Flag] {
 	}
 }
 
+// Purpose is what a command uses the flags it refuses for, so that each
+// command's refusal says why in its own words.
+type Purpose struct {
+	// Overlay follows "go test flag -overlay cannot be passed through: ".
+	Overlay string
+
+	// ModSetter names what sets -mod and -modfile, as the subject of a
+	// sentence.
+	ModSetter string
+}
+
 // Refuse reports why a go test flag cannot be passed through beside the
 // engine, or nil when it can.
 //
-// -overlay is how a mutant reaches the build. A second one would either be
-// ignored or replace the mutant, and either way the run would measure the
-// templates as written rather than as mutated.
+// -overlay is how the engine, and a mutant, reach the build. A second one
+// would either be ignored or replace them.
 //
 // -mod and -modfile are refused because the engine sets both: -modfile
 // names a copy of go.mod that requires github.com/typelate/htt, whose
@@ -94,12 +103,12 @@ func Flags(args []string) iter.Seq[Flag] {
 // matching it, or as std or all: the engine replaces that package through
 // the overlay, and coverage instrumentation reads the packages it
 // instruments from disk, which would undo it.
-func Refuse(f Flag) error {
+func Refuse(f Flag, p Purpose) error {
 	switch f.Name {
 	case "overlay":
-		return errors.New("go test flag -overlay cannot be passed through: muxt uses -overlay to deliver each mutant")
+		return fmt.Errorf("go test flag -overlay cannot be passed through: %s", p.Overlay)
 	case "mod", "modfile":
-		return fmt.Errorf("go test flag -%s cannot be passed through: the coverage pre-pass sets -mod=mod and -modfile to require github.com/typelate/htt, muxt's template engine, in a copy of go.mod", f.Name)
+		return fmt.Errorf("go test flag -%s cannot be passed through: %s sets -mod=mod and -modfile to require github.com/typelate/htt, muxt's template engine, in a copy of go.mod", f.Name, p.ModSetter)
 	case "coverpkg":
 		if pattern, ok := coversHTMLTemplate(f.Value); ok {
 			return fmt.Errorf("go test flag -coverpkg cannot cover html/template (%q does): muxt replaces html/template with its own template engine to learn which template actions the tests reach; use -coverpkg with your own packages, such as ./... instead", pattern)
