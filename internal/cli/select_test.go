@@ -559,3 +559,32 @@ func TestGenerateNamesMissingDirectory(t *testing.T) {
 		})
 	}
 }
+
+// TestTestSelectsOneDirectoryOutsideTheFilesDirectory states that muxt test,
+// run in a package directory, tests that directory alone and names no
+// key: whether muxt.json has an entry for it or does not configure it.
+func TestTestSelectsOneDirectoryOutsideTheFilesDirectory(t *testing.T) {
+	for _, tt := range []struct {
+		name, dir, wantKey string
+	}{
+		{name: "a directory with an entry", dir: "contacts", wantKey: "example.com/fieldkit/contacts"},
+		{name: "a directory no muxt.json configures", dir: "extra", wantKey: ""},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			base := newFieldkit(t, fieldkitEntries)
+			var got []packageJob
+			err := commands(filepath.Join(base, tt.dir), []string{testCommandName}, func(string) string { return "" }, func() (string, bool) { return "v1.2.3", true }, strings.NewReader(""), new(bytes.Buffer), new(bytes.Buffer), runners{
+				test: func(_ *cobra.Command, jobs []packageJob, _ testConfiguration) error {
+					got = jobs
+					return nil
+				},
+			})
+			require.NoError(t, err, "muxt test in %s", tt.dir)
+
+			require.Len(t, got, 1, "jobs")
+			assert.Equal(t, filepath.Join(base, tt.dir), got[0].Dir, "job directory")
+			assert.Equal(t, tt.wantKey, got[0].Key, "job key")
+			assert.False(t, got[0].Keyed, "a run in one package directory names no package")
+		})
+	}
+}
