@@ -24,6 +24,9 @@ func testCommand(workingDirectory *string, getEnv func(string) string, run func(
 		Short: "Run go test on muxt's template engine",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cmd.SilenceUsage = true
+			if dash := cmd.ArgsLenAtDash(); dash >= 0 {
+				config.GoTestArgs = args[dash:]
+			}
 			spec := jobSpec{
 				Name:  testCommandName,
 				Scope: eachEntry,

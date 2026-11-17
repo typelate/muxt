@@ -733,6 +733,11 @@ func TestCommandLineConfigurations(t *testing.T) {
 			args: "test",
 			want: testConfiguration{},
 		},
+		{
+			name: "test with go test flags after --",
+			args: "test -- -run TestIndex -count=2",
+			want: testConfiguration{GoTestArgs: []string{"-run", "TestIndex", "-count=2"}},
+		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := configurationOf(t, tt.args, tt.env)
