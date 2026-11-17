@@ -1,0 +1,137 @@
+# The hub holds what the packages below it share, beside the generated
+# route_paths.go: a path parameter type and a template. A parameter type
+# declared in the hub needs no import there, so it cannot make an import cycle.
+# Each package has its own Index route; the package name tells them apart.
+
+muxt generate
+muxt check
+exec go build ./...
+exec go test ./site
+
+-- go.mod --
+module example.com/m
+
+go 1.22
+-- muxt.json --
+{
+	"route_paths": {},
+	"package_defaults": {
+		"use_receiver_type": "Server"
+	},
+	"packages": {
+		"example.com/m/admin": {},
+		"example.com/m/blog": {}
+	}
+}
+-- hypertext.go --
+package m
+
+import (
+	"embed"
+	"strconv"
+)
+
+//go:embed *.gohtml
+var TemplateSource embed.FS
+
+// ArticleID is a path parameter type the muxt packages share.
+type ArticleID int
+
+func (id *ArticleID) UnmarshalText(text []byte) error {
+	n, err := strconv.Atoi(string(text))
+	*id = ArticleID(n)
+	return err
+}
+
+func (id ArticleID) MarshalText() ([]byte, error) {
+	return []byte(strconv.Itoa(int(id))), nil
+}
+-- nav.gohtml --
+{{define "nav"}}<nav><a id="nav-admin" href="{{.Path.Admin.Index}}">admin</a><a id="nav-blog" href="{{.Path.Blog.Index}}">blog</a></nav>{{end}}
+-- admin/admin.go --
+package admin
+
+import (
+	"embed"
+	"html/template"
+
+	"example.com/m"
+)
+
+//go:embed *.gohtml
+var templateSource embed.FS
+
+var templates = template.Must(template.Must(template.ParseFS(m.TemplateSource, "*.gohtml")).ParseFS(templateSource, "*.gohtml"))
+
+type Server struct{}
+
+func (Server) Index() []m.ArticleID { return []m.ArticleID{42} }
+-- admin/index.gohtml --
+{{define "GET /admin Index()"}}{{template "nav" $}}{{range .Result}}<a id="article" href="{{$.Path.Blog.Get .}}">article</a>{{end}}{{end}}
+-- blog/blog.go --
+package blog
+
+import (
+	"embed"
+	"html/template"
+
+	"example.com/m"
+)
+
+//go:embed *.gohtml
+var templateSource embed.FS
+
+var templates = template.Must(template.Must(template.ParseFS(m.TemplateSource, "*.gohtml")).ParseFS(templateSource, "*.gohtml"))
+
+type Server struct{}
+
+func (Server) Index() string { return "blog" }
+
+func (Server) Get(id m.ArticleID) string { return "article" }
+-- blog/blog.gohtml --
+{{define "GET /blog Index()"}}{{template "nav" $}}<h1>{{.Result}}</h1>{{end}}
+{{define "GET /blog/{id} Get(id)"}}{{template "nav" $}}<h1>{{.Result}}</h1>{{end}}
+-- site/site_test.go --
+package site
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+
+	"example.com/m"
+	"example.com/m/admin"
+	"example.com/m/blog"
+)
+
+func TestTheHubsTypeAndTemplateServeBothPackages(t *testing.T) {
+	mux := http.NewServeMux()
+	var paths m.TemplateRoutePaths = admin.TemplateRoutes(mux, admin.Server{})
+	blog.TemplateRoutes(mux, blog.Server{})
+
+	got, err := paths.Blog().Get(m.ArticleID(7))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "/blog/7"; got != want {
+		t.Errorf("paths.Blog().Get(7) = %q, want %q", got, want)
+	}
+	nav := []string{`id="nav-admin" href="/admin"`, `id="nav-blog" href="/blog"`}
+	for target, wants := range map[string][]string{
+		"/admin":   append([]string{`id="article" href="/blog/42"`}, nav...),
+		"/blog":    nav,
+		"/blog/42": nav,
+	} {
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, target, nil))
+		if got := rec.Result().StatusCode; got != http.StatusOK {
+			t.Errorf("GET %s status = %d, want %d", target, got, http.StatusOK)
+		}
+		for _, want := range wants {
+			if body := rec.Body.String(); !strings.Contains(body, want) {
+				t.Errorf("GET %s body = %q, want it to contain %q", target, body, want)
+			}
+		}
+	}
+}
