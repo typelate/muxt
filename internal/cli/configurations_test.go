@@ -870,6 +870,8 @@ func TestCommandLineRejections(t *testing.T) {
 		{name: "an unknown explore-module format", args: "explore-module --format=yaml", wantErr: "unknown format: yaml"},
 		{name: "fmt writing standard input", args: "fmt -w", wantErr: "fmt: -w needs a file or directory; standard input has no file to write"},
 		{name: "a go test flag muxt needs for itself", args: "test-template-mutations -- -overlay=other.json", wantErr: "go test flag -overlay cannot be passed through: muxt uses -overlay to deliver each mutant"},
+		{name: "test with a package directory", args: "test web", wantErr: "test takes no arguments before --; pass go test flags after --: web"},
+		{name: "test with a package directory before go test flags", args: "test web other -- -count=2", wantErr: "test takes no arguments before --; pass go test flags after --: web other"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := configurationOf(t, tt.args, nil)

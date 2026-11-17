@@ -1,6 +1,9 @@
 package cli
 
 import (
+	"fmt"
+	"strings"
+
 	"github.com/spf13/cobra"
 
 	"github.com/typelate/muxt/internal/generate"
@@ -24,8 +27,15 @@ func testCommand(workingDirectory *string, getEnv func(string) string, run func(
 		Short: "Run go test on muxt's template engine",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cmd.SilenceUsage = true
+			// The package is the working directory or an entry of
+			// muxt.json; what go test should run is said after --.
+			before := args
 			if dash := cmd.ArgsLenAtDash(); dash >= 0 {
+				before = args[:dash]
 				config.GoTestArgs = args[dash:]
+			}
+			if len(before) > 0 {
+				return fmt.Errorf("%s takes no arguments before --; pass go test flags after --: %s", testCommandName, strings.Join(before, " "))
 			}
 			spec := jobSpec{
 				Name:  testCommandName,
