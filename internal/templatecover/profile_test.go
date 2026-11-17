@@ -3,6 +3,7 @@ package templatecover_test
 import (
 	"bytes"
 	"go/token"
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -121,6 +122,36 @@ func TestProfileKeepsTwoPackagesSameBaseNameApart(t *testing.T) {
 	assert.Contains(t, got, "/abs/b/index.gohtml:5.1,5.4 1 1\n")
 	assert.NotContains(t, got, "/abs/a/index.gohtml:5.")
 	assert.NotContains(t, got, "/abs/b/index.gohtml:2.")
+}
+
+// TestProfileWritesSortedWhateverTheOrderAdded states that the same blocks
+// give the same bytes however they were added: mode first, then by file,
+// then by position as numbers.
+func TestProfileWritesSortedWhateverTheOrderAdded(t *testing.T) {
+	sources := templatecover.Sources(packageWith(map[string]source.Definition{
+		"b": definedIn("/abs/b.gohtml", "b.gohtml"),
+		"a": definedIn("/abs/a.gohtml", "a.gohtml"),
+	}))
+	blocks := []templatecover.Block{
+		{StartLine: 10, StartCol: 1, EndLine: 10, EndCol: 2},
+		{StartLine: 9, StartCol: 7, EndLine: 9, EndCol: 8},
+		{StartLine: 9, StartCol: 2, EndLine: 9, EndCol: 5},
+		{StartLine: 2, StartCol: 1, EndLine: 3, EndCol: 1},
+	}
+	want := "mode: set\n" +
+		"/abs/a.gohtml:2.1,3.1 1 1\n/abs/a.gohtml:9.2,9.5 1 1\n/abs/a.gohtml:9.7,9.8 1 1\n/abs/a.gohtml:10.1,10.2 1 1\n" +
+		"/abs/b.gohtml:2.1,3.1 1 1\n/abs/b.gohtml:9.2,9.5 1 1\n/abs/b.gohtml:9.7,9.8 1 1\n/abs/b.gohtml:10.1,10.2 1 1\n"
+
+	for range 20 {
+		var p templatecover.Profile
+		for _, b := range slices.Backward(blocks) {
+			p.Add(templatecover.Reached{
+				"a.gohtml": {b: {}},
+				"b.gohtml": {b: {}},
+			}, sources)
+		}
+		assert.Equal(t, want, written(t, &p))
+	}
 }
 
 // TestAmbiguousNameErrorNamesEveryFile states the one-line message.

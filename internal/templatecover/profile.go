@@ -117,8 +117,13 @@ func (p *Profile) WriteTo(w io.Writer) (int64, error) {
 	if err != nil {
 		return total, err
 	}
-	for file, blocks := range p.files {
-		for b := range blocks {
+	for _, file := range slices.Sorted(maps.Keys(p.files)) {
+		blocks := slices.SortedFunc(maps.Keys(p.files[file]), func(a, b Block) int {
+			return cmp.Or(
+				cmp.Compare(a.StartLine, b.StartLine), cmp.Compare(a.StartCol, b.StartCol),
+				cmp.Compare(a.EndLine, b.EndLine), cmp.Compare(a.EndCol, b.EndCol))
+		})
+		for _, b := range blocks {
 			n, err := fmt.Fprintf(w, "%s:%d.%d,%d.%d 1 1\n", file, b.StartLine, b.StartCol, b.EndLine, b.EndCol)
 			total += int64(n)
 			if err != nil {
