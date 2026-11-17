@@ -110,6 +110,16 @@ func (p *Profile) Add(r Reached, sources []Source) []*AmbiguousNameError {
 	return ambiguous
 }
 
+// column is col as go tool cover reads it. x/tools cover.Boundaries starts
+// counting columns on line 1 at 2, not 1, so without this a span on line 1
+// would start one byte early.
+func column(line, col int) int {
+	if line == 1 {
+		return col + 1
+	}
+	return col
+}
+
 // WriteTo writes the profile in the format of a Go cover profile.
 func (p *Profile) WriteTo(w io.Writer) (int64, error) {
 	n, err := io.WriteString(w, "mode: set\n")
@@ -124,7 +134,7 @@ func (p *Profile) WriteTo(w io.Writer) (int64, error) {
 				cmp.Compare(a.EndLine, b.EndLine), cmp.Compare(a.EndCol, b.EndCol))
 		})
 		for _, b := range blocks {
-			n, err := fmt.Fprintf(w, "%s:%d.%d,%d.%d 1 1\n", file, b.StartLine, b.StartCol, b.EndLine, b.EndCol)
+			n, err := fmt.Fprintf(w, "%s:%d.%d,%d.%d 1 1\n", file, b.StartLine, column(b.StartLine, b.StartCol), b.EndLine, column(b.EndLine, b.EndCol))
 			total += int64(n)
 			if err != nil {
 				return total, err

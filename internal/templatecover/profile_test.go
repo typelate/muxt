@@ -94,7 +94,7 @@ func TestProfileLeavesOutAParseNameTwoFilesShare(t *testing.T) {
 	}))
 	reached := templatecover.Reached{
 		"index.gohtml": {{StartLine: 2, StartCol: 1, EndLine: 2, EndCol: 9}: {}},
-		"nav.gohtml":   {{StartLine: 1, StartCol: 1, EndLine: 1, EndCol: 4}: {}},
+		"nav.gohtml":   {{StartLine: 4, StartCol: 1, EndLine: 4, EndCol: 4}: {}},
 	}
 
 	var p templatecover.Profile
@@ -103,7 +103,7 @@ func TestProfileLeavesOutAParseNameTwoFilesShare(t *testing.T) {
 	assert.Equal(t, []*templatecover.AmbiguousNameError{
 		{ParseName: "index.gohtml", Files: []string{"/abs/pkg/index.gohtml", "/abs/ui/index.gohtml"}},
 	}, got)
-	assert.Equal(t, "mode: set\n/abs/pkg/nav.gohtml:1.1,1.4 1 1\n", written(t, &p))
+	assert.Equal(t, "mode: set\n/abs/pkg/nav.gohtml:4.1,4.4 1 1\n", written(t, &p))
 }
 
 // TestProfileKeepsTwoPackagesSameBaseNameApart states that each package is
@@ -152,6 +152,29 @@ func TestProfileWritesSortedWhateverTheOrderAdded(t *testing.T) {
 		}
 		assert.Equal(t, want, written(t, &p))
 	}
+}
+
+// TestProfileWritesLineOneColumnsOneMore states that a position on line 1
+// is written one column further, because x/tools cover.Boundaries counts
+// line 1 from column 2, which is what makes go tool cover -html start a
+// span at the line's first byte. Positions on other lines are unchanged.
+func TestProfileWritesLineOneColumnsOneMore(t *testing.T) {
+	sources := templatecover.Sources(packageWith(map[string]source.Definition{
+		"index": definedIn("/abs/index.gohtml", "index.gohtml"),
+	}))
+	reached := templatecover.Reached{"index.gohtml": {
+		{StartLine: 1, StartCol: 1, EndLine: 1, EndCol: 8}: {},
+		{StartLine: 1, StartCol: 9, EndLine: 2, EndCol: 4}: {},
+		{StartLine: 2, StartCol: 4, EndLine: 3, EndCol: 5}: {},
+	}}
+
+	var p templatecover.Profile
+	p.Add(reached, sources)
+
+	assert.Equal(t, "mode: set\n"+
+		"/abs/index.gohtml:1.2,1.9 1 1\n"+
+		"/abs/index.gohtml:1.10,2.4 1 1\n"+
+		"/abs/index.gohtml:2.4,3.5 1 1\n", written(t, &p))
 }
 
 // TestAmbiguousNameErrorNamesEveryFile states the one-line message.
