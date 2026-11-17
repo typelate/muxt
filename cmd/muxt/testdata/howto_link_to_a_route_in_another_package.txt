@@ -1,0 +1,177 @@
+# How to link to a route in another package: the muxt.json directory is the hub,
+# route_paths in it writes route_paths.go, and a template in any package links
+# to a route of any other by package namespace: {{.Path.Blog.Get 42}}.
+
+cd internal/hypertext
+muxt generate
+muxt check
+cd ../..
+exec go build ./...
+exec go test ./...
+
+# Break a link: blog has no route named Missing.
+cp internal/hypertext/admin/index.gohtml.bad internal/hypertext/admin/index.gohtml
+cd internal/hypertext
+! muxt check
+stderr 'admin/index\.gohtml:1:101: executing "GET /admin Index\(\)" at <\.Path\.Blog\.Missing>: field or method Missing not found on hypertext\.BlogTemplateRoutePaths'
+
+-- go.mod --
+module example.com/site
+
+go 1.22
+-- internal/hypertext/muxt.json --
+{
+	"route_paths": {},
+	"package_defaults": {
+		"use_receiver_type": "Server",
+		"output_routes_func_with_path_prefix_param": true
+	},
+	"packages": {
+		"example.com/site/internal/hypertext/admin": {},
+		"example.com/site/internal/hypertext/blog": {
+			"input_static_assets_directory": "assets",
+			"output_static_assets_path": "/static"
+		}
+	}
+}
+-- internal/hypertext/hypertext.go --
+package hypertext
+
+import (
+	"embed"
+	"strconv"
+)
+
+//go:embed *.gohtml
+var TemplateSource embed.FS
+
+// ArticleID is a path parameter type that admin and blog share.
+type ArticleID int
+
+func (id *ArticleID) UnmarshalText(text []byte) error {
+	n, err := strconv.Atoi(string(text))
+	*id = ArticleID(n)
+	return err
+}
+
+func (id ArticleID) MarshalText() ([]byte, error) {
+	return []byte(strconv.Itoa(int(id))), nil
+}
+-- internal/hypertext/nav.gohtml --
+{{define "nav"}}<nav><a id="nav-admin" href="{{.Path.Admin.Index}}">admin</a><a id="nav-blog" href="{{.Path.Blog.Index}}">blog</a></nav>{{end}}
+-- internal/hypertext/admin/admin.go --
+package admin
+
+import (
+	"embed"
+	"html/template"
+
+	"example.com/site/internal/hypertext"
+)
+
+//go:embed *.gohtml
+var templateSource embed.FS
+
+var templates = template.Must(template.Must(template.ParseFS(hypertext.TemplateSource, "*.gohtml")).ParseFS(templateSource, "*.gohtml"))
+
+type Server struct{}
+
+func (Server) Index() string { return "admin" }
+-- internal/hypertext/admin/index.gohtml --
+{{define "GET /admin Index()"}}{{template "nav" $}}<h1>{{.Result}}</h1><a id="article" href="{{.Path.Blog.Get 42}}">article 42</a><link id="css" rel="stylesheet" href="{{.Path.Blog.ReadStatic}}app.css">{{end}}
+-- internal/hypertext/admin/index.gohtml.bad --
+{{define "GET /admin Index()"}}{{template "nav" $}}<h1>{{.Result}}</h1><a id="article" href="{{.Path.Blog.Missing}}">article 42</a><link id="css" rel="stylesheet" href="{{.Path.Blog.ReadStatic}}app.css">{{end}}
+-- internal/hypertext/blog/blog.go --
+package blog
+
+import (
+	"embed"
+	"html/template"
+
+	"example.com/site/internal/hypertext"
+)
+
+//go:embed *.gohtml
+var templateSource embed.FS
+
+var templates = template.Must(template.Must(template.ParseFS(hypertext.TemplateSource, "*.gohtml")).ParseFS(templateSource, "*.gohtml"))
+
+type Server struct{}
+
+func (Server) Index() string { return "blog" }
+
+func (Server) Get(id hypertext.ArticleID) string { return "article" }
+-- internal/hypertext/blog/blog.gohtml --
+{{define "GET /blog Index()"}}{{template "nav" $}}<h1>{{.Result}}</h1>{{end}}
+{{define "GET /blog/{id} Get(id)"}}{{template "nav" $}}<h1>{{.Result}}</h1>{{end}}
+-- internal/hypertext/blog/assets/app.css --
+p{color:red}
+-- cmd/site/main.go --
+package main
+
+import (
+	"log"
+	"net/http"
+
+	"example.com/site/internal/hypertext/admin"
+	"example.com/site/internal/hypertext/blog"
+)
+
+func newMux(prefix string) *http.ServeMux {
+	mux := http.NewServeMux()
+	admin.TemplateRoutes(mux, admin.Server{}, prefix)
+	blog.TemplateRoutes(mux, blog.Server{}, prefix)
+	return mux
+}
+
+func main() {
+	log.Fatal(http.ListenAndServe(":8080", newMux("")))
+}
+-- cmd/site/main_test.go --
+package main
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"regexp"
+	"testing"
+)
+
+func get(t *testing.T, mux *http.ServeMux, target string) string {
+	t.Helper()
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, target, nil))
+	if got := rec.Result().StatusCode; got != http.StatusOK {
+		t.Fatalf("GET %s status = %d, want %d", target, got, http.StatusOK)
+	}
+	return rec.Body.String()
+}
+
+func TestPrefixAppearsOnce(t *testing.T) {
+	mux := newMux("/app")
+	body := get(t, mux, "/app/admin")
+
+	match := regexp.MustCompile(`id="article" href="(/app/blog/42)"`).FindStringSubmatch(body)
+	if match == nil {
+		t.Fatalf("GET /app/admin body = %q, want a link to /app/blog/42", body)
+	}
+	get(t, mux, match[1])
+}
+
+func TestAdminPageLinksToBlog(t *testing.T) {
+	mux := newMux("")
+	body := get(t, mux, "/admin")
+
+	for _, pattern := range []string{
+		`id="article" href="(/blog/42)"`,
+		`id="css" rel="stylesheet" href="(/static/app\.css)"`,
+		`id="nav-admin" href="(/admin)"`,
+		`id="nav-blog" href="(/blog)"`,
+	} {
+		match := regexp.MustCompile(pattern).FindStringSubmatch(body)
+		if match == nil {
+			t.Fatalf("GET /admin body = %q, want it to match %s", body, pattern)
+		}
+		get(t, mux, match[1])
+	}
+}

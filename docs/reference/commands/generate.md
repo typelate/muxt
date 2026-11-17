@@ -112,7 +112,7 @@ mux.Handle("GET /static/", http.StripPrefix("/static/", http.HandlerFunc(func(re
 
 The pattern is always `GET`, and the path gets a trailing `/`. A request for a directory, the static assets path itself or a subdirectory, is a 404 unless the directory holds an `index.html`, which is served as `http.FileServerFS` serves it; the files are never listed ([reference_static_assets_no_listing.txt](../../../cmd/muxt/testdata/reference_static_assets_no_listing.txt)).
 
-`TemplateRoutePaths` gains a method returning the path, named like a call-less `GET` route with that path ([route methods](../call-results.md#route-methods)): `/static` is `ReadStatic`, so a template links `{{.Path.ReadStatic}}app.css` ([reference_static_assets.txt](../../../cmd/muxt/testdata/reference_static_assets.txt)).
+`TemplateRoutePaths` gains a method returning the path, named like a call-less `GET` route with that path ([route methods](../call-results.md#route-methods)): `/static` is `ReadStatic`, so a template links `{{.Path.ReadStatic}}app.css` ([reference_static_assets.txt](../../../cmd/muxt/testdata/reference_static_assets.txt)). With `route_paths` in `muxt.json`, the method is on the package's namespace type of the hub, so a template links `{{.Path.Blog.ReadStatic}}app.css` ([reference_route_paths_static_assets.txt](../../../cmd/muxt/testdata/reference_route_paths_static_assets.txt)).
 
 The generated file's [header](#files) records both flags, which is why a project that serves its CSS by hand gets less from [`muxt fmt`](fmt.md#migrating-a-project). `muxt fmt` reads them back to find the CSS a template uses ([where CSS comes from](fmt.md#where-css-comes-from)).
 

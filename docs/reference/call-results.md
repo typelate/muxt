@@ -80,7 +80,7 @@ Templates receive `*TemplateData[R, T]`, where `R` is the receiver interface and
 | `.Ok` | `bool`, per the shape table above |
 | `.Request` | `*http.Request` |
 | `.Receiver` | `R` |
-| `.Path` | `TemplateRoutePaths`: one method per route ([names](#route-methods)), taking one argument per path wildcard in order and returning the path as a `string`: `{{.Path.GetUser .Result.ID}}` |
+| `.Path` | `TemplateRoutePaths`: one method per route ([names](#route-methods)), taking one argument per path wildcard in order and returning the path as a `string`: `{{.Path.GetUser .Result.ID}}`. With `route_paths` in `muxt.json`, `.Path` has one method per package namespace instead (`{{.Path.Blog.Get 42}}`), each returning that package's paths ([`route_paths`](muxt-json.md#route_paths)). |
 | `.Route` | `TemplateRouteBuilder`: the same methods, each returning a `TemplateRoute` with `Path()`, `String()` (the path, so `{{.Route.GetUser .Result.ID}}` prints it), `Method()` (empty when the pattern names none) and `HasMethod()` ([reference_template_route.txt](../../cmd/muxt/testdata/reference_template_route.txt)) |
 | `.MuxtVersion` | the generating muxt version |
 | `.StatusCode code` | the data, for chaining |

@@ -81,9 +81,9 @@ muxt -C ./web generate --use-receiver-type=Server
 | `--output-receiver-interface` | `RoutesReceiver` | Interface listing the methods the routes call. |
 | `--output-template-data-type` | `TemplateData` | Type passed to route templates. |
 | `--output-sse-template-data-type` | `SSETemplateData` | Type passed to Server-Sent Events route templates. |
-| `--output-template-route-paths-type` | `TemplateRoutePaths` | Type whose methods build route paths. |
-| `--output-template-route-type` | `TemplateRoute`, or the paths type name with `Route` appended when `--output-template-route-paths-type` names another type | Type the methods of `--output-template-route-builder-type` return. Each file generated into one package needs its own ([reference_multiple_generated_routes_named_after_paths_type.txt](../../cmd/muxt/testdata/reference_multiple_generated_routes_named_after_paths_type.txt)). |
-| `--output-template-route-builder-type` | the route type name with `Builder` appended | Type `TemplateData.Route` returns. Its methods mirror those of the paths type and return the route type. |
+| `--output-template-route-paths-type` | `TemplateRoutePaths` | Type whose methods build route paths. Ignored for a package under `packages` when `muxt.json` has `route_paths` ([`route_paths`](muxt-json.md#route_paths)). |
+| `--output-template-route-type` | `TemplateRoute`, or the paths type name with `Route` appended when `--output-template-route-paths-type` names another type | Type the methods of `--output-template-route-builder-type` return. Each file generated into one package needs its own ([reference_multiple_generated_routes_named_after_paths_type.txt](../../cmd/muxt/testdata/reference_multiple_generated_routes_named_after_paths_type.txt)). Ignored for a package under `packages` when `muxt.json` has `route_paths` ([`route_paths`](muxt-json.md#route_paths)). |
+| `--output-template-route-builder-type` | the route type name with `Builder` appended | Type `TemplateData.Route` returns. Its methods mirror those of the paths type and return the route type. Ignored for a package under `packages` when `muxt.json` has `route_paths` ([`route_paths`](muxt-json.md#route_paths)). |
 | `--output-routes-func-with-logger-param` | `false` | Add a `*slog.Logger` parameter. |
 | `--output-routes-func-with-path-prefix-param` | `false` | Add a `pathsPrefix string` parameter. |
 | `--output-routes-func-with-middleware-param` | `false` | Add a `middleware func(http.Handler) http.Handler` parameter. |

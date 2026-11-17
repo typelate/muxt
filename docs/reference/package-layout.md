@@ -28,6 +28,29 @@ internal/hypertext/
 
 Commit the generated files.
 
+## Hub layout
+
+With `route_paths` in `muxt.json`, the directory of `muxt.json` is the hub and the muxt packages sit below it:
+
+```text
+internal/hypertext/
+├── muxt.json                  # route_paths and packages
+├── hypertext.go               # TemplateSource embed.FS, shared path parameter types
+├── nav.gohtml                 # shared template
+├── route_paths.go             # generated: the path helpers of every listed package
+├── admin/
+│   ├── admin.go
+│   ├── index.gohtml
+│   └── template_routes.go     # generated, imports the hub
+└── blog/
+    ├── blog.go
+    ├── blog.gohtml
+    ├── assets/
+    └── template_routes.go     # generated, imports the hub
+```
+
+Packages import the hub; the hub imports none of them ([steps](../how-to/link-to-a-route-in-another-package.md), [`route_paths`](muxt-json.md#route_paths)).
+
 ## Edge cases
 
 - **Partials prefixed with `_`.** A bare-directory `//go:embed` skips them, so embed them with a glob or `all:`.

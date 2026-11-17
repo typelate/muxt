@@ -112,3 +112,5 @@ Error: /home/me/app/workspace/over.gohtml:1:1: template "layout" is replaced by 
 ```
 
 The same module, run end to end: [howto_shared_template_fragments.txt](../../cmd/muxt/testdata/howto_shared_template_fragments.txt). Rules, errors and which shared templates `muxt check` reports unused: [Templates Variable](../reference/templates-variable.md#sharing-another-packages-files).
+
+To link from one package to a route of another, and to share path parameter types as well as templates, see [Link to a route in another package](link-to-a-route-in-another-package.md).

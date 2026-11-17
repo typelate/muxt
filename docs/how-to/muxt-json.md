@@ -90,7 +90,7 @@ It prints nothing unless a route has a note or warning; `-v` lists what was writ
 
 `muxt check` in the same directory checks every entry, the workspace first.
 
-Run `muxt generate` inside `workspace` and it writes that entry only. A directive left in a sub-package generates that package a second time.
+Run `muxt generate` inside `workspace` and it writes that entry only; with `route_paths` in the file, it also regenerates the hub's `route_paths.go` ([reference_route_paths_child_directory.txt](../../cmd/muxt/testdata/reference_route_paths_child_directory.txt)). A directive left in a sub-package generates that package a second time.
 
 ## 6. What a flag does now
 
