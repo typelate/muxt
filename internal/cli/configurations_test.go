@@ -901,6 +901,9 @@ func TestCommandLineRejections(t *testing.T) {
 		{name: "test with a mod flag", args: "test -- -mod=vendor", wantErr: "go test flag -mod cannot be passed through: muxt test sets -mod=mod and -modfile to require github.com/typelate/htt, muxt's template engine, in a copy of go.mod"},
 		{name: "test with a modfile as the next argument", args: "test -- -modfile x.mod", wantErr: "go test flag -modfile cannot be passed through: muxt test sets -mod=mod and -modfile to require github.com/typelate/htt, muxt's template engine, in a copy of go.mod"},
 		{name: "test with a coverpkg that covers html/template", args: "test -- -coverpkg=./...,html/template", wantErr: `go test flag -coverpkg cannot cover html/template ("html/template" does): muxt replaces html/template with its own template engine to learn which template actions the tests reach; use -coverpkg with your own packages, such as ./... instead`},
+		{name: "test with a change of directory after --", args: "test -- -C sub", wantErr: "-C after -- cannot reach go test, which takes it only as its first flag; use muxt -C sub test"},
+		{name: "test with a change of directory joined by =", args: "test -- -C=sub", wantErr: "-C after -- cannot reach go test, which takes it only as its first flag; use muxt -C sub test"},
+		{name: "test with a change of directory that names none", args: "test -- -C", wantErr: "-C after -- cannot reach go test, which takes it only as its first flag; use muxt's own -C before test"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := configurationOf(t, tt.args, nil)
