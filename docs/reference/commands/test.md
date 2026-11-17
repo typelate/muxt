@@ -32,4 +32,6 @@ With a [muxt.json](../muxt-json.md) in the working directory, every entry runs, 
 
 A run over every entry writes the entry's key on its own line before that package's output. With `-json` after `--` it writes no key, so the output stays a stream of JSON events.
 
+muxt puts the engine in place for every package before the first `go test` runs. When one package cannot have it, no `go test` runs and the error is `cannot run the tests on muxt's template engine: <reason>`.
+
 The first package that fails ends the run; the entries after it are not tested. Its last line is `Error: <key>: go test failed`.

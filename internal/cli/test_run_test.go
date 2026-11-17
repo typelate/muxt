@@ -39,6 +39,9 @@ type testRun struct {
 	// Result what it returns, by call.
 	Write  func(call int, stdout, stderr io.Writer)
 	Result func(call int) error
+
+	// PrepareResult is what each engine's preparation returns, by call.
+	PrepareResult func(call int) error
 }
 
 func (r *testRun) goTest(_ context.Context, dir string, env, args []string, stdout, stderr io.Writer) error {
@@ -54,7 +57,13 @@ func (r *testRun) goTest(_ context.Context, dir string, env, args []string, stdo
 }
 
 func (r *testRun) prepare(_ context.Context, _ overlay.Toolchain, dir string) (templatecover.Engine, error) {
+	call := len(r.Prepare)
 	r.Prepare = append(r.Prepare, dir)
+	if r.PrepareResult != nil {
+		if err := r.PrepareResult(call); err != nil {
+			return templatecover.Engine{}, err
+		}
+	}
 	return templatecover.Engine{
 		Files:    overlay.Files{ModFile: filepath.Join(dir, "go.mod"), Overlay: filepath.Join(dir, "overlay.json")},
 		CoverDir: filepath.Join(dir, "profiles"),
@@ -160,6 +169,29 @@ func TestTestStopsAtTheFirstFailingPackage(t *testing.T) {
 	require.Len(t, run.Calls, 2, "go test runs")
 	assert.Equal(t, "/work/b", run.Calls[1].Dir, "the last package tested")
 	assert.NotContains(t, stdout, "example.com/c", "stdout names the package that never ran")
+}
+
+// TestTestRunsNothingWhenAnEngineCannotBePrepared states that the engines
+// of every package are in place before the first go test runs, so a package
+// that cannot have one costs no one a run of the packages before it.
+func TestTestRunsNothingWhenAnEngineCannotBePrepared(t *testing.T) {
+	run := newTestRun(t)
+	run.PrepareResult = func(call int) error {
+		if call == 1 {
+			return errors.New("go.work is in use")
+		}
+		return nil
+	}
+	jobs := []packageJob{
+		{Key: "example.com/a", Dir: "/work/a", Keyed: true},
+		{Key: "example.com/b", Dir: "/work/b", Keyed: true},
+	}
+	stdout, _, err := run.run(jobs, testConfiguration{})
+
+	require.Error(t, err, "muxt test")
+	assert.Equal(t, "cannot run the tests on muxt's template engine: go.work is in use", err.Error(), "error")
+	assert.Empty(t, run.Calls, "go test runs")
+	assert.Empty(t, stdout, "stdout")
 }
 
 // TestTestNamesTheFailingKeyedPackage states that when one of several

@@ -83,11 +83,20 @@ func testRunner(goTest goTestFunc, prepare prepareFunc) func(*cobra.Command, []p
 				err = errors.Join(err, fmt.Errorf("removing the scratch directory: %w", rmErr))
 			}
 		}()
+		// Every engine is in place before the first go test runs, so a
+		// package that cannot have one costs no run of the packages before it.
+		engines := make([]templatecover.Engine, len(jobs))
 		for i, job := range jobs {
-			engine, err := prepare(ctx, overlay.Toolchain{Go: "go", Dir: job.Dir}, filepath.Join(scratch, strconv.Itoa(i)))
+			engines[i], err = prepare(ctx, overlay.Toolchain{Go: "go", Dir: job.Dir}, filepath.Join(scratch, strconv.Itoa(i)))
 			if err != nil {
+				if ctxErr := ctx.Err(); ctxErr != nil {
+					return ctxErr
+				}
 				return fmt.Errorf("cannot run the tests on muxt's template engine: %w", err)
 			}
+		}
+		for i, job := range jobs {
+			engine := engines[i]
 			// -count=1 comes first so a caller's own -count wins, and a
 			// replayed pass cannot leave a package out of the profile.
 			args := append([]string{"test", "-count=1"}, engine.Flags()...)
