@@ -10,6 +10,7 @@ import (
 	"maps"
 	"path/filepath"
 	"slices"
+	"strings"
 
 	"github.com/ettle/strcase"
 
@@ -136,8 +137,14 @@ func generatedNames(config RoutesFileConfiguration) []generatedName {
 
 // checkGeneratedNames reports two generated declarations with the same
 // name, naming the flags that set them.
-func checkGeneratedNames(config RoutesFileConfiguration) error {
+func checkGeneratedNames(config RoutesFileConfiguration, hub *Hub) error {
 	names := generatedNames(config)
+	if hub != nil {
+		// The hub declares the path types, so this file does not.
+		names = slices.DeleteFunc(names, func(n generatedName) bool {
+			return strings.HasPrefix(n.flag, "output-template-route-")
+		})
+	}
 	for i, later := range names {
 		for _, earlier := range names[:i] {
 			if later.name != "" && later.name == earlier.name {
@@ -177,7 +184,7 @@ func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, hub *Hub, pk
 	}
 	file := newFile(pkg, reserved...)
 
-	if err := checkGeneratedNames(config); err != nil {
+	if err := checkGeneratedNames(config, hub); err != nil {
 		return nil, err
 	}
 
@@ -223,13 +230,18 @@ func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, hub *Hub, pk
 	}
 	routesFunc.Body.List = append(routesFunc.Body.List, handlers...)
 
-	routePathDecls, err := routePathTypeAndMethods(file, config, configPathTypeNames(config), groups.all)
-	if err != nil {
-		return nil, err
+	var routePathDecls []ast.Decl
+	if hub == nil {
+		routePathDecls, err = routePathTypeAndMethods(file, config, configPathTypeNames(config), groups.all)
+		if err != nil {
+			return nil, err
+		}
 	}
 	if config.StaticAssetsDirectory != "" {
 		routesFunc.Body.List = append(routesFunc.Body.List, staticAssetsStatements(file, config)...)
-		routePathDecls = append(routePathDecls, staticAssetsPathMethods(file, config)...)
+		if hub == nil {
+			routePathDecls = append(routePathDecls, staticAssetsPathMethods(file, config)...)
+		}
 	}
 	routesFunc.Body.List = append(routesFunc.Body.List, returnRoutePaths(file, config, hub))
 

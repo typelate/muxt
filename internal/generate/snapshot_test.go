@@ -128,13 +128,28 @@ func configuration(t *testing.T, archive *txtar.Archive) generate.RoutesFileConf
 	return generate.RoutesFileConfiguration{}
 }
 
+// hubOf reads the archive's optional hub.json: the hub the routes file
+// names the path types of. An archive without one generates with no hub.
+func hubOf(t *testing.T, archive *txtar.Archive) *generate.Hub {
+	t.Helper()
+	for _, file := range archive.Files {
+		if file.Name != "hub.json" {
+			continue
+		}
+		var hub generate.Hub
+		require.NoError(t, json.Unmarshal(file.Data, &hub), "hub.json")
+		return &hub
+	}
+	return nil
+}
+
 // snapshot loads an archive's package, generates from it, and returns the
 // want/ files it produces, by name.
 func snapshot(t *testing.T, config generate.RoutesFileConfiguration, archive *txtar.Archive) map[string]string {
 	t.Helper()
 	files := make(map[string]string)
 	for _, file := range archive.Files {
-		if strings.HasPrefix(file.Name, "want/") || file.Name == "config.json" {
+		if strings.HasPrefix(file.Name, "want/") || file.Name == "config.json" || file.Name == "hub.json" {
 			continue
 		}
 		files[file.Name] = string(file.Data)
@@ -166,7 +181,7 @@ func snapshot(t *testing.T, config generate.RoutesFileConfiguration, archive *tx
 	}
 	var logs strings.Builder
 	logger := log.New(&logs, "", 0)
-	generated, err := generate.TemplateRoutesFiles(dir, config, nil, pkg, defs, generate.Loggers{Progress: logger, Notes: logger})
+	generated, err := generate.TemplateRoutesFiles(dir, config, hubOf(t, archive), pkg, defs, generate.Loggers{Progress: logger, Notes: logger})
 	for _, file := range generated {
 		got[relative(file.Path)] = file.Content
 		assert.Empty(t, unusedImports(t, file.Content), "%s imports these without using them", relative(file.Path))
