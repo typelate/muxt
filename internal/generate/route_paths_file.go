@@ -24,6 +24,9 @@ const (
 	hubRouteTypeName   = "TemplateRoute"
 )
 
+// hubConstructorName is the name of the function that makes the hub type typeName.
+func hubConstructorName(typeName string) string { return "New" + typeName }
+
 // RoutePaths is the hub file: the path helpers of every package that shares the hub.
 type RoutePaths struct {
 	ImportPath, PackageName string
@@ -100,7 +103,7 @@ func hubBaseDecls(packages []RoutePathsPackage, typeName string, accessed func(n
 			}}}},
 		}},
 		&ast.FuncDecl{
-			Name: ast.NewIdent("New" + typeName),
+			Name: ast.NewIdent(hubConstructorName(typeName)),
 			Type: &ast.FuncType{Params: fieldList([]*ast.Field{param(ast.NewIdent("string"), pathPrefixPathsStructFieldName)}), Results: fieldList(results(ast.NewIdent(typeName)))},
 			Body: &ast.BlockStmt{List: []ast.Stmt{returnExprs(&ast.CompositeLit{Type: ast.NewIdent(typeName), Elts: []ast.Expr{
 				&ast.KeyValueExpr{Key: ast.NewIdent(pathPrefixPathsStructFieldName), Value: ast.NewIdent(pathPrefixPathsStructFieldName)},

@@ -52,7 +52,7 @@ func configPathTypeNames(config RoutesFileConfiguration) pathTypeNames {
 // pathsTypeExpr is the paths type as the file being generated names it.
 func pathsTypeExpr(f *File, config RoutesFileConfiguration, hub *Hub) ast.Expr {
 	if hub != nil {
-		return astgen.ExportedIdentifier(f, hub.PackageName, hub.ImportPath, "TemplateRoutePaths")
+		return astgen.ExportedIdentifier(f, hub.PackageName, hub.ImportPath, hubPathsTypeName)
 	}
 	return ast.NewIdent(config.TemplateRoutePathsTypeName)
 }
@@ -60,7 +60,7 @@ func pathsTypeExpr(f *File, config RoutesFileConfiguration, hub *Hub) ast.Expr {
 // builderTypeExpr is the route builder type as the file being generated names it.
 func builderTypeExpr(f *File, config RoutesFileConfiguration, hub *Hub) ast.Expr {
 	if hub != nil {
-		return astgen.ExportedIdentifier(f, hub.PackageName, hub.ImportPath, "TemplateRouteBuilder")
+		return astgen.ExportedIdentifier(f, hub.PackageName, hub.ImportPath, hubBuilderTypeName)
 	}
 	return ast.NewIdent(routeBuilderTypeName(config))
 }
@@ -68,7 +68,7 @@ func builderTypeExpr(f *File, config RoutesFileConfiguration, hub *Hub) ast.Expr
 // routeBuilderLiteral is the route builder for a path prefix expression.
 func routeBuilderLiteral(f *File, config RoutesFileConfiguration, hub *Hub, prefix ast.Expr) ast.Expr {
 	if hub != nil {
-		return &ast.CallExpr{Fun: astgen.ExportedIdentifier(f, hub.PackageName, hub.ImportPath, "NewTemplateRouteBuilder"), Args: []ast.Expr{prefix}}
+		return &ast.CallExpr{Fun: astgen.ExportedIdentifier(f, hub.PackageName, hub.ImportPath, hubConstructorName(hubBuilderTypeName)), Args: []ast.Expr{prefix}}
 	}
 	return &ast.CompositeLit{
 		Type: builderTypeExpr(f, config, hub),
@@ -79,7 +79,7 @@ func routeBuilderLiteral(f *File, config RoutesFileConfiguration, hub *Hub, pref
 // pathsLiteral is the paths value for a path prefix expression.
 func pathsLiteral(f *File, config RoutesFileConfiguration, hub *Hub, prefix ast.Expr) ast.Expr {
 	if hub != nil {
-		return &ast.CallExpr{Fun: astgen.ExportedIdentifier(f, hub.PackageName, hub.ImportPath, "NewTemplateRoutePaths"), Args: []ast.Expr{prefix}}
+		return &ast.CallExpr{Fun: astgen.ExportedIdentifier(f, hub.PackageName, hub.ImportPath, hubConstructorName(hubPathsTypeName)), Args: []ast.Expr{prefix}}
 	}
 	return &ast.CompositeLit{Type: pathsTypeExpr(f, config, hub), Elts: []ast.Expr{
 		&ast.KeyValueExpr{Key: ast.NewIdent(routesPathsFieldName), Value: routeBuilderLiteral(f, config, hub, prefix)},
