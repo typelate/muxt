@@ -2,9 +2,11 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 
@@ -19,6 +21,16 @@ type goTestFunc func(ctx context.Context, dir string, env, args []string, stdout
 
 // prepareFunc is templatecover.Prepare, replaced in tests.
 type prepareFunc func(ctx context.Context, tc overlay.Toolchain, dir string) (templatecover.Engine, error)
+
+// goTestFailure is go test exiting with a failure: a test failed or a
+// package did not build. go test printed which.
+type goTestFailure struct {
+	Err *exec.ExitError
+}
+
+func (e *goTestFailure) Error() string { return "go test failed" }
+
+func (e *goTestFailure) Unwrap() error { return e.Err }
 
 // runGoTest is the go command, run as templatecover.Command sets it up.
 func runGoTest(ctx context.Context, dir string, env, args []string, stdout, stderr io.Writer) error {
@@ -46,7 +58,14 @@ func testRunner(goTest goTestFunc, prepare prepareFunc) func(*cobra.Command, []p
 			args := append([]string{"test", "-count=1"}, engine.Flags()...)
 			args = append(args, config.GoTestArgs...)
 			if err := goTest(cmd.Context(), job.Dir, engine.Environ(nil), args, cmd.OutOrStdout(), cmd.ErrOrStderr()); err != nil {
-				return fmt.Errorf("running go test in %s: %w", job.Dir, err)
+				exit, ok := errors.AsType[*exec.ExitError](err)
+				if !ok {
+					return fmt.Errorf("running go test in %s: %w", job.Dir, err)
+				}
+				// go test said why; cobra repeating that it failed would
+				// only bury it.
+				cmd.SilenceErrors = true
+				return &goTestFailure{Err: exit}
 			}
 		}
 		return nil

@@ -3,7 +3,9 @@ package cli
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -112,6 +114,27 @@ func TestTestPassesGoTestOutputThrough(t *testing.T) {
 
 	assert.Equal(t, "ok  \texample.com/pkg\t0.003s\nno final newline", stdout, "stdout")
 	assert.Equal(t, "# example.com/pkg\r\nwarning\n", stderr, "stderr")
+}
+
+// TestTestFailsWhenTheTestsFail states that a failing go test fails the
+// command, and that go test's own report is the whole of what is printed:
+// cobra's "Error:" line would only repeat it.
+func TestTestFailsWhenTheTestsFail(t *testing.T) {
+	run := newTestRun(t)
+	run.Write = func(_ int, stdout, _ io.Writer) {
+		_, _ = io.WriteString(stdout, "--- FAIL: TestIndex (0.00s)\nFAIL\n")
+	}
+	run.Result = func(int) error { return &exec.ExitError{} }
+	var stdout, stderr bytes.Buffer
+	err := commands("/work", []string{testCommandName}, func(string) string { return "" }, cliVersion, strings.NewReader(""), &stdout, &stderr, runners{
+		test: testRunner(run.goTest, run.prepare),
+	})
+
+	require.Error(t, err, "muxt test")
+	_, ok := errors.AsType[*goTestFailure](err)
+	assert.True(t, ok, "the error is a *goTestFailure, got %T: %v", err, err)
+	assert.Equal(t, "--- FAIL: TestIndex (0.00s)\nFAIL\n", stdout.String(), "stdout")
+	assert.Empty(t, stderr.String(), "stderr")
 }
 
 // TestTestGivesEachJobItsOwnCoverDirectory states that two packages' test
