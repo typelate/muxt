@@ -26,6 +26,30 @@ import (
 // extra imports.
 type packageLoader func(root string, dirs, patterns []string) (*load.Loaded, error)
 
+// hubNamespaces returns each job's namespace on the hub's paths type, by
+// packages key. It fails when two packages would share a namespace, a
+// namespace is not an identifier, or two of the hub's declarations would share
+// a name.
+func hubNamespaces(hub *routePathsTarget, jobs []packageJob) (map[string]string, error) {
+	keys := make([]string, len(jobs))
+	for i, job := range jobs {
+		keys[i] = job.Key
+	}
+	if err := generate.CheckNamespaces(keys, hub.Hub.ImportPath); err != nil {
+		return nil, err
+	}
+	namespaces := make(map[string]string, len(jobs))
+	hubPackageList := make([]generate.HubPackage, len(keys))
+	for i, key := range keys {
+		namespaces[key], _ = generate.Namespace(key, hub.Hub.ImportPath)
+		hubPackageList[i] = generate.HubPackage{ImportPath: key, Namespace: namespaces[key]}
+	}
+	if err := generate.CheckHubTypeNames(hub.Hub.Names, hubPackageList); err != nil {
+		return nil, err
+	}
+	return namespaces, nil
+}
+
 // generateRunner generates jobs from one load, one directory at a time, a
 // package after the packages it imports. A job's files are all written before
 // the next job is resolved, so a failure leaves the earlier jobs written.
@@ -59,20 +83,9 @@ func generateRunner(loadPackages packageLoader) func(*cobra.Command, []packageJo
 		var namespaces map[string]string // by packages key
 		var hubPackages []generate.RoutePathsPackage
 		if hub != nil {
-			keys := make([]string, len(jobs))
-			for i, job := range jobs {
-				keys[i] = job.Key
-			}
-			if err := generate.CheckNamespaces(keys, hub.Hub.ImportPath); err != nil {
-				return err
-			}
-			namespaces = make(map[string]string, len(jobs))
-			hubPackageList := make([]generate.HubPackage, len(keys))
-			for i, key := range keys {
-				namespaces[key], _ = generate.Namespace(key, hub.Hub.ImportPath)
-				hubPackageList[i] = generate.HubPackage{ImportPath: key, Namespace: namespaces[key]}
-			}
-			if err := generate.CheckHubTypeNames(hub.Hub.Names, hubPackageList); err != nil {
+			var err error
+			namespaces, err = hubNamespaces(hub, jobs)
+			if err != nil {
 				return err
 			}
 		}
