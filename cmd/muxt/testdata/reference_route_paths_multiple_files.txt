@@ -1,0 +1,72 @@
+# "output_multiple_files": true on admin splits its routes file; the page still
+# links to blog through the hub and the module builds.
+
+muxt generate
+muxt check
+exec go build ./...
+exec go test ./site
+
+-- go.mod --
+module example.com/m
+
+go 1.22
+-- muxt.json --
+{
+	"route_paths": {},
+	"package_defaults": {
+		"use_receiver_type": "Server"
+	},
+	"packages": {
+		"example.com/m/admin": {
+			"output_multiple_files": true
+		},
+		"example.com/m/blog": {}
+	}
+}
+-- admin/admin.go --
+package admin
+
+import "html/template"
+
+var templates = template.Must(template.New("GET /admin Dashboard()").Parse(`<a href="{{$.Path.Blog.GetArticle 42}}">article</a>`))
+
+type Server struct{}
+
+func (Server) Dashboard() string { return "dashboard" }
+-- blog/blog.go --
+package blog
+
+import "html/template"
+
+var templates = template.Must(template.New("GET /article/{id} GetArticle(id)").Parse(`<h1>{{.Result}}</h1>`))
+
+type Server struct{}
+
+func (Server) GetArticle(id int) string { return "article" }
+-- site/site_test.go --
+package site
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+
+	"example.com/m/admin"
+	"example.com/m/blog"
+)
+
+func TestLinksToBlog(t *testing.T) {
+	mux := http.NewServeMux()
+	admin.TemplateRoutes(mux, admin.Server{})
+	blog.TemplateRoutes(mux, blog.Server{})
+
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/admin", nil))
+	if got := rec.Result().StatusCode; got != http.StatusOK {
+		t.Fatalf("GET /admin status = %d, want %d", got, http.StatusOK)
+	}
+	if body, want := rec.Body.String(), `href="/article/42"`; !strings.Contains(body, want) {
+		t.Errorf("GET /admin body = %q, want it to contain %q", body, want)
+	}
+}

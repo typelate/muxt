@@ -1,0 +1,59 @@
+# muxt does not look for an import cycle: a path parameter type declared in
+# admin itself, not in the hub, makes the hub import admin and admin import the
+# hub. muxt generate succeeds and the Go build reports the cycle.
+
+muxt generate
+! exec go build ./...
+stderr 'import cycle'
+
+-- go.mod --
+module example.com/m
+
+go 1.22
+-- muxt.json --
+{
+	"route_paths": {},
+	"package_defaults": {
+		"use_receiver_type": "Server"
+	},
+	"packages": {
+		"example.com/m/admin": {},
+		"example.com/m/blog": {}
+	}
+}
+-- admin/admin.go --
+package admin
+
+import (
+	"html/template"
+	"strconv"
+)
+
+var templates = template.Must(template.New("GET /user/{id} GetUser(id)").Parse(`<h1>{{.Result}}</h1>`))
+
+// UserID is declared here, not in the hub.
+type UserID int
+
+func (id *UserID) UnmarshalText(text []byte) error {
+	n, err := strconv.Atoi(string(text))
+	*id = UserID(n)
+	return err
+}
+
+func (id UserID) MarshalText() ([]byte, error) {
+	return []byte(strconv.Itoa(int(id))), nil
+}
+
+type Server struct{}
+
+func (Server) GetUser(id UserID) string { return "user" }
+-- blog/blog.go --
+package blog
+
+import "html/template"
+
+var templates = template.Must(template.New("GET /article/{id} GetArticle(id)").Parse(`<h1>{{.Result}}</h1>`))
+
+type Server struct{}
+
+func (Server) GetArticle(id int) string { return "article" }

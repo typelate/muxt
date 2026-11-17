@@ -1,0 +1,46 @@
+# Two listed packages whose namespaces come out equal fail muxt generate. The
+# error names the namespace and both import paths, and nothing is written.
+
+! muxt generate
+cmpenv stderr want-err.txt
+! exists route_paths.go
+! exists admin_users/template_routes.go
+! exists admin/users/template_routes.go
+
+-- go.mod --
+module example.com/m
+
+go 1.22
+-- muxt.json --
+{
+	"route_paths": {},
+	"package_defaults": {
+		"use_receiver_type": "Server"
+	},
+	"packages": {
+		"example.com/m/admin_users": {},
+		"example.com/m/admin/users": {}
+	}
+}
+-- admin_users/users.go --
+package admin_users
+
+import "html/template"
+
+var templates = template.Must(template.New("GET /a Index()").Parse(`<h1>{{.Result}}</h1>`))
+
+type Server struct{}
+
+func (Server) Index() string { return "a" }
+-- admin/users/users.go --
+package users
+
+import "html/template"
+
+var templates = template.Must(template.New("GET /b Index()").Parse(`<h1>{{.Result}}</h1>`))
+
+type Server struct{}
+
+func (Server) Index() string { return "b" }
+-- want-err.txt --
+Error: packages "example.com/m/admin/users" and "example.com/m/admin_users" both get the route paths namespace "AdminUsers"; rename one of them

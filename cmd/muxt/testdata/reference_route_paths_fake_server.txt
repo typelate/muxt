@@ -1,0 +1,44 @@
+# muxt generate-fake-server for a package of a route_paths module writes a
+# fake server that builds with the hub.
+
+muxt generate
+muxt generate-fake-server admin
+exists cmd/explore-goland/main.go
+exists cmd/explore-goland/internal/fake/receiver.go
+exec go build ./...
+
+-- go.mod --
+module example.com/m
+
+go 1.24
+-- muxt.json --
+{
+	"route_paths": {},
+	"package_defaults": {
+		"use_receiver_type": "Server"
+	},
+	"packages": {
+		"example.com/m/admin": {},
+		"example.com/m/blog": {}
+	}
+}
+-- admin/admin.go --
+package admin
+
+import "html/template"
+
+var templates = template.Must(template.New("GET /admin Dashboard()").Parse(`<a href="{{$.Path.Blog.GetArticle 42}}">article</a>`))
+
+type Server struct{}
+
+func (Server) Dashboard() string { return "dashboard" }
+-- blog/blog.go --
+package blog
+
+import "html/template"
+
+var templates = template.Must(template.New("GET /article/{id} GetArticle(id)").Parse(`<h1>{{.Result}}</h1>`))
+
+type Server struct{}
+
+func (Server) GetArticle(id int) string { return "article" }

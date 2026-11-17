@@ -1,0 +1,50 @@
+# Generating twice gives the same files: route_paths.go and each package's
+# template_routes.go are byte-identical after a second muxt generate.
+
+muxt generate
+exists route_paths.go
+cp route_paths.go first_route_paths.go.txt
+cp admin/template_routes.go first_admin_routes.go.txt
+cp blog/template_routes.go first_blog_routes.go.txt
+
+muxt generate
+cmp route_paths.go first_route_paths.go.txt
+cmp admin/template_routes.go first_admin_routes.go.txt
+cmp blog/template_routes.go first_blog_routes.go.txt
+exec go build ./...
+
+-- go.mod --
+module example.com/m
+
+go 1.22
+-- muxt.json --
+{
+	"route_paths": {},
+	"package_defaults": {
+		"use_receiver_type": "Server"
+	},
+	"packages": {
+		"example.com/m/admin": {},
+		"example.com/m/blog": {}
+	}
+}
+-- admin/admin.go --
+package admin
+
+import "html/template"
+
+var templates = template.Must(template.New("GET /admin Dashboard()").Parse(`<a href="{{$.Path.Blog.GetArticle 42}}">article</a>`))
+
+type Server struct{}
+
+func (Server) Dashboard() string { return "dashboard" }
+-- blog/blog.go --
+package blog
+
+import "html/template"
+
+var templates = template.Must(template.New("GET /article/{id} GetArticle(id)").Parse(`<h1>{{.Result}}</h1><a href="{{.Path.Admin.Dashboard}}">admin</a>`))
+
+type Server struct{}
+
+func (Server) GetArticle(id int) string { return "article" }

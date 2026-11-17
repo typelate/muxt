@@ -1,0 +1,83 @@
+# With "output_exported_default_identifiers": false the routes function of each
+# package is unexported, and the hub is still exported, so the packages build
+# and each package's own test serves a page that links to the other.
+
+muxt generate
+muxt check
+exec go build ./...
+exec go test ./admin ./blog
+
+-- go.mod --
+module example.com/m
+
+go 1.22
+-- muxt.json --
+{
+	"route_paths": {},
+	"package_defaults": {
+		"use_receiver_type": "Server",
+		"output_exported_default_identifiers": false
+	},
+	"packages": {
+		"example.com/m/admin": {},
+		"example.com/m/blog": {}
+	}
+}
+-- admin/admin.go --
+package admin
+
+import "html/template"
+
+var templates = template.Must(template.New("GET /admin Dashboard()").Parse(`<a href="{{$.Path.Blog.GetArticle 42}}">article</a>`))
+
+type Server struct{}
+
+func (Server) Dashboard() string { return "dashboard" }
+-- admin/admin_test.go --
+package admin
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func TestLinksToBlog(t *testing.T) {
+	mux := http.NewServeMux()
+	templateRoutes(mux, Server{})
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/admin", nil))
+	if body, want := rec.Body.String(), `href="/article/42"`; !strings.Contains(body, want) {
+		t.Errorf("GET /admin body = %q, want it to contain %q", body, want)
+	}
+}
+-- blog/blog.go --
+package blog
+
+import "html/template"
+
+var templates = template.Must(template.New("GET /article/{id} GetArticle(id)").Parse(`<h1>{{.Result}}</h1><a href="{{.Path.Admin.Dashboard}}">admin</a>`))
+
+type Server struct{}
+
+func (Server) GetArticle(id int) string { return "article" }
+-- blog/blog_test.go --
+package blog
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func TestLinksToAdmin(t *testing.T) {
+	mux := http.NewServeMux()
+	templateRoutes(mux, Server{})
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/article/7", nil))
+	if body, want := rec.Body.String(), `href="/admin"`; !strings.Contains(body, want) {
+		t.Errorf("GET /article/7 body = %q, want it to contain %q", body, want)
+	}
+}

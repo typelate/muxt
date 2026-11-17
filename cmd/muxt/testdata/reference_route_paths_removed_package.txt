@@ -1,0 +1,62 @@
+# A package removed from "packages" is gone from the hub after the next muxt
+# generate, so a template that still links to it fails muxt check.
+
+muxt generate
+muxt check
+
+cp muxt.json.new muxt.json
+muxt generate
+! muxt check
+cmpenv stderr want-err.txt
+
+-- go.mod --
+module example.com/m
+
+go 1.22
+-- muxt.json --
+{
+	"route_paths": {},
+	"package_defaults": {
+		"use_receiver_type": "Server"
+	},
+	"packages": {
+		"example.com/m/admin": {},
+		"example.com/m/blog": {}
+	}
+}
+-- muxt.json.new --
+{
+	"route_paths": {},
+	"package_defaults": {
+		"use_receiver_type": "Server"
+	},
+	"packages": {
+		"example.com/m/admin": {}
+	}
+}
+-- admin/admin.go --
+package admin
+
+import "html/template"
+
+var templates = template.Must(template.New("GET /admin Dashboard()").Parse(`<a href="{{.Path.Blog.GetArticle 42}}">x</a>`))
+
+type Server struct{}
+
+func (Server) Dashboard() string { return "dashboard" }
+-- blog/blog.go --
+package blog
+
+import "html/template"
+
+var templates = template.Must(template.New("GET /article/{id} GetArticle(id)").Parse(`<h1>{{.Result}}</h1>`))
+
+type Server struct{}
+
+func (Server) GetArticle(id int) string { return "article" }
+-- want-err.txt --
+example.com/m/admin
+$WORK/admin/template_routes.go:39:13 ExecuteTemplate "GET /admin Dashboard()" *TemplateData[RoutesReceiver, string]
+GET /admin Dashboard():1:17: executing "GET /admin Dashboard()" at <.Path.Blog.GetArticle>: field or method Blog not found on m.TemplateRoutePaths
+
+Error: example.com/m/admin: 1 error

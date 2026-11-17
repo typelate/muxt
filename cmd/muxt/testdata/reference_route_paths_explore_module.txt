@@ -1,0 +1,49 @@
+# muxt explore-module run in the muxt.json directory exits 0 and lists both
+# packages, each with the command that lists its routes.
+
+muxt generate
+muxt explore-module
+stdout 'example.com/m/admin'
+stdout 'example.com/m/blog'
+stdout 'muxt -C '$WORK${/}'admin'
+stdout 'muxt -C '$WORK${/}'blog'
+
+muxt explore-module --format=json
+stdout '"path": ?"example.com/m/admin"'
+stdout '"path": ?"example.com/m/blog"'
+
+-- go.mod --
+module example.com/m
+
+go 1.22
+-- muxt.json --
+{
+	"route_paths": {},
+	"package_defaults": {
+		"use_receiver_type": "Server"
+	},
+	"packages": {
+		"example.com/m/admin": {},
+		"example.com/m/blog": {}
+	}
+}
+-- admin/admin.go --
+package admin
+
+import "html/template"
+
+var templates = template.Must(template.New("GET /admin Dashboard()").Parse(`<a href="{{$.Path.Blog.GetArticle 42}}">article</a>`))
+
+type Server struct{}
+
+func (Server) Dashboard() string { return "dashboard" }
+-- blog/blog.go --
+package blog
+
+import "html/template"
+
+var templates = template.Must(template.New("GET /article/{id} GetArticle(id)").Parse(`<h1>{{.Result}}</h1>`))
+
+type Server struct{}
+
+func (Server) GetArticle(id int) string { return "article" }
