@@ -136,7 +136,10 @@ func routeLiteral(file *File, names pathTypeNames, def *muxt.Definition, path as
 	}
 }
 
-func routePathTypeAndMethods(imports *File, config RoutesFileConfiguration, names pathTypeNames, defs []muxt.Definition) ([]ast.Decl, error) {
+// routePathTypeAndMethods declares the path types and their methods. The route
+// type is declared with them unless the caller declares it, as the hub file
+// does once for all packages.
+func routePathTypeAndMethods(imports *File, config RoutesFileConfiguration, names pathTypeNames, defs []muxt.Definition, declareRoute bool) ([]ast.Decl, error) {
 	decls := []ast.Decl{
 		&ast.GenDecl{
 			Tok: token.TYPE,
@@ -159,7 +162,9 @@ func routePathTypeAndMethods(imports *File, config RoutesFileConfiguration, name
 			},
 		},
 	}
-	decls = append(decls, routeTypeDecls(names)...)
+	if declareRoute {
+		decls = append(decls, routeTypeDecls(names)...)
+	}
 	if err := muxt.CheckPathMethodCollisions(defs); err != nil {
 		return nil, err
 	}

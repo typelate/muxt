@@ -232,7 +232,7 @@ func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, hub *Hub, pk
 
 	var routePathDecls []ast.Decl
 	if hub == nil {
-		routePathDecls, err = routePathTypeAndMethods(file, config, configPathTypeNames(config), groups.all)
+		routePathDecls, err = routePathTypeAndMethods(file, config, configPathTypeNames(config), groups.all, true)
 		if err != nil {
 			return nil, err
 		}
