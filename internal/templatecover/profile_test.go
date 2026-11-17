@@ -64,3 +64,17 @@ func TestProfileLeavesOutBlocksOfATemplateWithNoFile(t *testing.T) {
 
 	assert.Equal(t, "mode: set\n", written(t, &p))
 }
+
+// TestProfileNamesTheFileOfASharedFragment states that a fragment from
+// another package's embed.FS is written under that package's file.
+func TestProfileNamesTheFileOfASharedFragment(t *testing.T) {
+	shared := definedIn("/abs/ui/nav.gohtml", "nav.gohtml")
+	shared.Package = "example.com/ui"
+	sources := templatecover.Sources(packageWith(map[string]source.Definition{"nav": shared}))
+	reached := templatecover.Reached{"nav.gohtml": {{StartLine: 3, StartCol: 2, EndLine: 3, EndCol: 12}: {}}}
+
+	var p templatecover.Profile
+	p.Add(reached, sources)
+
+	assert.Equal(t, "mode: set\n/abs/ui/nav.gohtml:3.2,3.12 1 1\n", written(t, &p))
+}
