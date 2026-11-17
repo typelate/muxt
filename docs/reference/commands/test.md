@@ -24,7 +24,7 @@ muxt refuses these before anything runs:
 
 ## Failures
 
-When `go test` fails, `muxt test` exits `1` and adds nothing to what `go test` printed, except in a run over several entries ([Selection](#selection)). Every failure exits `1`, `go test`'s `2` included.
+When `go test` fails, `muxt test` exits `1` and adds nothing to what `go test` printed, except in a run over every entry ([Selection](#selection)). Every failure exits `1`, `go test`'s `2` included.
 
 ## Selection
 
