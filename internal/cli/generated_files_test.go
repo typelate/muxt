@@ -380,6 +380,25 @@ func TestRemoveOrphans(t *testing.T) {
 	assert.Equal(t, []string{"kept.go", "unowned.go"}, left, "files left")
 }
 
+func TestRemoveOtherHubFilesKeepsEverythingButAnotherHubFile(t *testing.T) {
+	dir := t.TempDir()
+	writeTestFile(t, dir, "route_paths.go", header.FormatHub("v1")+"package m\n")
+	kept := writeTestFile(t, dir, "paths_gen.go", header.FormatHub("v1")+"package m\n")
+	writeTestFile(t, dir, "template_routes.go", header.Format([]string{"--output-routes-func=Routes"}, "v1")+"package m\n")
+	writeTestFile(t, dir, "notes.go", "package m\n\nvar notes = 1\n")
+
+	require.NoError(t, removeOtherHubFiles(dir, kept), "removeOtherHubFiles()")
+
+	var left []string
+	entries, err := os.ReadDir(dir)
+	require.NoError(t, err)
+	for _, e := range entries {
+		left = append(left, e.Name())
+	}
+	slices.Sort(left)
+	assert.Equal(t, []string{"notes.go", "paths_gen.go", "template_routes.go"}, left, "files left")
+}
+
 func TestRemoveOrphansReportsFailure(t *testing.T) {
 	dir := t.TempDir()
 	stuck := filepath.Join(dir, "stuck")

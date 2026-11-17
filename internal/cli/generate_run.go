@@ -157,7 +157,7 @@ func writeHubFile(stdout io.Writer, hub *routePathsTarget, version string, packa
 		return err
 	}
 	_, _ = fmt.Fprintf(stdout, "wrote %s: %s\n", filepath.Base(file.Path), plural(file.Routes, "route"))
-	return nil
+	return removeOtherHubFiles(hub.Dir, file.Path)
 }
 
 // jobResult is what resolving a job generates: the files of its own

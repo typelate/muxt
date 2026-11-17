@@ -326,6 +326,23 @@ func removeOrphans(owned, written map[string]bool) error {
 	return nil
 }
 
+// removeOtherHubFiles deletes the hub files in dir other than keep, the one
+// just written: a hub file left under a former output_file would declare
+// the hub's types a second time.
+func removeOtherHubFiles(dir, keep string) error {
+	generated, err := header.Scan(dir)
+	if err != nil {
+		return err
+	}
+	stale := make(map[string]bool)
+	for path, h := range generated {
+		if h.IsHub() && path != keep {
+			stale[path] = true
+		}
+	}
+	return removeOrphans(stale, nil)
+}
+
 func plural(n int, noun string) string {
 	if n == 1 {
 		return "1 " + noun

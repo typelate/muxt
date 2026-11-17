@@ -1,0 +1,109 @@
+# Renaming route_paths.output_file replaces the old hub file: only one file
+# declares the hub's types, so the module builds. A hand-written file stays.
+
+muxt generate
+exists route_paths.go
+
+cp muxt.renamed.json muxt.json
+muxt generate
+exists paths_gen.go
+! exists route_paths.go
+cmp notes.go notes.go.orig
+exists admin/template_routes.go
+exec go build ./...
+muxt check
+
+cp muxt.renamed-again.json muxt.json
+cd blog
+muxt generate
+cd ..
+exists hub_gen.go
+! exists paths_gen.go
+cmp notes.go notes.go.orig
+exec go build ./...
+
+-- go.mod --
+module example.com/m
+
+go 1.22
+-- notes.go --
+package m
+
+var notes = 1
+-- notes.go.orig --
+package m
+
+var notes = 1
+-- muxt.json --
+{
+	"route_paths": {},
+	"package_defaults": {
+		"use_receiver_type": "Server"
+	},
+	"packages": {
+		"example.com/m/admin": {},
+		"example.com/m/blog": {}
+	}
+}
+-- muxt.renamed.json --
+{
+	"route_paths": {
+		"output_file": "paths_gen.go"
+	},
+	"package_defaults": {
+		"use_receiver_type": "Server"
+	},
+	"packages": {
+		"example.com/m/admin": {},
+		"example.com/m/blog": {}
+	}
+}
+-- muxt.renamed-again.json --
+{
+	"route_paths": {
+		"output_file": "hub_gen.go"
+	},
+	"package_defaults": {
+		"use_receiver_type": "Server"
+	},
+	"packages": {
+		"example.com/m/admin": {},
+		"example.com/m/blog": {}
+	}
+}
+-- admin/admin.go --
+package admin
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templateSource embed.FS
+
+var templates = template.Must(template.ParseFS(templateSource, "*.gohtml"))
+
+type Server struct{}
+
+func (Server) Dashboard() []int { return []int{42} }
+-- admin/dashboard.gohtml --
+{{define "GET /admin Dashboard()"}}{{range .Result}}<a href="{{$.Path.Blog.GetArticle .}}">article</a>{{end}}{{end}}
+-- blog/blog.go --
+package blog
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templateSource embed.FS
+
+var templates = template.Must(template.ParseFS(templateSource, "*.gohtml"))
+
+type Server struct{}
+
+func (Server) GetArticle(id int) string { return "article" }
+-- blog/article.gohtml --
+{{define "GET /article/{id} GetArticle(id)"}}<h1>{{.Result}}</h1>{{end}}
