@@ -1,0 +1,47 @@
+# With a route_paths key a link names its package: {{.Path.Admin.Dashboard}}. muxt check reports one that does not.
+
+muxt generate
+! muxt check
+cmpenv stderr want-err.txt
+
+-- go.mod --
+module example.com/m
+
+go 1.22
+-- muxt.json --
+{
+	"route_paths": {},
+	"package_defaults": {
+		"use_receiver_type": "Server"
+	},
+	"packages": {
+		"example.com/m/admin": {},
+		"example.com/m/blog": {}
+	}
+}
+-- admin/admin.go --
+package admin
+
+import "html/template"
+
+var templates = template.Must(template.New("GET /admin Dashboard()").Parse(`<a href="{{.Path.Dashboard}}">x</a>`))
+
+type Server struct{}
+
+func (Server) Dashboard() string { return "dashboard" }
+-- blog/blog.go --
+package blog
+
+import "html/template"
+
+var templates = template.Must(template.New("GET /article/{id} GetArticle(id)").Parse(`<h1>{{.Result}}</h1>`))
+
+type Server struct{}
+
+func (Server) GetArticle(id int) string { return "article" }
+-- want-err.txt --
+example.com/m/admin
+$WORK/admin/template_routes.go:39:13 ExecuteTemplate "GET /admin Dashboard()" *TemplateData[RoutesReceiver, string]
+GET /admin Dashboard():1:17: executing "GET /admin Dashboard()" at <.Path.Dashboard>: field or method Dashboard not found on m.TemplateRoutePaths
+
+Error: example.com/m/admin: 1 error
