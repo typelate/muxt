@@ -4,8 +4,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"fmt"
-	"iter"
 	"os"
 	"os/exec"
 	"regexp"
@@ -16,6 +14,7 @@ import (
 	"github.com/typelate/htt/template"
 
 	"github.com/typelate/muxt/internal/overlay"
+	"github.com/typelate/muxt/internal/templatecover"
 )
 
 // goTest runs the project's tests, optionally with extra flags.
@@ -138,84 +137,14 @@ func (t goTest) coverage(ctx context.Context, engine overlay.Files, coverDir str
 // binary's and is kept.
 func withoutCoverFlags(args []string) []string {
 	kept := make([]string, 0, len(args))
-	for f := range goTestFlags(args) {
-		switch f.name {
+	for f := range templatecover.Flags(args) {
+		switch f.Name {
 		case "cover", "covermode", "coverprofile", "coverpkg":
 			continue
 		}
-		kept = append(kept, f.args...)
+		kept = append(kept, f.Args...)
 	}
 	return kept
-}
-
-// goTestFlag is one step of a walk over the caller's go test arguments.
-type goTestFlag struct {
-	// name is the flag's name without its dashes, "" for an argument
-	// that is not a flag, and "args" for the -args that hands the rest
-	// to the test binary.
-	name string
-
-	// value is the flag's value, after its = or, for a flag that takes
-	// one, the next argument; hasValue says whether it has one.
-	value    string
-	hasValue bool
-
-	// args are the arguments the step spans: the flag and its value, or
-	// for -args, everything from it on.
-	args []string
-}
-
-// takesValue reports whether a go test or build flag takes a value,
-// which without an = is the next argument. Any other flag, the test
-// binary's own among them, is read as one that takes none, as go test
-// reads a flag it does not know.
-func takesValue(name string) bool {
-	switch name {
-	case "asmflags", "bench", "benchtime", "blockprofile", "blockprofilerate",
-		"buildmode", "compiler", "count", "covermode", "coverpkg",
-		"coverprofile", "cpu", "cpuprofile", "exec", "fuzz",
-		"fuzzminimizetime", "fuzztime", "gccgoflags", "gcflags",
-		"installsuffix", "ldflags", "list", "memprofile", "memprofilerate",
-		"mod", "modfile", "mutexprofile", "mutexprofilefraction", "o",
-		"outputdir", "overlay", "p", "parallel", "pgo", "pkgdir",
-		"run", "shuffle", "skip", "tags", "timeout", "toolexec",
-		"trace", "vet":
-		return true
-	}
-	return false
-}
-
-// goTestFlags walks the caller's go test arguments as go test reads them,
-// one flag, with its value, at a time. It stops at -args, whose arguments
-// belong to the test binary, and yields them as one last step.
-func goTestFlags(args []string) iter.Seq[goTestFlag] {
-	return func(yield func(goTestFlag) bool) {
-		for i := 0; i < len(args); i++ {
-			arg := args[i]
-			if arg == "-args" || arg == "--args" {
-				yield(goTestFlag{name: "args", args: args[i:]})
-				return
-			}
-			if !strings.HasPrefix(arg, "-") {
-				// A value of a flag it did not know to take one, such
-				// as a test binary's own.
-				if !yield(goTestFlag{args: args[i : i+1]}) {
-					return
-				}
-				continue
-			}
-			name, value, hasValue := strings.Cut(strings.TrimLeft(arg, "-"), "=")
-			end := i + 1
-			if !hasValue && takesValue(name) && end < len(args) {
-				value, hasValue = args[end], true
-				end++
-			}
-			if !yield(goTestFlag{name: name, value: value, hasValue: hasValue, args: args[i:end]}) {
-				return
-			}
-			i = end - 1
-		}
-	}
 }
 
 // mutantOutputLimit is how much of one mutant's go test output is kept:
@@ -255,8 +184,8 @@ func onlyTests(names []string) *regexp.Regexp {
 
 // hasRunFlag reports whether the caller's go test flags select tests.
 func hasRunFlag(args []string) bool {
-	for f := range goTestFlags(args) {
-		if f.name == "run" {
+	for f := range templatecover.Flags(args) {
+		if f.Name == "run" {
 			return true
 		}
 	}
@@ -516,41 +445,13 @@ func (o *goTestOutput) String() string {
 func CheckGoTestArgs(args []string) error {
 	// The walk ends at -args: everything after it belongs to the test
 	// binary.
-	for f := range goTestFlags(args) {
-		switch name := f.name; name {
-		case "overlay":
-			return errors.New("go test flag -overlay cannot be passed through: muxt uses -overlay to deliver each mutant")
-		case "json":
+	for f := range templatecover.Flags(args) {
+		if f.Name == "json" {
 			return errors.New("go test flag -json cannot be passed through: muxt reads go test's text output to tell a failed test from a failed build")
-		case "mod", "modfile":
-			return fmt.Errorf("go test flag -%s cannot be passed through: the coverage pre-pass sets -mod=mod and -modfile to require github.com/typelate/htt, muxt's template engine, in a copy of go.mod", name)
-		case "coverpkg":
-			if pattern, ok := coversHTMLTemplate(f.value); ok {
-				return fmt.Errorf("go test flag -coverpkg cannot cover html/template (%q does): muxt replaces html/template with its own template engine to learn which template actions the tests reach; use -coverpkg with your own packages, such as ./... instead", pattern)
-			}
+		}
+		if err := templatecover.Refuse(f); err != nil {
+			return err
 		}
 	}
 	return nil
-}
-
-// coversHTMLTemplate returns the first of a -coverpkg value's
-// comma-separated patterns that takes in html/template.
-func coversHTMLTemplate(value string) (string, bool) {
-	for pattern := range strings.SplitSeq(value, ",") {
-		switch {
-		case pattern == "std", pattern == "all":
-			return pattern, true
-		case strings.Contains(pattern, "..."):
-			parts := strings.Split(pattern, "...")
-			for j := range parts {
-				parts[j] = regexp.QuoteMeta(parts[j])
-			}
-			if regexp.MustCompile("^" + strings.Join(parts, ".*") + "$").MatchString("html/template") {
-				return pattern, true
-			}
-		case pattern == "html/template":
-			return pattern, true
-		}
-	}
-	return "", false
 }
