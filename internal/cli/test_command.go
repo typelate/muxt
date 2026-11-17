@@ -68,8 +68,10 @@ func checkTestGoTestArgs(args []string) error {
 	}
 	for f := range templatecover.Flags(args) {
 		switch f.Name {
-		case "overlay", "mod", "modfile":
-			return templatecover.Refuse(f, purpose)
+		case "overlay", "mod", "modfile", "coverpkg":
+			if err := templatecover.Refuse(f, purpose); err != nil {
+				return err
+			}
 		}
 	}
 	return nil

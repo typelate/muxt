@@ -738,6 +738,31 @@ func TestCommandLineConfigurations(t *testing.T) {
 			args: "test -- -run TestIndex -count=2",
 			want: testConfiguration{GoTestArgs: []string{"-run", "TestIndex", "-count=2"}},
 		},
+		{
+			name: "test with a coverpkg that leaves html/template alone",
+			args: "test -- -coverpkg=./...",
+			want: testConfiguration{GoTestArgs: []string{"-coverpkg=./..."}},
+		},
+		{
+			name: "test with json",
+			args: "test -- -json",
+			want: testConfiguration{GoTestArgs: []string{"-json"}},
+		},
+		{
+			name: "test with a flag that is only the test binary's",
+			args: "test -- -args -mod=x",
+			want: testConfiguration{GoTestArgs: []string{"-args", "-mod=x"}},
+		},
+		{
+			name: "test with its own cover flags",
+			args: "test -- -cover -coverprofile=c.out",
+			want: testConfiguration{GoTestArgs: []string{"-cover", "-coverprofile=c.out"}},
+		},
+		{
+			name: "test with a package pattern",
+			args: "test -- ./...",
+			want: testConfiguration{GoTestArgs: []string{"./..."}},
+		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := configurationOf(t, tt.args, tt.env)
@@ -875,6 +900,7 @@ func TestCommandLineRejections(t *testing.T) {
 		{name: "test with an overlay of its own", args: "test -- -overlay=x.json", wantErr: "go test flag -overlay cannot be passed through: muxt test uses -overlay to put its template engine in place of html/template"},
 		{name: "test with a mod flag", args: "test -- -mod=vendor", wantErr: "go test flag -mod cannot be passed through: muxt test sets -mod=mod and -modfile to require github.com/typelate/htt, muxt's template engine, in a copy of go.mod"},
 		{name: "test with a modfile as the next argument", args: "test -- -modfile x.mod", wantErr: "go test flag -modfile cannot be passed through: muxt test sets -mod=mod and -modfile to require github.com/typelate/htt, muxt's template engine, in a copy of go.mod"},
+		{name: "test with a coverpkg that covers html/template", args: "test -- -coverpkg=./...,html/template", wantErr: `go test flag -coverpkg cannot cover html/template ("html/template" does): muxt replaces html/template with its own template engine to learn which template actions the tests reach; use -coverpkg with your own packages, such as ./... instead`},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := configurationOf(t, tt.args, nil)
