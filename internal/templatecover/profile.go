@@ -4,9 +4,11 @@ import (
 	"cmp"
 	"fmt"
 	"io"
+	"maps"
 	"path"
 	"path/filepath"
 	"slices"
+	"strings"
 
 	"github.com/typelate/htt"
 
@@ -54,21 +56,58 @@ type Profile struct {
 	files map[string]map[Block]bool
 }
 
-// Add attributes what was reached to the files in sources.
-func (p *Profile) Add(r Reached, sources []Source) {
+// AmbiguousNameError is a parse name that two or more template files
+// share, so a block reached under it cannot be put in one of them. A parse
+// name is a file's base name, and a shared fragment can have the base name
+// of a local file.
+type AmbiguousNameError struct {
+	ParseName string
+	// Files are the absolute paths that have the name, sorted.
+	Files []string
+}
+
+func (e *AmbiguousNameError) Error() string {
+	last := len(e.Files) - 1
+	files := e.Files[0]
+	if last > 0 {
+		files = strings.Join(e.Files[:last], ", ") + " and " + e.Files[last]
+	}
+	return fmt.Sprintf("%s share the parse name %s; the cover profile leaves out its blocks", files, e.ParseName)
+}
+
+// Add attributes what was reached to the files in sources. A parse name no
+// source has is dropped, and so is one that two files have, which is
+// returned in parse name order.
+func (p *Profile) Add(r Reached, sources []Source) []*AmbiguousNameError {
+	filesByName := make(map[string][]string)
 	for _, s := range sources {
 		for _, tree := range s.Trees {
-			for b := range r[tree.ParseName] {
-				if p.files == nil {
-					p.files = make(map[string]map[Block]bool)
-				}
-				if p.files[s.File] == nil {
-					p.files[s.File] = make(map[Block]bool)
-				}
-				p.files[s.File][b] = true
+			if !slices.Contains(filesByName[tree.ParseName], s.File) {
+				filesByName[tree.ParseName] = append(filesByName[tree.ParseName], s.File)
 			}
 		}
 	}
+	var ambiguous []*AmbiguousNameError
+	for _, name := range slices.Sorted(maps.Keys(r)) {
+		files := filesByName[name]
+		switch len(files) {
+		case 0:
+		case 1:
+			if p.files == nil {
+				p.files = make(map[string]map[Block]bool)
+			}
+			if p.files[files[0]] == nil {
+				p.files[files[0]] = make(map[Block]bool)
+			}
+			for b := range r[name] {
+				p.files[files[0]][b] = true
+			}
+		default:
+			slices.Sort(files)
+			ambiguous = append(ambiguous, &AmbiguousNameError{ParseName: name, Files: files})
+		}
+	}
+	return ambiguous
 }
 
 // WriteTo writes the profile in the format of a Go cover profile.
