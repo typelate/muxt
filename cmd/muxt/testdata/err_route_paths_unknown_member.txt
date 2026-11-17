@@ -1,0 +1,17 @@
+# A member of route_paths that nothing reads fails muxt generate. The error
+# names the file, the member and the closest known member.
+
+! muxt generate
+cmpenv stderr want-err.txt
+
+-- go.mod --
+module example.com/m
+
+go 1.22
+-- muxt.json --
+{
+	"route_paths": {"output_fil": "x.go"},
+	"packages": {}
+}
+-- want-err.txt --
+Error: $WORK/muxt.json: route_paths: unknown key "output_fil"; did you mean "output_file"?

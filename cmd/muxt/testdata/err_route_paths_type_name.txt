@@ -1,0 +1,17 @@
+# A type name member of route_paths that is not an exported Go identifier fails
+# muxt generate. The error names the file, the member and the value.
+
+! muxt generate
+cmpenv stderr want-err.txt
+
+-- go.mod --
+module example.com/m
+
+go 1.22
+-- muxt.json --
+{
+	"route_paths": {"output_paths_type": "paths"},
+	"packages": {}
+}
+-- want-err.txt --
+Error: $WORK/muxt.json: route_paths: output_paths_type "paths" must be an exported Go identifier

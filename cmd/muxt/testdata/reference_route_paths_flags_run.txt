@@ -1,0 +1,72 @@
+# A run configured by flags, in a directory with no entry in muxt.json, keeps
+# its own path types and leaves the hub file as it was: route_paths covers the
+# listed packages only.
+
+muxt generate
+cp route_paths.go route_paths.go.before
+
+cd other
+muxt generate --use-receiver-type=Server
+muxt check
+cd ..
+
+cmp route_paths.go route_paths.go.before
+exec go build ./...
+exec go test ./other
+
+-- go.mod --
+module example.com/m
+
+go 1.22
+-- muxt.json --
+{
+	"route_paths": {},
+	"package_defaults": {
+		"use_receiver_type": "Server"
+	},
+	"packages": {
+		"example.com/m/blog": {}
+	}
+}
+-- blog/blog.go --
+package blog
+
+import "html/template"
+
+var templates = template.Must(template.New("GET /article/{id} GetArticle(id)").Parse(`<h1>{{.Result}}</h1>`))
+
+type Server struct{}
+
+func (Server) GetArticle(id int) string { return "article" }
+-- other/other.go --
+package other
+
+import "html/template"
+
+var templates = template.Must(template.New("GET /other Index()").Parse(`<a id="self" href="{{.Path.Index}}">other</a>`))
+
+type Server struct{}
+
+func (Server) Index() string { return "other" }
+-- other/other_test.go --
+package other
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func TestAFlagsRunKeepsItsOwnPathTypes(t *testing.T) {
+	mux := http.NewServeMux()
+	var paths TemplateRoutePaths = TemplateRoutes(mux, Server{})
+	if got, want := paths.Index(), "/other"; got != want {
+		t.Errorf("paths.Index() = %q, want %q", got, want)
+	}
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/other", nil))
+	if body, want := rec.Body.String(), `id="self" href="/other"`; !strings.Contains(body, want) {
+		t.Errorf("GET /other body = %q, want it to contain %q", body, want)
+	}
+}
