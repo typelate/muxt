@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/typelate/htt/template"
 
 	"github.com/typelate/muxt/internal/overlay"
 	"github.com/typelate/muxt/internal/templatecover"
@@ -95,6 +96,24 @@ func TestTestRunsGoTestOnTheEngine(t *testing.T) {
 		"-run", "TestIndex",
 	}
 	assert.Equal(t, want, run.Calls[0].Args, "go test arguments")
+}
+
+// TestTestGivesEachJobItsOwnCoverDirectory states that two packages' test
+// binaries never write profiles to the same place, so a profile line is
+// the package's whose go test wrote it.
+func TestTestGivesEachJobItsOwnCoverDirectory(t *testing.T) {
+	run := newTestRun(t)
+	_, _, err := run.run([]packageJob{{Dir: "/work/a"}, {Dir: "/work/b"}}, testConfiguration{})
+	require.NoError(t, err, "muxt test")
+
+	require.Len(t, run.Calls, 2, "go test runs")
+	require.Len(t, run.Prepare, 2, "engines")
+	assert.NotEqual(t, run.Prepare[0], run.Prepare[1], "engine directories")
+	assert.Equal(t, filepath.Dir(run.Prepare[0]), filepath.Dir(run.Prepare[1]), "the engine directories' parent, the command's scratch")
+	for i, call := range run.Calls {
+		want := template.CoverEnv + "=" + filepath.Join(run.Prepare[i], "profiles")
+		assert.Contains(t, call.Env, want, "go test %d environment", i)
+	}
 }
 
 // TestTestPassesNoPackagePattern states that with nothing after -- go test
