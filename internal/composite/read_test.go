@@ -361,6 +361,32 @@ func TestFindRejectsARoutePathsKeyThatIsNotAnObject(t *testing.T) {
 	}
 }
 
+// TestFindRejectsAnUnknownRoutePathsMember states that a member of route_paths
+// that nothing reads is an *composite.UnknownKeyError naming the file, the
+// route_paths object and the key, with the closest known member as the hint.
+func TestFindRejectsAnUnknownRoutePathsMember(t *testing.T) {
+	for _, tt := range []struct {
+		name, key, suggestion string
+	}{
+		{name: "no near match", key: "nope", suggestion: ""},
+		{name: "a typo", key: "output_fil", suggestion: "output_file"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := writeFile(t, `{"route_paths": {"`+tt.key+`": 1}, "packages": {}}`)
+
+			_, _, err := composite.Find(dir, testKeys())
+
+			var typed *composite.UnknownKeyError
+			require.ErrorAs(t, err, &typed, "Find error %v", err)
+			path := filepath.Join(dir, composite.FileName)
+			assert.Equal(t, path, typed.Path, "Path = %q, want %q", typed.Path, path)
+			assert.Equal(t, "route_paths", typed.Where, "Where = %q, want %q", typed.Where, "route_paths")
+			assert.Equal(t, tt.key, typed.Key, "Key = %q, want %q", typed.Key, tt.key)
+			assert.Equal(t, tt.suggestion, typed.Suggestion, "Suggestion = %q, want %q", typed.Suggestion, tt.suggestion)
+		})
+	}
+}
+
 // TestFindAcceptsARoutePathsKey states that a top-level route_paths object is
 // read, and that the File says whether the key is there at all.
 func TestFindAcceptsARoutePathsKey(t *testing.T) {
