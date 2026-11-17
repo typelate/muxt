@@ -2,7 +2,6 @@ package mutation
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"go/version"
 	"io"
@@ -10,24 +9,18 @@ import (
 	"path/filepath"
 	"strings"
 
-	"golang.org/x/tools/cover"
-
 	"github.com/typelate/muxt/internal/overlay"
+	"github.com/typelate/muxt/internal/templatecover"
 )
 
 // coverage is the template blocks the tests executed in the coverage
-// pre-pass, by the parse name of the template they are in, which is a
-// file's base name: two files with one base name share a key.
-//
-// Nil means coverage is unknown, and nothing may be read from it; an
-// empty coverage means the tests executed no template at all.
-type coverage map[string]map[coverBlock]struct{}
+// pre-pass, as templatecover.Reached reads them. It is a defined type, not
+// an alias, so that reaches can be its method.
+type coverage templatecover.Reached
 
 // coverBlock is a block's span in its template, as a cover profile gives
 // it.
-type coverBlock struct {
-	StartLine, StartCol, EndLine, EndCol int
-}
+type coverBlock = templatecover.Block
 
 // coverageRun runs the tests once with the engine's files and the
 // directory each test binary writes its profile to, as goTest.coverage.
@@ -99,13 +92,13 @@ func templateCoverage(ctx context.Context, tc overlay.Toolchain, scratch string,
 	case out.coverDisabled != "":
 		return coverageUnknown(warn, out.coverDisabled), engineNote(engine), nil
 	}
-	cov, err := mergeProfiles(coverDir)
+	reached, err := templatecover.ReadProfiles(coverDir)
 	if err != nil {
 		return coverageUnknown(warn, err.Error()), engineNote(engine), nil
 	}
 	warnRaisedGoLine(warn, engine)
 	warnUpgrades(warn, engine)
-	return cov, engineNote(engine), nil
+	return coverage(reached), engineNote(engine), nil
 }
 
 // engineNote says which github.com/typelate/htt the pre-pass built the
@@ -206,47 +199,4 @@ func firstError(out string, err error) string {
 		return line
 	}
 	return err.Error()
-}
-
-// errNoProfile is a pre-pass in which no test binary wrote a profile.
-var errNoProfile = errors.New("no test binary ran the templates (no coverage profile was written)")
-
-// mergeProfiles unions every <pid>.cov in dir by block. A block is in the
-// union when any test binary executed it.
-//
-// Every test binary that runs the engine writes its profile as it starts,
-// so a profile with no blocks is a binary that executed no template.
-// No profile at all is errNoProfile: nothing says the engine ran, as when
-// a package has no test files, -exec runs the tests elsewhere, or they
-// render through a server binary of their own, and reading it as nothing
-// reached would skip every mutant.
-func mergeProfiles(dir string) (coverage, error) {
-	files, err := filepath.Glob(filepath.Join(dir, "*.cov"))
-	if err != nil {
-		return nil, err
-	}
-	if len(files) == 0 {
-		return nil, errNoProfile
-	}
-	cov := make(coverage)
-	for _, name := range files {
-		profiles, err := cover.ParseProfiles(name)
-		if err != nil {
-			return nil, fmt.Errorf("reading template coverage: %w", err)
-		}
-		for _, p := range profiles {
-			for _, b := range p.Blocks {
-				if b.Count == 0 {
-					continue
-				}
-				blocks := cov[p.FileName]
-				if blocks == nil {
-					blocks = make(map[coverBlock]struct{})
-					cov[p.FileName] = blocks
-				}
-				blocks[coverBlock{StartLine: b.StartLine, StartCol: b.StartCol, EndLine: b.EndLine, EndCol: b.EndCol}] = struct{}{}
-			}
-		}
-	}
-	return cov, nil
 }
