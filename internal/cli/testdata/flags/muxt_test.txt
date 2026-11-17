@@ -1,0 +1,15 @@
+muxt test
+
+flags:
+
+--help:
+Run go test on muxt's template engine
+
+Usage:
+  muxt test [-- go test flags] [flags]
+
+Flags:
+  -h, --help   help for test
+
+Global Flags:
+  -C, --change-directory string   change the working directory

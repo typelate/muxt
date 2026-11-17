@@ -12,6 +12,7 @@ import (
 	"github.com/typelate/muxt/internal/analysis"
 	"github.com/typelate/muxt/internal/load"
 	"github.com/typelate/muxt/internal/mutation"
+	"github.com/typelate/muxt/internal/templatecover"
 )
 
 const (
@@ -37,6 +38,7 @@ func Commands(wd string, args []string, getEnv func(string) string, stdin io.Rea
 		calls:     callsRunner(load.InDirectories),
 		mutations: runTemplateMutations,
 		format:    runFormatCommand,
+		test:      testRunner(runGoTest, templatecover.Prepare),
 		load:      load.InDirectories,
 	})
 }
@@ -59,6 +61,7 @@ type runners struct {
 	calls     func(cmd *cobra.Command, jobs []packageJob, config analysis.TemplateCallsConfiguration) error
 	mutations func(cmd *cobra.Command, wd string, config mutation.Configuration) error
 	format    func(cmd *cobra.Command, wd string, config formatConfiguration) error
+	test      func(cmd *cobra.Command, jobs []packageJob, config testConfiguration) error
 
 	// load is how generate def asks for the package it adds a template to. A
 	// nil load skips the checks that need the package, so a test states what a
@@ -149,6 +152,7 @@ The documentation for this version is in the binary:
 		exploreModuleCommand(workingDirectory, getEnv),
 		generateFakeServerCommand(workingDirectory, getEnv),
 		testTemplateMutationsCommand(workingDirectory, getEnv, run.mutations),
+		testCommand(workingDirectory, getEnv, run.test),
 		documentationCommand(version),
 	)
 	describe(rootCmd)

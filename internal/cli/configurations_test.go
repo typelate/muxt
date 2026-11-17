@@ -47,6 +47,12 @@ func configurationOf(t *testing.T, commandLine string, env map[string]string) (a
 		calls:     func(_ *cobra.Command, _ []packageJob, c analysis.TemplateCallsConfiguration) error { return record(c) },
 		mutations: func(_ *cobra.Command, _ string, c mutation.Configuration) error { return record(c) },
 		format:    func(_ *cobra.Command, _ string, c formatConfiguration) error { return record(c) },
+		test: func(_ *cobra.Command, jobs []packageJob, c testConfiguration) error {
+			if len(jobs) != 1 {
+				return fmt.Errorf("got %d test jobs, want 1", len(jobs))
+			}
+			return record(c)
+		},
 	})
 	return got, err
 }
@@ -720,6 +726,13 @@ func TestCommandLineConfigurations(t *testing.T) {
 			args: "fmt --write --list --diff x.gohtml",
 			want: formatConfiguration{Paths: []string{"x.gohtml"}, Write: true, List: true, Diff: true},
 		},
+		{
+			// The package directory is the working directory; see
+			// TestChangeDirectory.
+			name: "test with nothing after --",
+			args: "test",
+			want: testConfiguration{},
+		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := configurationOf(t, tt.args, tt.env)
@@ -750,6 +763,8 @@ func TestChangeDirectory(t *testing.T) {
 		{args: "test-template-mutations --dry-run ./internal/preview -- -count=1", want: "/work/internal/preview"},
 		{args: "-C sub test-template-mutations ../preview", want: "/work/preview"},
 		{args: "test-template-mutations -- -count=1", want: "/work"},
+		{args: "test", want: "/work"},
+		{args: "-C sub test", want: "/work/sub"},
 	} {
 		t.Run(tt.args, func(t *testing.T) {
 			var got string
@@ -771,6 +786,12 @@ func TestChangeDirectory(t *testing.T) {
 					return record(jobs[0].Dir)
 				},
 				mutations: func(_ *cobra.Command, wd string, _ mutation.Configuration) error { return record(wd) },
+				test: func(_ *cobra.Command, jobs []packageJob, _ testConfiguration) error {
+					if len(jobs) != 1 {
+						return fmt.Errorf("got %d test jobs, want 1", len(jobs))
+					}
+					return record(jobs[0].Dir)
+				},
 			})
 			require.NoError(t, err)
 			assert.Equal(t, filepath.FromSlash(tt.want), got)

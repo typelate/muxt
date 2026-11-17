@@ -20,6 +20,13 @@ type goTestFunc func(ctx context.Context, dir string, env, args []string, stdout
 // prepareFunc is templatecover.Prepare, replaced in tests.
 type prepareFunc func(ctx context.Context, tc overlay.Toolchain, dir string) (templatecover.Engine, error)
 
+// runGoTest is the go command, run as templatecover.Command sets it up.
+func runGoTest(ctx context.Context, dir string, env, args []string, stdout, stderr io.Writer) error {
+	cmd := templatecover.Command(ctx, dir, env, args...)
+	cmd.Stdout, cmd.Stderr = stdout, stderr
+	return cmd.Run()
+}
+
 // testRunner runs each job's tests on muxt's template engine. The go test
 // of a job is separate from the others', so a profile line can be
 // attributed to the files of the package it came from.

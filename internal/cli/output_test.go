@@ -153,7 +153,7 @@ func TestCommandsAreWired(t *testing.T) {
 	for _, name := range []string{
 		generateCommandName, versionCommandName, checkCommandName,
 		listTemplateCallersCommandName, listTemplateCallsCommandName,
-		exploreModuleCommandName, generateFakeServerCommandName, testTemplateMutationsName,
+		exploreModuleCommandName, generateFakeServerCommandName, testTemplateMutationsName, testCommandName,
 	} {
 		t.Run(name, func(t *testing.T) {
 			assert.Contains(t, help(t, name), "muxt "+name, "muxt %s --help want its usage", name)
