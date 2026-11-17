@@ -87,7 +87,7 @@ func testRunner(goTest goTestFunc, prepare prepareFunc) func(*cobra.Command, []p
 		// package that cannot have one costs no run of the packages before it.
 		engines := make([]templatecover.Engine, len(jobs))
 		for i, job := range jobs {
-			engines[i], err = prepare(ctx, overlay.Toolchain{Go: "go", Dir: job.Dir}, filepath.Join(scratch, strconv.Itoa(i)))
+			engines[i], err = prepare(ctx, overlay.Toolchain{Go: "go", Dir: job.Dir, Purpose: "muxt " + testCommandName}, filepath.Join(scratch, strconv.Itoa(i)))
 			if err != nil {
 				if ctxErr := ctx.Err(); ctxErr != nil {
 					return ctxErr

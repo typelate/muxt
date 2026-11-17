@@ -351,11 +351,19 @@ func TestProbe(t *testing.T) {
 // is refused: htt at its version, or the fork that replaces it.
 func TestProbeRefusalNamesAnUnfetchableModule(t *testing.T) {
 	for _, tt := range []struct {
-		name   string
-		reason string
-		req    overlay.Requirement
-		want   string
+		name    string
+		reason  string
+		purpose string
+		req     overlay.Requirement
+		want    string
 	}{
+		{
+			name:    "htt, for a command that names itself",
+			reason:  "go: github.com/typelate/htt@v0.2.0: module lookup disabled by GOPROXY=off",
+			purpose: "muxt test",
+			req:     overlay.Requirement{Version: "v0.2.0"},
+			want:    "cannot get github.com/typelate/htt@v0.2.0, which muxt test requires",
+		},
 		{
 			name:   "htt",
 			reason: "go: github.com/typelate/htt@v0.2.0: module lookup disabled by GOPROXY=off",
@@ -370,7 +378,7 @@ func TestProbeRefusalNamesAnUnfetchableModule(t *testing.T) {
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			err := overlay.ProbeRefusal(errors.New(tt.reason), tt.req)
+			err := overlay.ProbeRefusal(errors.New(tt.reason), tt.req, tt.purpose)
 			for _, want := range []string{tt.want, "module cache", "module lookup disabled by GOPROXY=off"} {
 				if !strings.Contains(err.Error(), want) {
 					t.Errorf("probeRefusal = %q, want it to say %q", err, want)
@@ -405,6 +413,7 @@ func TestEngineFile(t *testing.T) {
 func TestProbeReportsARefusedOverlay(t *testing.T) {
 	for _, tt := range []struct {
 		name, stderr string
+		purpose      string
 		want         []string
 		not          []string
 	}{
@@ -425,10 +434,22 @@ func TestProbeReportsARefusedOverlay(t *testing.T) {
 			want:   []string{"go.work is in use", "go: -modfile cannot be used in workspace mode"},
 			not:    []string{"GOTOOLCHAIN=local"},
 		},
+		{
+			name:    "a workspace, for a command that names itself",
+			stderr:  "go: -modfile cannot be used in workspace mode",
+			purpose: "muxt test",
+			want:    []string{"go.work is in use", "refuses muxt test's -modfile in workspace mode", "go: -modfile cannot be used in workspace mode"},
+			not:     []string{"coverage pre-pass"},
+		},
+		{
+			name:   "a workspace, for the coverage pre-pass",
+			stderr: "go: -modfile cannot be used in workspace mode",
+			want:   []string{"refuses the coverage pre-pass's -modfile in workspace mode"},
+		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			goBin := fakeGo(t, t.TempDir(), t.TempDir(), "echo '"+tt.stderr+"' >&2; exit 1")
-			err := probe(context.Background(), overlay.Toolchain{Go: goBin})
+			err := probe(context.Background(), overlay.Toolchain{Go: goBin, Purpose: tt.purpose})
 			if err == nil {
 				t.Fatal("Probe succeeded against a go command that refuses the overlay")
 			}

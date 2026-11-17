@@ -32,7 +32,8 @@ type goTestCall struct {
 // the runner asked of each.
 type testRun struct {
 	t       *testing.T
-	Prepare []string // the directory each engine was written to
+	Prepare []string            // the directory each engine was written to
+	Targets []overlay.Toolchain // the toolchain each engine was prepared for
 	Calls   []goTestCall
 
 	// Write is what each go test writes to its stdout and stderr, and
@@ -56,9 +57,10 @@ func (r *testRun) goTest(_ context.Context, dir string, env, args []string, stdo
 	return nil
 }
 
-func (r *testRun) prepare(_ context.Context, _ overlay.Toolchain, dir string) (templatecover.Engine, error) {
+func (r *testRun) prepare(_ context.Context, tc overlay.Toolchain, dir string) (templatecover.Engine, error) {
 	call := len(r.Prepare)
 	r.Prepare = append(r.Prepare, dir)
+	r.Targets = append(r.Targets, tc)
 	if r.PrepareResult != nil {
 		if err := r.PrepareResult(call); err != nil {
 			return templatecover.Engine{}, err
@@ -169,6 +171,21 @@ func TestTestStopsAtTheFirstFailingPackage(t *testing.T) {
 	require.Len(t, run.Calls, 2, "go test runs")
 	assert.Equal(t, "/work/b", run.Calls[1].Dir, "the last package tested")
 	assert.NotContains(t, stdout, "example.com/c", "stdout names the package that never ran")
+}
+
+// TestTestPreparesEachEngineInItsPackageForMuxtTest states that an engine
+// is prepared in the package's directory, and that the toolchain says muxt
+// test is the command whose -modfile the go command may refuse.
+func TestTestPreparesEachEngineInItsPackageForMuxtTest(t *testing.T) {
+	run := newTestRun(t)
+	_, _, err := run.run([]packageJob{{Dir: "/work/a"}, {Dir: "/work/b"}}, testConfiguration{})
+	require.NoError(t, err, "muxt test")
+
+	want := []overlay.Toolchain{
+		{Go: "go", Dir: "/work/a", Purpose: "muxt test"},
+		{Go: "go", Dir: "/work/b", Purpose: "muxt test"},
+	}
+	assert.Equal(t, want, run.Targets, "toolchains")
 }
 
 // TestTestRunsNothingWhenAnEngineCannotBePrepared states that the engines

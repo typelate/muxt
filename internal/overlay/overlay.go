@@ -61,6 +61,19 @@ type Toolchain struct {
 
 	// Env is the go command's environment, nil for the process's own.
 	Env []string
+
+	// Purpose names the command that sets -modfile, so a refusal says whose
+	// flag the go command refused: "muxt test" reads "muxt test's -modfile".
+	// Empty names the coverage pre-pass.
+	Purpose string
+}
+
+// modfileSetter is who a refusal says sets -modfile.
+func (tc Toolchain) modfileSetter() string {
+	if tc.Purpose == "" {
+		return "the coverage pre-pass"
+	}
+	return tc.Purpose
 }
 
 func (tc Toolchain) goBin() string {
@@ -508,7 +521,7 @@ func Probe(ctx context.Context, target Target) (err error) {
 	}
 	out, err := goOutput(ctx, tc, "list", "-mod=mod", "-modfile="+modFile, "-overlay="+jsonPath, "-f", "{{range .GoFiles}}{{println .}}{{end}}", "html/template")
 	if err != nil {
-		return probeRefusal(err, req)
+		return probeRefusal(err, req, tc.modfileSetter())
 	}
 	for _, name := range strings.Fields(string(out)) {
 		if name == probeFile {
@@ -520,8 +533,12 @@ func Probe(ctx context.Context, target Target) (err error) {
 
 // probeRefusal says why the probe's go list failed: the go command's own
 // reason, which is what it printed to standard error, with the advice that
-// fits it. The go command says what it refuses only in that text.
-func probeRefusal(err error, req requirement) error {
+// fits it. The go command says what it refuses only in that text. setter is
+// who sets -modfile; "" names the coverage pre-pass.
+func probeRefusal(err error, req requirement, setter string) error {
+	if setter == "" {
+		setter = Toolchain{}.modfileSetter()
+	}
 	reason := err.Error()
 	var goErr *goCommandError
 	if errors.As(err, &goErr) && goErr.stderr != "" {
@@ -533,9 +550,9 @@ func probeRefusal(err error, req requirement) error {
 	}
 	switch {
 	case strings.Contains(reason, "workspace mode"):
-		return fmt.Errorf("go.work is in use, and the go command refuses the coverage pre-pass's -modfile in workspace mode: %s", reason)
+		return fmt.Errorf("go.work is in use, and the go command refuses %s's -modfile in workspace mode: %s", setter, reason)
 	case req.Dir == "" && strings.Contains(reason, engine.Path+"@"):
-		return fmt.Errorf("the go command cannot get %s@%s, which the coverage pre-pass requires (it must be in the module cache or on the module proxy): %s", engine.Path, engine.Version, reason)
+		return fmt.Errorf("the go command cannot get %s@%s, which %s requires (it must be in the module cache or on the module proxy): %s", engine.Path, engine.Version, setter, reason)
 	case strings.Contains(strings.ToLower(reason), "toolchain"), strings.Contains(reason, "GOMODCACHE"):
 		return fmt.Errorf("the go command refuses an overlay of GOROOT's html/template (try GOTOOLCHAIN=local): %s", reason)
 	default:
