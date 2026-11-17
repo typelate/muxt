@@ -338,20 +338,33 @@ func TestTestNamesEachKeyedPackage(t *testing.T) {
 
 // TestTestNamesNoKeyWhenGoTestWritesJSON states that with -json after -- the
 // output stays a stream of JSON events: a key line would break every
-// reader of it.
+// reader of it. A -json that go test reads as off leaves the key lines in.
 func TestTestNamesNoKeyWhenGoTestWritesJSON(t *testing.T) {
-	run := newTestRun(t)
-	run.Write = func(_ int, stdout, _ io.Writer) {
-		_, _ = io.WriteString(stdout, "{}\n")
-	}
-	jobs := []packageJob{
-		{Key: "example.com/a", Dir: "/work/a", Keyed: true},
-		{Key: "example.com/b", Dir: "/work/b", Keyed: true},
-	}
-	stdout, _, err := run.run(jobs, testConfiguration{GoTestArgs: []string{"-json"}})
-	require.NoError(t, err, "muxt test")
+	for _, tt := range []struct {
+		args       []string
+		wantStdout string
+	}{
+		{args: []string{"-json"}, wantStdout: "{}\n{}\n"},
+		{args: []string{"-json=true"}, wantStdout: "{}\n{}\n"},
+		{args: []string{"-json=false"}, wantStdout: "example.com/a\n{}\nexample.com/b\n{}\n"},
+		{args: []string{"-json", "-json=false"}, wantStdout: "example.com/a\n{}\nexample.com/b\n{}\n"},
+		{args: []string{"-json=false", "-json"}, wantStdout: "{}\n{}\n"},
+	} {
+		t.Run(strings.Join(tt.args, " "), func(t *testing.T) {
+			run := newTestRun(t)
+			run.Write = func(_ int, stdout, _ io.Writer) {
+				_, _ = io.WriteString(stdout, "{}\n")
+			}
+			jobs := []packageJob{
+				{Key: "example.com/a", Dir: "/work/a", Keyed: true},
+				{Key: "example.com/b", Dir: "/work/b", Keyed: true},
+			}
+			stdout, _, err := run.run(jobs, testConfiguration{GoTestArgs: tt.args})
+			require.NoError(t, err, "muxt test")
 
-	assert.Equal(t, "{}\n{}\n", stdout, "stdout")
+			assert.Equal(t, tt.wantStdout, stdout, "muxt test -- %s stdout", strings.Join(tt.args, " "))
+		})
+	}
 }
 
 // TestTestPassesNoPackagePattern states that with nothing after -- go test
