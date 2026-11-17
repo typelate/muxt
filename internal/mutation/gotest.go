@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"os"
 	"os/exec"
 	"regexp"
 	"slices"
@@ -87,12 +86,9 @@ func (t goTest) baseline(ctx context.Context) (string, error) {
 const coverageOutputLimit = 1 << 20
 
 // coverageFlags are the go test flags of the coverage pre-pass: the
-// overlay putting the shim in place of html/template, and the modfile
-// requiring github.com/typelate/htt, which the shim imports. -mod=mod
-// lets the go command add the sums htt's requirements need to the
-// modfile's go.sum, never the test target's. -v is required: see coverage.
+// engine's, and -v, which is required: see coverage.
 func coverageFlags(engine overlay.Files) []string {
-	return []string{"-v", "-mod=mod", "-modfile=" + engine.ModFile, "-overlay=" + engine.Overlay}
+	return append([]string{"-v"}, templatecover.Engine{Files: engine}.Flags()...)
 }
 
 // coverage runs the tests once, unmutated, with engine's files laying
@@ -106,11 +102,7 @@ func coverageFlags(engine overlay.Files) []string {
 // says so only on its stderr, with html.CoverDisabledMarker. Without -v a
 // broken export would read as templates no test reached.
 func (t goTest) coverage(ctx context.Context, engine overlay.Files, coverDir string) (*goTestOutput, error) {
-	env := t.env
-	if env == nil {
-		env = os.Environ()
-	}
-	t.env = append(slices.Clip(env), template.CoverEnv+"="+coverDir)
+	t.env = templatecover.Engine{Files: engine, CoverDir: coverDir}.Environ(t.env)
 	t.extra = withoutCoverFlags(t.extra)
 	return t.run(ctx, coverageOutputLimit, coverageFlags(engine)...)
 }

@@ -2,10 +2,10 @@ package mutation
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"go/version"
 	"io"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -46,32 +46,18 @@ func (c Configuration) toolchain(dir string) overlay.Toolchain {
 // that fail under the engine: kill runs use the real html/template, and
 // the baseline, which has passed by then, is what says the tests pass.
 func templateCoverage(ctx context.Context, tc overlay.Toolchain, scratch string, run coverageRun, warn io.Writer) (coverage, string, error) {
-	// The toolchain is asked for its GOROOT and the target's go.mod once,
-	// for both the probe and the files.
-	target, err := overlay.Resolve(ctx, tc)
-	if err == nil {
-		err = overlay.Probe(ctx, target)
-	}
+	prepared, err := templatecover.Prepare(ctx, tc, filepath.Join(scratch, "coverage"))
 	if err != nil {
-		if ctxErr := ctx.Err(); ctxErr != nil {
+		unavailable, ok := errors.AsType[*templatecover.UnavailableError](err)
+		if !ok {
+			return nil, "", err
+		}
+		if ctxErr := ctx.Err(); unavailable.Resolving && ctxErr != nil {
 			return nil, "", ctxErr
 		}
-		return coverageUnknown(warn, err.Error()), "", nil
+		return coverageUnknown(warn, unavailable.Error()), "", nil
 	}
-	dir, err := filepath.Abs(filepath.Join(scratch, "coverage"))
-	if err != nil {
-		return nil, "", err
-	}
-	// The overlay names the shim by its path verbatim, so it is
-	// absolute.
-	coverDir := filepath.Join(dir, "profiles")
-	if err := os.MkdirAll(coverDir, 0o700); err != nil {
-		return nil, "", err
-	}
-	engine, err := overlay.Write(target, dir)
-	if err != nil {
-		return coverageUnknown(warn, err.Error()), "", nil
-	}
+	engine, coverDir := prepared.Files, prepared.CoverDir
 
 	out, err := run(ctx, engine, coverDir)
 	if ctxErr := ctx.Err(); ctxErr != nil {
