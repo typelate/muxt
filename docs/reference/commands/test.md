@@ -10,6 +10,8 @@ Everything after `--` goes to `go test` as written, after `-count=1`; a later `-
 
 `go test`'s stdout and stderr reach yours unchanged. In a healthy run muxt prints nothing of its own.
 
+The files that put the engine in place are written to a temporary directory, removed when the command ends, an interrupt included.
+
 ## Failures
 
 When `go test` fails, `muxt test` exits `1` and adds nothing to what `go test` printed. Every failure exits `1`, `go test`'s `2` included.

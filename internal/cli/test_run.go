@@ -7,8 +7,10 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"strconv"
+	"syscall"
 
 	"github.com/spf13/cobra"
 
@@ -43,13 +45,24 @@ func runGoTest(ctx context.Context, dir string, env, args []string, stdout, stde
 // of a job is separate from the others', so a profile line can be
 // attributed to the files of the package it came from.
 func testRunner(goTest goTestFunc, prepare prepareFunc) func(*cobra.Command, []packageJob, testConfiguration) error {
-	return func(cmd *cobra.Command, jobs []packageJob, config testConfiguration) error {
+	return func(cmd *cobra.Command, jobs []packageJob, config testConfiguration) (err error) {
+		// An interrupt stops the go test in flight and removes the files
+		// the run wrote; a second one ends the process at once.
+		ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
+		defer stop()
+		context.AfterFunc(ctx, stop)
+
 		scratch, err := os.MkdirTemp("", "muxt-test-")
 		if err != nil {
 			return fmt.Errorf("creating a scratch directory: %w", err)
 		}
+		defer func() {
+			if rmErr := os.RemoveAll(scratch); rmErr != nil {
+				err = errors.Join(err, fmt.Errorf("removing the scratch directory: %w", rmErr))
+			}
+		}()
 		for i, job := range jobs {
-			engine, err := prepare(cmd.Context(), overlay.Toolchain{Go: "go", Dir: job.Dir}, filepath.Join(scratch, strconv.Itoa(i)))
+			engine, err := prepare(ctx, overlay.Toolchain{Go: "go", Dir: job.Dir}, filepath.Join(scratch, strconv.Itoa(i)))
 			if err != nil {
 				return fmt.Errorf("cannot run the tests on muxt's template engine: %w", err)
 			}
@@ -57,7 +70,11 @@ func testRunner(goTest goTestFunc, prepare prepareFunc) func(*cobra.Command, []p
 			// replayed pass cannot leave a package out of the profile.
 			args := append([]string{"test", "-count=1"}, engine.Flags()...)
 			args = append(args, config.GoTestArgs...)
-			if err := goTest(cmd.Context(), job.Dir, engine.Environ(nil), args, cmd.OutOrStdout(), cmd.ErrOrStderr()); err != nil {
+			if err := goTest(ctx, job.Dir, engine.Environ(nil), args, cmd.OutOrStdout(), cmd.ErrOrStderr()); err != nil {
+				if ctxErr := ctx.Err(); ctxErr != nil {
+					// Whatever the interrupted run said, it was not a verdict.
+					return ctxErr
+				}
 				exit, ok := errors.AsType[*exec.ExitError](err)
 				if !ok {
 					return fmt.Errorf("running go test in %s: %w", job.Dir, err)

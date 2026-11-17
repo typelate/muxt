@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -135,6 +136,70 @@ func TestTestFailsWhenTheTestsFail(t *testing.T) {
 	assert.True(t, ok, "the error is a *goTestFailure, got %T: %v", err, err)
 	assert.Equal(t, "--- FAIL: TestIndex (0.00s)\nFAIL\n", stdout.String(), "stdout")
 	assert.Empty(t, stderr.String(), "stderr")
+}
+
+// TestTestRemovesItsScratchDirectory states that the engine files and
+// profiles are gone when the command returns, however it ends.
+func TestTestRemovesItsScratchDirectory(t *testing.T) {
+	for _, tt := range []struct {
+		name   string
+		result func(ctx context.Context) error
+		check  func(t *testing.T, err error)
+	}{
+		{
+			name:   "tests that pass",
+			result: func(context.Context) error { return nil },
+			check:  func(t *testing.T, err error) { assert.NoError(t, err, "muxt test") },
+		},
+		{
+			name:   "tests that fail",
+			result: func(context.Context) error { return &exec.ExitError{} },
+			check:  func(t *testing.T, err error) { assert.Error(t, err, "muxt test") },
+		},
+		{
+			name: "an interrupt",
+			result: func(ctx context.Context) error {
+				self, err := os.FindProcess(os.Getpid())
+				if err == nil {
+					err = self.Signal(os.Interrupt)
+				}
+				if err != nil {
+					t.Skipf("cannot interrupt this process: %v", err)
+				}
+				<-ctx.Done()
+				return ctx.Err()
+			},
+			check: func(t *testing.T, err error) { assert.ErrorIs(t, err, context.Canceled, "muxt test") },
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			tmp := t.TempDir()
+			t.Setenv("TMPDIR", tmp)
+			var out, errOut bytes.Buffer
+			cmd := &cobra.Command{Use: testCommandName}
+			cmd.SetOut(&out)
+			cmd.SetErr(&errOut)
+			cmd.SetContext(context.Background())
+			var written []string
+			prepare := func(_ context.Context, _ overlay.Toolchain, dir string) (templatecover.Engine, error) {
+				// Write what the real Prepare writes, so there is something to remove.
+				if err := os.MkdirAll(filepath.Join(dir, "profiles"), 0o700); err != nil {
+					return templatecover.Engine{}, err
+				}
+				written = append(written, dir)
+				return templatecover.Engine{CoverDir: filepath.Join(dir, "profiles")}, nil
+			}
+			goTest := func(ctx context.Context, _ string, _, _ []string, _, _ io.Writer) error { return tt.result(ctx) }
+			err := testRunner(goTest, prepare)(cmd, []packageJob{{Dir: "/work/pkg"}}, testConfiguration{})
+			tt.check(t, err)
+
+			require.Len(t, written, 1, "engines written")
+			assert.NoDirExists(t, filepath.Dir(written[0]), "scratch directory")
+			left, readErr := os.ReadDir(tmp)
+			require.NoError(t, readErr, "reading TMPDIR")
+			assert.Empty(t, left, "files left in TMPDIR")
+		})
+	}
 }
 
 // TestTestGivesEachJobItsOwnCoverDirectory states that two packages' test
