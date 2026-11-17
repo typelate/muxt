@@ -211,6 +211,33 @@ func TestTestRunsNothingWhenAnEngineCannotBePrepared(t *testing.T) {
 	assert.Empty(t, stdout, "stdout")
 }
 
+// TestTestReportsAnInterruptDuringPreparation states that a preparation an
+// interrupt cut short is reported as the interrupt: the go command it
+// killed said nothing about the engine.
+func TestTestReportsAnInterruptDuringPreparation(t *testing.T) {
+	t.Setenv("TMPDIR", t.TempDir())
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	cmd := &cobra.Command{Use: testCommandName}
+	cmd.SetOut(io.Discard)
+	cmd.SetErr(io.Discard)
+	cmd.SetContext(ctx)
+	prepare := func(context.Context, overlay.Toolchain, string) (templatecover.Engine, error) {
+		cancel()
+		return templatecover.Engine{}, errors.New("signal: interrupt")
+	}
+	var calls int
+	goTest := func(context.Context, string, []string, []string, io.Writer, io.Writer) error {
+		calls++
+		return nil
+	}
+	err := testRunner(goTest, prepare)(cmd, []packageJob{{Dir: "/work/pkg"}}, testConfiguration{})
+
+	assert.ErrorIs(t, err, context.Canceled, "muxt test")
+	assert.NotContains(t, err.Error(), "template engine", "error")
+	assert.Zero(t, calls, "go test runs")
+}
+
 // TestTestNamesTheFailingKeyedPackage states that when one of several
 // packages fails, the last line of stderr says which, because go test's own
 // report may have scrolled away.
