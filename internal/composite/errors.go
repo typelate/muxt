@@ -440,6 +440,19 @@ func (k Kind) description() string {
 	}
 }
 
+// RouteValueError reports a value in the route_paths object that is not usable
+// as written, such as an output_file that is not a Go file name in the
+// directory holding the muxt.json. Where names the object, Key the member, Value
+// the value as written, and Rule what the value must be.
+type RouteValueError struct {
+	Path, Where, Key, Value, Rule string
+}
+
+// Error returns the path, the member, the value and the rule on one line.
+func (e *RouteValueError) Error() string {
+	return fmt.Sprintf("%s: %s: %s %q %s", e.Path, e.Where, e.Key, e.Value, e.Rule)
+}
+
 // ValueError reports a value of a muxt.json key that its setting's parser
 // rejects, such as a byte size that is not one. Key is the muxt.json key and
 // Err is the parser's error.

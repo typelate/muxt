@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"unicode"
 )
 
 // FileName is the name of the configuration file muxt looks for.
@@ -280,6 +281,9 @@ func read(path string, keys Keys) (*File, error) {
 		// The json package matches a struct field in any letter case, so a
 		// "Packages" holding a list fails as a Go type: name it as a key the
 		// file does not know instead.
+		if kindErr := checkRoutePathsKinds(path, data); kindErr != nil {
+			return nil, kindErr
+		}
 		if keyErr := checkTopKeys(path, data); keyErr != nil {
 			return nil, keyErr
 		}
@@ -325,6 +329,9 @@ func (f *File) checkKeys(data []byte, raw rawFile, keys Keys) error {
 		return err
 	}
 	if err := checkRoutePathsKeys(f.Name, data); err != nil {
+		return err
+	}
+	if err := checkRoutePathsValues(f.Name, raw.RoutePaths); err != nil {
 		return err
 	}
 	// Sorted, so a did-you-mean hint between two equally close keys is the
@@ -381,6 +388,39 @@ func checkRoutePathsKeys(path string, data []byte) error {
 		}
 	}
 	return nil
+}
+
+// checkRoutePathsKinds returns a *ValueTypeError for an output_file in data that
+// is not a JSON string. The json package fails on such a value with a Go type
+// name, so the members are read again from data here, the way checkKinds reads
+// an entry's.
+func checkRoutePathsKinds(path string, data []byte) error {
+	var top struct {
+		RoutePaths map[string]json.RawMessage `json:"route_paths"`
+	}
+	if err := json.Unmarshal(data, &top); err != nil {
+		return fmt.Errorf("parsing %s: %w", path, err)
+	}
+	kinds := Keys{Kinds: map[string]Kind{"output_file": KindString}}
+	return checkEntryKinds(path, "route_paths", top.RoutePaths, kinds)
+}
+
+// checkRoutePathsValues returns a *RouteValueError for an output_file that is
+// not a Go file name. The generator joins the name onto the muxt.json directory,
+// so a name with a directory part would write outside it. An absent or empty
+// output_file is fine: the default is used.
+func checkRoutePathsValues(path string, rp *RoutePaths) error {
+	if rp == nil || rp.OutputFile == "" || isGoFileName(rp.OutputFile) {
+		return nil
+	}
+	return &RouteValueError{Path: path, Where: "route_paths", Key: "output_file", Value: rp.OutputFile, Rule: "must be a Go file name in this directory"}
+}
+
+// isGoFileName reports whether name is a plain file name ending in ".go", with
+// something before the extension and no separator or whitespace.
+func isGoFileName(name string) bool {
+	base := strings.TrimSuffix(name, ".go")
+	return base != "" && base != name && !strings.ContainsAny(name, `/\`) && !strings.ContainsFunc(name, unicode.IsSpace)
 }
 
 // checkPackageKey returns a *KeyFormError for a key that is a directory

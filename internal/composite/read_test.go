@@ -404,6 +404,16 @@ func TestFindAcceptsARoutePathsKey(t *testing.T) {
 			file: `{"packages": {}}`,
 			want: false,
 		},
+		{
+			name: "output file",
+			file: `{"route_paths": {"output_file": "paths_gen.go"}, "packages": {}}`,
+			want: true,
+		},
+		{
+			name: "default output file name",
+			file: `{"route_paths": {"output_file": "route_paths.go"}, "packages": {}}`,
+			want: true,
+		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			dir := writeFile(t, tt.file)
@@ -414,6 +424,49 @@ func TestFindAcceptsARoutePathsKey(t *testing.T) {
 			require.True(t, found, "found")
 			got := f.RoutePaths != nil
 			assert.Equal(t, tt.want, got, "RoutePaths present = %t, want %t", got, tt.want)
+		})
+	}
+}
+
+// TestFindRejectsARoutePathsOutputFileThatIsNotAString states that an
+// output_file that is not a JSON string is a *composite.ValueTypeError naming
+// the key and the type it takes.
+func TestFindRejectsARoutePathsOutputFileThatIsNotAString(t *testing.T) {
+	dir := writeFile(t, `{"route_paths": {"output_file": 3}, "packages": {}}`)
+
+	_, _, err := composite.Find(dir, testKeys())
+
+	var typed *composite.ValueTypeError
+	require.ErrorAs(t, err, &typed, "Find error %v", err)
+	path := filepath.Join(dir, composite.FileName)
+	want := fmt.Sprintf("%s: route_paths: key \"output_file\" takes a JSON string", path)
+	assert.Equal(t, want, err.Error(), "message")
+}
+
+// TestFindRejectsARoutePathsOutputFileThatIsNotAFileName states that an
+// output_file that is not the name of a Go file in the muxt.json directory is a
+// *composite.RouteValueError naming the file, the key and the value.
+func TestFindRejectsARoutePathsOutputFileThatIsNotAFileName(t *testing.T) {
+	for _, value := range []string{
+		"../x.go",
+		"sub/x.go",
+		`sub\x.go`,
+		"/abs/x.go",
+		"paths.txt",
+		".go",
+		"a b.go",
+	} {
+		t.Run(value, func(t *testing.T) {
+			dir := writeFile(t, `{"route_paths": {"output_file": `+fmt.Sprintf("%q", value)+`}, "packages": {}}`)
+
+			_, _, err := composite.Find(dir, testKeys())
+
+			var typed *composite.RouteValueError
+			require.ErrorAs(t, err, &typed, "Find error %v", err)
+			path := filepath.Join(dir, composite.FileName)
+			want := fmt.Sprintf("%s: route_paths: output_file %q must be a Go file name in this directory", path, value)
+			assert.Equal(t, want, err.Error(), "message")
+			assert.Equal(t, value, typed.Value, "Value = %q, want %q", typed.Value, value)
 		})
 	}
 }
