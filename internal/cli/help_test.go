@@ -28,6 +28,7 @@ func TestRootHelp(t *testing.T) {
 		"\n  muxt generate",
 		"\n  muxt check",
 		"\n  muxt fmt",
+		"\n  muxt test  ",
 		"\n  muxt test-template-mutations",
 		"\n  muxt documentation",
 		"\n  muxt documentation docs/README.md",
@@ -42,6 +43,7 @@ func TestRootHelp(t *testing.T) {
 		"\n  muxt generate",
 		"\n  muxt check",
 		"\n  muxt fmt",
+		"\n  muxt test  ",
 		"\n  muxt test-template-mutations",
 		"\n  muxt documentation",
 		"\n  muxt documentation docs/README.md",
@@ -75,7 +77,7 @@ func TestCommandHelpNamesReference(t *testing.T) {
 		generateCommandName, versionCommandName, checkCommandName,
 		listTemplateCallersCommandName, listTemplateCallsCommandName,
 		exploreModuleCommandName, generateFakeServerCommandName, testTemplateMutationsName,
-		documentationCommandName, fmtCommandName,
+		testCommandName, documentationCommandName, fmtCommandName,
 	} {
 		t.Run(name, func(t *testing.T) {
 			out := help(t, name)
@@ -96,6 +98,11 @@ func TestCommandHelpNamesReference(t *testing.T) {
 			assert.True(t, slices.Contains(strings.Split(out, "\n"), line), "muxt generate %s --help has no line %q", name, line)
 		})
 	}
+
+	t.Run("test shows where go test flags go", func(t *testing.T) {
+		out := help(t, testCommandName)
+		assert.Contains(t, out, "\n  muxt test [-- go test flags] [flags]\n", "muxt test --help")
+	})
 
 	t.Run("generate names muxt.json", func(t *testing.T) {
 		out := help(t, generateCommandName)

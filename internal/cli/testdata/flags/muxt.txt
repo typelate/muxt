@@ -67,6 +67,7 @@ The usual order:
   muxt generate                  write template_routes.go from the templates
   muxt check                     type-check each template against its data
   muxt fmt -w .                  re-indent the templates in place
+  muxt test                      see which template blocks the tests run
   muxt test-template-mutations   find template behavior no test checks
 
 The documentation for this version is in the binary:
