@@ -486,6 +486,24 @@ func TestTestWritesTheBlocksOfEveryPackage(t *testing.T) {
 	assert.Equal(t, want, string(got), "profile")
 }
 
+// TestTestLoadsNoPackageWithoutAProfile states that attribution, which
+// loads each package through the go command, happens only for a run that
+// asked for a profile: muxt test alone is go test and nothing else.
+func TestTestLoadsNoPackageWithoutAProfile(t *testing.T) {
+	run := newTestRun(t)
+	run.Wrote = writesProfile("index.gohtml:1.1,1.9 1 1\n")
+	run.Sources = map[string][]templatecover.Source{"/work/pkg": {sourceOf("/work/pkg/index.gohtml")}}
+	cwd := t.TempDir()
+	t.Chdir(cwd)
+	_, _, err := run.run([]packageJob{{Dir: "/work/pkg"}}, testConfiguration{})
+	require.NoError(t, err, "muxt test")
+
+	assert.Empty(t, run.Attributed, "packages loaded for attribution")
+	entries, err := os.ReadDir(cwd)
+	require.NoError(t, err, "reading the working directory")
+	assert.Empty(t, entries, "files written to the working directory")
+}
+
 // TestTestPassesNoPackagePattern states that with nothing after -- go test
 // is given no package pattern, so it tests the package in the directory.
 func TestTestPassesNoPackagePattern(t *testing.T) {
