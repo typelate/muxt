@@ -39,7 +39,9 @@ The first package that fails ends the run; the entries after it are not tested. 
 
 ## Cover profile
 
-`--output-cover-profile FILE` writes the template blocks the tests reached to `FILE` when the run ends, as a Go cover profile (`mode: set`). Each line names a template file by absolute path, so a run over several packages writes one profile with every package's blocks. A run that reaches no template writes the mode line alone.
+`--output-cover-profile FILE` writes the template blocks the tests reached to `FILE` when the run ends, as a Go cover profile (`mode: set`). Each line names a template file by absolute path, so a run over several packages writes one profile with every package's blocks. A run that reaches no template writes the mode line alone. A failing run still writes the profile of what ran.
+
+The profile holds reached blocks only, so `go tool cover -html` shows unreached template text as not tracked rather than uncovered. It leaves out string templates, files read at run time, and templates parsed only in test files or only under build tags.
 
 The directory of `FILE` must exist. When it does not, no `go test` runs and the error is `--output-cover-profile: stat <directory>: no such file or directory`, the directory by absolute path. When it is a file, the error is `--output-cover-profile: <directory> is not a directory`.
 
