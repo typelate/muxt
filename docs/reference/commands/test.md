@@ -38,4 +38,4 @@ The first package that fails ends the run; the entries after it are not tested. 
 
 ## Cover profile
 
-`--output-cover-profile FILE` writes the template blocks the tests reached to `FILE` when the run ends, as a Go cover profile (`mode: set`). A run that reaches no template writes the mode line alone.
+`--output-cover-profile FILE` writes the template blocks the tests reached to `FILE` when the run ends, as a Go cover profile (`mode: set`). Each line names a template file by absolute path, so a run over several packages writes one profile with every package's blocks. A run that reaches no template writes the mode line alone.

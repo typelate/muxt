@@ -38,7 +38,7 @@ func Commands(wd string, args []string, getEnv func(string) string, stdin io.Rea
 		calls:     callsRunner(load.InDirectories),
 		mutations: runTemplateMutations,
 		format:    runFormatCommand,
-		test:      testRunner(runGoTest, templatecover.Prepare),
+		test:      testRunner(runGoTest, templatecover.Prepare, loadSources),
 		load:      load.InDirectories,
 	})
 }

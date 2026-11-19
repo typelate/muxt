@@ -15,6 +15,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/typelate/htt"
 	"github.com/typelate/htt/template"
 
 	"github.com/typelate/muxt/internal/overlay"
@@ -41,8 +42,49 @@ type testRun struct {
 	Write  func(call int, stdout, stderr io.Writer)
 	Result func(call int) error
 
+	// Wrote is what each go test leaves on disk, by call: the profiles its
+	// test binaries write to the cover directory the environment names.
+	Wrote func(call int, coverDir string) error
+
 	// PrepareResult is what each engine's preparation returns, by call.
 	PrepareResult func(call int) error
+
+	// Sources are the template files of each package, by directory, and
+	// Attributed the directories whose files were asked for.
+	Sources    map[string][]templatecover.Source
+	Attributed []string
+}
+
+func (r *testRun) attribute(job packageJob) ([]templatecover.Source, error) {
+	r.Attributed = append(r.Attributed, job.Dir)
+	return r.Sources[job.Dir], nil
+}
+
+// coverDirOf is where a go test call was told to write its template cover
+// profile.
+func coverDirOf(t *testing.T, env []string) string {
+	t.Helper()
+	for _, kv := range env {
+		if dir, ok := strings.CutPrefix(kv, template.CoverEnv+"="); ok {
+			return dir
+		}
+	}
+	t.Fatalf("go test environment has no %s", template.CoverEnv)
+	return ""
+}
+
+// writesProfile is a stand-in test binary that executed the blocks, one
+// profile line each, in the parse name's template.
+func writesProfile(lines ...string) func(int, string) error {
+	return func(call int, coverDir string) error {
+		content := "mode: set\n" + strings.Join(lines, "")
+		return os.WriteFile(filepath.Join(coverDir, strconv.Itoa(call)+".cov"), []byte(content), 0o600)
+	}
+}
+
+// sourceOf is a template file and the parse name its tree has.
+func sourceOf(file string) templatecover.Source {
+	return templatecover.Source{File: file, Trees: []*htt.Tree{{ParseName: filepath.Base(file)}}}
 }
 
 func (r *testRun) goTest(_ context.Context, dir string, env, args []string, stdout, stderr io.Writer) error {
@@ -50,6 +92,11 @@ func (r *testRun) goTest(_ context.Context, dir string, env, args []string, stdo
 	r.Calls = append(r.Calls, goTestCall{Dir: dir, Env: env, Args: args})
 	if r.Write != nil {
 		r.Write(call, stdout, stderr)
+	}
+	if r.Wrote != nil {
+		if err := r.Wrote(call, coverDirOf(r.t, env)); err != nil {
+			r.t.Fatalf("stand-in go test writing profiles: %v", err)
+		}
 	}
 	if r.Result != nil {
 		return r.Result(call)
@@ -66,9 +113,14 @@ func (r *testRun) prepare(_ context.Context, tc overlay.Toolchain, dir string) (
 			return templatecover.Engine{}, err
 		}
 	}
+	// Like the real Prepare, leave the directory test binaries write to.
+	coverDir := filepath.Join(dir, "profiles")
+	if err := os.MkdirAll(coverDir, 0o700); err != nil {
+		r.t.Fatalf("stand-in engine: %v", err)
+	}
 	return templatecover.Engine{
 		Files:    overlay.Files{ModFile: filepath.Join(dir, "go.mod"), Overlay: filepath.Join(dir, "overlay.json")},
-		CoverDir: filepath.Join(dir, "profiles"),
+		CoverDir: coverDir,
 	}, nil
 }
 
@@ -81,7 +133,7 @@ func (r *testRun) run(jobs []packageJob, config testConfiguration) (stdout, stde
 	cmd.SetOut(&out)
 	cmd.SetErr(&errOut)
 	cmd.SetContext(context.Background())
-	err = testRunner(r.goTest, r.prepare)(cmd, jobs, config)
+	err = testRunner(r.goTest, r.prepare, r.attribute)(cmd, jobs, config)
 	return out.String(), errOut.String(), err
 }
 
@@ -140,7 +192,7 @@ func TestTestFailsWhenTheTestsFail(t *testing.T) {
 	run.Result = func(int) error { return &exec.ExitError{} }
 	var stdout, stderr bytes.Buffer
 	err := commands("/work", []string{testCommandName}, func(string) string { return "" }, cliVersion, strings.NewReader(""), &stdout, &stderr, runners{
-		test: testRunner(run.goTest, run.prepare),
+		test: testRunner(run.goTest, run.prepare, run.attribute),
 	})
 
 	require.Error(t, err, "muxt test")
@@ -231,7 +283,7 @@ func TestTestReportsAnInterruptDuringPreparation(t *testing.T) {
 		calls++
 		return nil
 	}
-	err := testRunner(goTest, prepare)(cmd, []packageJob{{Dir: "/work/pkg"}}, testConfiguration{})
+	err := testRunner(goTest, prepare, nil)(cmd, []packageJob{{Dir: "/work/pkg"}}, testConfiguration{})
 
 	assert.ErrorIs(t, err, context.Canceled, "muxt test")
 	assert.NotContains(t, err.Error(), "template engine", "error")
@@ -252,7 +304,7 @@ func TestTestNamesTheFailingKeyedPackage(t *testing.T) {
 	base := newFieldkit(t, fieldkitEntries)
 	var stdout, stderr bytes.Buffer
 	err := commands(base, []string{testCommandName}, func(string) string { return "" }, cliVersion, strings.NewReader(""), &stdout, &stderr, runners{
-		test: testRunner(run.goTest, run.prepare),
+		test: testRunner(run.goTest, run.prepare, run.attribute),
 	})
 
 	require.Error(t, err, "muxt test")
@@ -314,7 +366,7 @@ func TestTestRemovesItsScratchDirectory(t *testing.T) {
 				return templatecover.Engine{CoverDir: filepath.Join(dir, "profiles")}, nil
 			}
 			goTest := func(ctx context.Context, _ string, _, _ []string, _, _ io.Writer) error { return tt.result(ctx) }
-			err := testRunner(goTest, prepare)(cmd, []packageJob{{Dir: "/work/pkg"}}, testConfiguration{})
+			err := testRunner(goTest, prepare, nil)(cmd, []packageJob{{Dir: "/work/pkg"}}, testConfiguration{})
 			tt.check(t, err)
 
 			require.Len(t, written, 1, "engines written")
@@ -400,6 +452,9 @@ func TestTestNamesNoKeyWhenGoTestWritesJSON(t *testing.T) {
 // did not finish.
 func TestTestWritesAnEmptyProfileWhenTheTestsReachNothing(t *testing.T) {
 	run := newTestRun(t)
+	// A test binary that ran the engine writes its profile as it starts,
+	// whether or not a template ran.
+	run.Wrote = writesProfile()
 	profile := filepath.Join(t.TempDir(), "cover.out")
 	_, _, err := run.run([]packageJob{{Dir: "/work/pkg"}}, testConfiguration{CoverProfile: profile})
 	require.NoError(t, err, "muxt test")
@@ -407,6 +462,28 @@ func TestTestWritesAnEmptyProfileWhenTheTestsReachNothing(t *testing.T) {
 	got, err := os.ReadFile(profile)
 	require.NoError(t, err, "reading the profile")
 	assert.Equal(t, "mode: set\n", string(got), "profile")
+}
+
+// TestTestWritesTheBlocksOfEveryPackage states that a profile holds what
+// each package's tests reached, under the template files of that package.
+func TestTestWritesTheBlocksOfEveryPackage(t *testing.T) {
+	run := newTestRun(t)
+	run.Wrote = func(call int, coverDir string) error {
+		line := []string{"index.gohtml:1.1,1.9 1 1\n", "index.gohtml:2.1,2.9 1 1\n"}[call]
+		return writesProfile(line)(call, coverDir)
+	}
+	run.Sources = map[string][]templatecover.Source{
+		"/work/a": {sourceOf("/work/a/index.gohtml")},
+		"/work/b": {sourceOf("/work/b/index.gohtml")},
+	}
+	profile := filepath.Join(t.TempDir(), "cover.out")
+	_, _, err := run.run([]packageJob{{Dir: "/work/a"}, {Dir: "/work/b"}}, testConfiguration{CoverProfile: profile})
+	require.NoError(t, err, "muxt test")
+
+	got, err := os.ReadFile(profile)
+	require.NoError(t, err, "reading the profile")
+	want := "mode: set\n/work/a/index.gohtml:1.2,1.10 1 1\n/work/b/index.gohtml:2.1,2.9 1 1\n"
+	assert.Equal(t, want, string(got), "profile")
 }
 
 // TestTestPassesNoPackagePattern states that with nothing after -- go test

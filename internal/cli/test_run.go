@@ -14,6 +14,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/typelate/muxt/internal/load"
 	"github.com/typelate/muxt/internal/overlay"
 	"github.com/typelate/muxt/internal/templatecover"
 )
@@ -23,6 +24,25 @@ type goTestFunc func(ctx context.Context, dir string, env, args []string, stdout
 
 // prepareFunc is templatecover.Prepare, replaced in tests.
 type prepareFunc func(ctx context.Context, tc overlay.Toolchain, dir string) (templatecover.Engine, error)
+
+// attributeFunc reads the template files of a job's package, which is where
+// a profile line's parse name becomes a file. The error says why they
+// cannot be read.
+type attributeFunc func(job packageJob) ([]templatecover.Source, error)
+
+// loadSources is attributeFunc loading the package the way muxt check does:
+// the job's directory, then its configured templates variables.
+func loadSources(job packageJob) ([]templatecover.Source, error) {
+	_, pl, err := load.Packages(job.Dir)
+	if err != nil {
+		return nil, fmt.Errorf("loading the package: %w", err)
+	}
+	pkg, err := load.Package(job.Dir, pl, job.Config.TemplatesVariables)
+	if err != nil {
+		return nil, fmt.Errorf("reading the templates: %w", err)
+	}
+	return templatecover.Sources(pkg), nil
+}
 
 // goTestFailure is go test exiting with a failure: a test failed or a
 // package did not build. go test printed which. Key is the muxt.json key of
@@ -66,7 +86,7 @@ func writesJSON(goTestArgs []string) bool {
 // testRunner runs each job's tests on muxt's template engine. The go test
 // of a job is separate from the others', so a profile line can be
 // attributed to the files of the package it came from.
-func testRunner(goTest goTestFunc, prepare prepareFunc) func(*cobra.Command, []packageJob, testConfiguration) error {
+func testRunner(goTest goTestFunc, prepare prepareFunc, attribute attributeFunc) func(*cobra.Command, []packageJob, testConfiguration) error {
 	return func(cmd *cobra.Command, jobs []packageJob, config testConfiguration) (err error) {
 		// An interrupt stops the go test in flight and removes the files
 		// the run wrote; a second one ends the process at once.
@@ -95,8 +115,7 @@ func testRunner(goTest goTestFunc, prepare prepareFunc) func(*cobra.Command, []p
 				return fmt.Errorf("cannot run the tests on muxt's template engine: %w", err)
 			}
 		}
-		for i, job := range jobs {
-			engine := engines[i]
+		runJob := func(job packageJob, engine templatecover.Engine) error {
 			// -count=1 comes first so a caller's own -count wins, and a
 			// replayed pass cannot leave a package out of the profile.
 			args := append([]string{"test", "-count=1"}, engine.Flags()...)
@@ -106,27 +125,63 @@ func testRunner(goTest goTestFunc, prepare prepareFunc) func(*cobra.Command, []p
 					return fmt.Errorf("writing the package key: %w", err)
 				}
 			}
-			if err := goTest(ctx, job.Dir, engine.Environ(nil), args, cmd.OutOrStdout(), cmd.ErrOrStderr()); err != nil {
-				if ctxErr := ctx.Err(); ctxErr != nil {
-					// Whatever the interrupted run said, it was not a verdict.
-					return ctxErr
+			err := goTest(ctx, job.Dir, engine.Environ(nil), args, cmd.OutOrStdout(), cmd.ErrOrStderr())
+			if err == nil {
+				return nil
+			}
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				// Whatever the interrupted run said, it was not a verdict.
+				return ctxErr
+			}
+			exit, ok := errors.AsType[*exec.ExitError](err)
+			if !ok {
+				return fmt.Errorf("running go test in %s: %w", job.Dir, err)
+			}
+			// go test said why; cobra repeating that it failed would
+			// only bury it, unless the run covered several packages and
+			// the line must name the one that did.
+			cmd.SilenceErrors = !job.Keyed
+			return &goTestFailure{Key: job.Key, Err: exit}
+		}
+		var profile templatecover.Profile
+		var failure error
+		for i, job := range jobs {
+			failure = runJob(job, engines[i])
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				return ctxErr
+			}
+			// A failing package still says what its tests reached.
+			if config.CoverProfile != "" {
+				if err := addToProfile(&profile, job, engines[i], attribute); err != nil {
+					return errors.Join(failure, err)
 				}
-				exit, ok := errors.AsType[*exec.ExitError](err)
-				if !ok {
-					return fmt.Errorf("running go test in %s: %w", job.Dir, err)
-				}
-				// go test said why; cobra repeating that it failed would
-				// only bury it, unless the run covered several packages and
-				// the line must name the one that did.
-				cmd.SilenceErrors = !job.Keyed
-				return &goTestFailure{Key: job.Key, Err: exit}
+			}
+			if failure != nil {
+				break
 			}
 		}
 		if config.CoverProfile != "" {
-			return writeCoverProfile(config.CoverProfile, &templatecover.Profile{})
+			if err := writeCoverProfile(config.CoverProfile, &profile); err != nil {
+				return errors.Join(failure, err)
+			}
 		}
-		return nil
+		return failure
 	}
+}
+
+// addToProfile attributes the template blocks a job's tests reached to the
+// template files of its package.
+func addToProfile(profile *templatecover.Profile, job packageJob, engine templatecover.Engine, attribute attributeFunc) error {
+	reached, err := templatecover.ReadProfiles(engine.CoverDir)
+	if err != nil {
+		return fmt.Errorf("reading the template coverage of %s: %w", job.Dir, err)
+	}
+	sources, err := attribute(job)
+	if err != nil {
+		return fmt.Errorf("reading the template files of %s: %w", job.Dir, err)
+	}
+	profile.Add(reached, sources)
+	return nil
 }
 
 // writeCoverProfile writes p to the file at name.
