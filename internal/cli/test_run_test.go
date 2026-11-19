@@ -209,6 +209,28 @@ func TestTestFailsWhenTheTestsFail(t *testing.T) {
 	assert.Empty(t, stderr.String(), "stderr")
 }
 
+// TestTestReportsAProfileItCannotWriteWhenTheTestsFail states that a cover
+// profile that cannot be written is printed though go test failed: go
+// test's report says nothing of it, so silencing the error as a repeat of
+// that report would hide it.
+func TestTestReportsAProfileItCannotWriteWhenTheTestsFail(t *testing.T) {
+	run := newTestRun(t)
+	run.Wrote = writesProfile()
+	run.Result = func(int) error { return &exec.ExitError{} }
+	// A directory where the file should be: its parent exists, so the
+	// check before go test passes and creating the file fails.
+	profile := t.TempDir()
+	var stdout, stderr bytes.Buffer
+	err := commands("/work", []string{testCommandName, "--" + outputCoverProfile, profile}, func(string) string { return "" }, cliVersion, strings.NewReader(""), &stdout, &stderr, runners{
+		test: testRunner(run.goTest, run.prepare, run.attribute),
+	})
+
+	require.Error(t, err, "muxt test")
+	_, ok := errors.AsType[*goTestFailure](err)
+	assert.True(t, ok, "the error is a *goTestFailure, got %T: %v", err, err)
+	assert.Equal(t, "Error: writing the cover profile: open "+profile+": is a directory\ngo test failed\n", stderr.String(), "stderr")
+}
+
 // TestTestStopsAtTheFirstFailingPackage states that a failure ends the run:
 // the packages after it are not tested.
 func TestTestStopsAtTheFirstFailingPackage(t *testing.T) {

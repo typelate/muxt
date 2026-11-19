@@ -158,6 +158,14 @@ func testRunner(goTest goTestFunc, prepare prepareFunc, attribute attributeFunc)
 		}
 		var profile templatecover.Profile
 		var failure error
+		// go test printed why it failed but not why the profile is
+		// missing, so the profile's error is printed even beside a
+		// failure cobra was told to keep quiet. It comes first so a keyed
+		// run's last line still names the failing package.
+		profileFailed := func(err error) error {
+			cmd.SilenceErrors = false
+			return errors.Join(err, failure)
+		}
 		for i, job := range jobs {
 			failure = runJob(job, engines[i])
 			if ctxErr := ctx.Err(); ctxErr != nil {
@@ -166,7 +174,7 @@ func testRunner(goTest goTestFunc, prepare prepareFunc, attribute attributeFunc)
 			// A failing package still says what its tests reached.
 			if config.CoverProfile != "" {
 				if err := addToProfile(cmd.ErrOrStderr(), &profile, job, engines[i], attribute); err != nil {
-					return errors.Join(failure, err)
+					return profileFailed(err)
 				}
 			}
 			if failure != nil {
@@ -175,7 +183,7 @@ func testRunner(goTest goTestFunc, prepare prepareFunc, attribute attributeFunc)
 		}
 		if config.CoverProfile != "" {
 			if err := writeCoverProfile(config.CoverProfile, &profile); err != nil {
-				return errors.Join(failure, err)
+				return profileFailed(err)
 			}
 		}
 		return failure
