@@ -486,6 +486,38 @@ func TestTestWritesTheBlocksOfEveryPackage(t *testing.T) {
 	assert.Equal(t, want, string(got), "profile")
 }
 
+// TestTestWritesTheProfileOfAFailingRun states that a run a failing package
+// stops still writes what its tests, and those before it, reached: a
+// failing test is when one most wants to see which templates it ran.
+func TestTestWritesTheProfileOfAFailingRun(t *testing.T) {
+	run := newTestRun(t)
+	run.Wrote = func(call int, coverDir string) error {
+		line := []string{"index.gohtml:1.1,1.9 1 1\n", "index.gohtml:2.1,2.9 1 1\n", "index.gohtml:3.1,3.9 1 1\n"}[call]
+		return writesProfile(line)(call, coverDir)
+	}
+	run.Result = func(call int) error {
+		if call == 1 {
+			return &exec.ExitError{}
+		}
+		return nil
+	}
+	run.Sources = map[string][]templatecover.Source{
+		"/work/a": {sourceOf("/work/a/index.gohtml")},
+		"/work/b": {sourceOf("/work/b/index.gohtml")},
+		"/work/c": {sourceOf("/work/c/index.gohtml")},
+	}
+	profile := filepath.Join(t.TempDir(), "cover.out")
+	jobs := []packageJob{{Dir: "/work/a"}, {Dir: "/work/b"}, {Dir: "/work/c"}}
+	_, _, err := run.run(jobs, testConfiguration{CoverProfile: profile})
+
+	_, ok := errors.AsType[*goTestFailure](err)
+	require.True(t, ok, "the error is a *goTestFailure, got %T: %v", err, err)
+	got, err := os.ReadFile(profile)
+	require.NoError(t, err, "reading the profile")
+	want := "mode: set\n/work/a/index.gohtml:1.2,1.10 1 1\n/work/b/index.gohtml:2.1,2.9 1 1\n"
+	assert.Equal(t, want, string(got), "profile")
+}
+
 // TestTestLoadsNoPackageWithoutAProfile states that attribution, which
 // loads each package through the go command, happens only for a run that
 // asked for a profile: muxt test alone is go test and nothing else.
