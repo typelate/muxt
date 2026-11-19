@@ -46,6 +46,12 @@ func testCommand(workingDirectory *string, getEnv func(string) string, run func(
 			if err := checkTestGoTestArgs(config.GoTestArgs); err != nil {
 				return err
 			}
+			if config.CoverProfile != "" {
+				// A relative path means relative to -C, not to the
+				// directory the process started in, which is where the
+				// runner would create it.
+				config.CoverProfile = absoluteDir(*workingDirectory, config.CoverProfile)
+			}
 			spec := jobSpec{
 				Name:  testCommandName,
 				Scope: eachEntry,
