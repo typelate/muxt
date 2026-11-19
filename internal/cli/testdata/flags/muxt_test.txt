@@ -1,9 +1,16 @@
 muxt test
 
 flags:
+--output-cover-profile
+  shorthand: ""
+  type: string
+  default: ""
+  hidden: false
+  deprecated: ""
+  usage: "write the template blocks the tests reached to this file, as a Go cover profile for go tool cover -html"
 
 --help:
-Runs `go test` with muxt's template engine in place of `html/template`.
+Runs `go test` with muxt's template engine in place of `html/template`. With `--output-cover-profile` it writes the template blocks the tests executed as a Go cover profile for `go tool cover -html`.
 
 Full reference: muxt documentation docs/reference/commands/test.md
 
@@ -11,7 +18,8 @@ Usage:
   muxt test [-- go test flags] [flags]
 
 Flags:
-  -h, --help   help for test
+  -h, --help                          help for test
+      --output-cover-profile string   write the template blocks the tests reached to this file, as a Go cover profile for go tool cover -html
 
 Global Flags:
   -C, --change-directory string   change the working directory

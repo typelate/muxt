@@ -91,7 +91,7 @@ Available Commands:
   help                    Help about any command
   list-template-callers   List template callers
   list-template-calls     List template calls
-  test                    Run go test on muxt's template engine
+  test                    Run go test on muxt's template engine; write template coverage with --output-cover-profile
   test-template-mutations Vary template actions and report the ones no test catches
   version                 Print the version number
 

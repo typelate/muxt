@@ -14,7 +14,7 @@
 | [`explore-module`](commands/explore-module.md) | `explore` | List every muxt package in the module. |
 | [`generate-fake-server`](commands/generate-fake-server.md) | | Write a fake server for browsing routes. |
 | [`test-template-mutations`](commands/test-template-mutations.md) | `mut`, `m` | Report template actions no test catches. |
-| [`test`](commands/test.md) | | Run go test on muxt's engine. |
+| [`test`](commands/test.md) | | Run go test on muxt's engine; write template coverage. |
 | [`version`](commands/version.md) | `v` | Print the version. |
 | [`documentation`](commands/documentation.md) | `docs`, `d` | Print an embedded documentation page or example file by path, list a directory, or search with `--query`. |
 | `completion` | | Print a shell completion script for `bash`, `fish`, `powershell`, or `zsh`. |

@@ -28,6 +28,7 @@ const (
 	outputExportedDefaultIdentifiers    = "output-exported-default-identifiers"
 	outputMultipartMaxMemory            = "output-multipart-max-memory"
 	outputMuxtVersion                   = "output-muxt-version"
+	outputCoverProfile                  = "output-cover-profile"
 	inputStaticAssetsDirectory          = "input-static-assets-directory"
 	outputStaticAssetsPath              = "output-static-assets-path"
 

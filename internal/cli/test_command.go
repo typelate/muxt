@@ -14,6 +14,9 @@ import (
 
 // testConfiguration is what the command line gives muxt test.
 type testConfiguration struct {
+	// CoverProfile is the file to write the template blocks the tests
+	// reached to, as a Go cover profile; empty for none.
+	CoverProfile string
 	// GoTestArgs is everything after --, as written.
 	GoTestArgs []string
 }
@@ -27,7 +30,7 @@ func testCommand(workingDirectory *string, getEnv func(string) string, run func(
 
 	cmd := &cobra.Command{
 		Use:   testCommandName + " [-- go test flags]",
-		Short: "Run go test on muxt's template engine",
+		Short: "Run go test on muxt's template engine; write template coverage with --output-cover-profile",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cmd.SilenceUsage = true
 			// The package is the working directory or an entry of
@@ -57,6 +60,8 @@ func testCommand(workingDirectory *string, getEnv func(string) string, run func(
 			return run(cmd, sel.Jobs, config)
 		},
 	}
+
+	cmd.Flags().StringVar(&config.CoverProfile, outputCoverProfile, "", "write the template blocks the tests reached to this file, as a Go cover profile for go tool cover -html")
 
 	return cmd
 }

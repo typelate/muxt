@@ -394,6 +394,21 @@ func TestTestNamesNoKeyWhenGoTestWritesJSON(t *testing.T) {
 	}
 }
 
+// TestTestWritesAnEmptyProfileWhenTheTestsReachNothing states that a run
+// whose test binaries executed no template still writes the profile file,
+// holding the mode line alone: a missing file would look like a run that
+// did not finish.
+func TestTestWritesAnEmptyProfileWhenTheTestsReachNothing(t *testing.T) {
+	run := newTestRun(t)
+	profile := filepath.Join(t.TempDir(), "cover.out")
+	_, _, err := run.run([]packageJob{{Dir: "/work/pkg"}}, testConfiguration{CoverProfile: profile})
+	require.NoError(t, err, "muxt test")
+
+	got, err := os.ReadFile(profile)
+	require.NoError(t, err, "reading the profile")
+	assert.Equal(t, "mode: set\n", string(got), "profile")
+}
+
 // TestTestPassesNoPackagePattern states that with nothing after -- go test
 // is given no package pattern, so it tests the package in the directory.
 func TestTestPassesNoPackagePattern(t *testing.T) {

@@ -122,6 +122,26 @@ func testRunner(goTest goTestFunc, prepare prepareFunc) func(*cobra.Command, []p
 				return &goTestFailure{Key: job.Key, Err: exit}
 			}
 		}
+		if config.CoverProfile != "" {
+			return writeCoverProfile(config.CoverProfile, &templatecover.Profile{})
+		}
 		return nil
 	}
+}
+
+// writeCoverProfile writes p to the file at name.
+func writeCoverProfile(name string, p *templatecover.Profile) (err error) {
+	f, err := os.Create(name)
+	if err != nil {
+		return fmt.Errorf("writing the cover profile: %w", err)
+	}
+	defer func() {
+		if closeErr := f.Close(); closeErr != nil {
+			err = errors.Join(err, fmt.Errorf("writing the cover profile: %w", closeErr))
+		}
+	}()
+	if _, err := p.WriteTo(f); err != nil {
+		return fmt.Errorf("writing the cover profile: %w", err)
+	}
+	return nil
 }

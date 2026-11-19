@@ -1,6 +1,6 @@
 # muxt test
 
-Runs `go test` with muxt's template engine in place of `html/template`.
+Runs `go test` with muxt's template engine in place of `html/template`. With `--output-cover-profile` it writes the template blocks the tests executed as a Go cover profile for `go tool cover -html`.
 
 ```text
 muxt test [-- go test flags] [flags]
@@ -35,3 +35,7 @@ A run over every entry writes the entry's key on its own line before that packag
 muxt puts the engine in place for every package before the first `go test` runs. When one package cannot have it, no `go test` runs and the error is `cannot run the tests on muxt's template engine: <reason>`. With a `go.work` in use the reason is `go.work is in use, and the go command refuses muxt test's -modfile in workspace mode: go: -modfile cannot be used in workspace mode`.
 
 The first package that fails ends the run; the entries after it are not tested. Its last line is `Error: <key>: go test failed`.
+
+## Cover profile
+
+`--output-cover-profile FILE` writes the template blocks the tests reached to `FILE` when the run ends, as a Go cover profile (`mode: set`). A run that reaches no template writes the mode line alone.
