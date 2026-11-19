@@ -53,10 +53,17 @@ type testRun struct {
 	// Attributed the directories whose files were asked for.
 	Sources    map[string][]templatecover.Source
 	Attributed []string
+
+	// Unreadable is why a package's template files cannot be read, by
+	// directory.
+	Unreadable map[string]error
 }
 
 func (r *testRun) attribute(job packageJob) ([]templatecover.Source, error) {
 	r.Attributed = append(r.Attributed, job.Dir)
+	if err := r.Unreadable[job.Dir]; err != nil {
+		return nil, err
+	}
 	return r.Sources[job.Dir], nil
 }
 
@@ -532,6 +539,28 @@ func TestTestWarnsWhenNoTestBinaryRanTheEngine(t *testing.T) {
 	got, err := os.ReadFile(profile)
 	require.NoError(t, err, "reading the profile")
 	assert.Equal(t, "mode: set\n", string(got), "profile")
+}
+
+// TestTestWarnsWhenAPackageCannotBeAttributed states that a package whose
+// template files cannot be read, as one that does not load or has no
+// templates variable, is a warning naming its directory, and the blocks of
+// the packages that can be read are still written.
+func TestTestWarnsWhenAPackageCannotBeAttributed(t *testing.T) {
+	run := newTestRun(t)
+	run.Wrote = func(call int, coverDir string) error {
+		return writesProfile("index.gohtml:2.1,2.9 1 1\n")(call, coverDir)
+	}
+	run.Sources = map[string][]templatecover.Source{"/work/b": {sourceOf("/work/b/index.gohtml")}}
+	run.Unreadable = map[string]error{"/work/a": errors.New("reading the templates: no templates variable")}
+	profile := filepath.Join(t.TempDir(), "cover.out")
+	_, stderr, err := run.run([]packageJob{{Dir: "/work/a"}, {Dir: "/work/b"}}, testConfiguration{CoverProfile: profile})
+	require.NoError(t, err, "muxt test")
+
+	want := "warning: cannot read the template files of /work/a (reading the templates: no templates variable); the cover profile has nothing from that package\n"
+	assert.Equal(t, want, stderr, "stderr")
+	got, err := os.ReadFile(profile)
+	require.NoError(t, err, "reading the profile")
+	assert.Equal(t, "mode: set\n/work/b/index.gohtml:2.1,2.9 1 1\n", string(got), "profile")
 }
 
 // TestTestFailsBeforeGoTestWhenTheProfileDirectoryIsMissing states that a

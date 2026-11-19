@@ -200,7 +200,10 @@ func addToProfile(warn io.Writer, profile *templatecover.Profile, job packageJob
 	}
 	sources, err := attribute(job)
 	if err != nil {
-		return fmt.Errorf("reading the template files of %s: %w", job.Dir, err)
+		if _, err := fmt.Fprintf(warn, "warning: cannot read the template files of %s (%v); the cover profile has nothing from that package\n", job.Dir, err); err != nil {
+			return fmt.Errorf("writing a warning: %w", err)
+		}
+		return nil
 	}
 	profile.Add(reached, sources)
 	return nil

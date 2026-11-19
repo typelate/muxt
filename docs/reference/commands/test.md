@@ -48,3 +48,9 @@ A package whose tests wrote no profile, as with no test files, is a warning on s
 ```text
 warning: no test binary in /abs/pkg ran muxt's template engine; the cover profile has nothing from that package
 ```
+
+A package that does not load, or has no templates variable, cannot be attributed. Its blocks are left out with a warning on stderr, and the exit status is `go test`'s:
+
+```text
+warning: cannot read the template files of /abs/pkg (reading the templates: variable templates not found in package example.com/pkg); the cover profile has nothing from that package
+```
