@@ -518,6 +518,20 @@ func TestTestWritesTheProfileOfAFailingRun(t *testing.T) {
 	assert.Equal(t, want, string(got), "profile")
 }
 
+// TestTestFailsBeforeGoTestWhenTheProfileDirectoryIsMissing states that a
+// profile that cannot be written is found out before the tests run, not
+// after minutes of them.
+func TestTestFailsBeforeGoTestWhenTheProfileDirectoryIsMissing(t *testing.T) {
+	run := newTestRun(t)
+	dir := filepath.Join(t.TempDir(), "missing")
+	_, _, err := run.run([]packageJob{{Dir: "/work/pkg"}}, testConfiguration{CoverProfile: filepath.Join(dir, "cover.out")})
+
+	require.Error(t, err, "muxt test")
+	assert.Equal(t, "--output-cover-profile: stat "+dir+": no such file or directory", err.Error(), "error")
+	assert.Empty(t, run.Prepare, "engines prepared")
+	assert.Empty(t, run.Calls, "go test runs")
+}
+
 // TestTestLoadsNoPackageWithoutAProfile states that attribution, which
 // loads each package through the go command, happens only for a run that
 // asked for a profile: muxt test alone is go test and nothing else.

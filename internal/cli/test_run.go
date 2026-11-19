@@ -94,6 +94,19 @@ func testRunner(goTest goTestFunc, prepare prepareFunc, attribute attributeFunc)
 		defer stop()
 		context.AfterFunc(ctx, stop)
 
+		if config.CoverProfile != "" {
+			// A profile that cannot be written is found out now, not
+			// after the tests ran.
+			dir := filepath.Dir(config.CoverProfile)
+			info, err := os.Stat(dir)
+			if err != nil {
+				return fmt.Errorf("--%s: %w", outputCoverProfile, err)
+			}
+			if !info.IsDir() {
+				return fmt.Errorf("--%s: %s is not a directory", outputCoverProfile, dir)
+			}
+		}
+
 		scratch, err := os.MkdirTemp("", "muxt-test-")
 		if err != nil {
 			return fmt.Errorf("creating a scratch directory: %w", err)
