@@ -20,6 +20,7 @@ muxt refuses these before anything runs:
 - `-overlay`: muxt test puts its engine in place through its own overlay.
 - `-mod` and `-modfile`: muxt test sets `-modfile` to a copy of `go.mod` that requires `github.com/typelate/htt`, and `-mod=mod` so the go command can complete the copy's sums.
 - A `-coverpkg` that covers `html/template`: by name, as `std` or `all`, or by a `...` pattern that matches it. Coverage instrumentation reads `html/template` from disk, which would undo the engine. `-coverpkg=./...` works.
+- A package pattern after `--` together with `--output-cover-profile`: each package needs its own `go test` to be told apart in the profile. Run in the package directory, or list the packages in `muxt.json`.
 - `-C`: `go test` reads it only as its first flag. Use muxt's own: `muxt -C sub test`.
 
 ## Failures

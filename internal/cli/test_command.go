@@ -47,6 +47,9 @@ func testCommand(workingDirectory *string, getEnv func(string) string, run func(
 				return err
 			}
 			if config.CoverProfile != "" {
+				if err := checkProfilePackages(config.GoTestArgs); err != nil {
+					return err
+				}
 				// A relative path means relative to -C, not to the
 				// directory the process started in, which is where the
 				// runner would create it.
@@ -70,6 +73,23 @@ func testCommand(workingDirectory *string, getEnv func(string) string, run func(
 	cmd.Flags().StringVar(&config.CoverProfile, outputCoverProfile, "", "write the template blocks the tests reached to this file, as a Go cover profile for go tool cover -html")
 
 	return cmd
+}
+
+// checkProfilePackages refuses a package pattern after --. A profile
+// attributes a block to the template files of the package whose go test
+// reached it, and one go test over several packages gives one cover
+// directory for all of them, where two packages' index.gohtml would meet.
+func checkProfilePackages(goTestArgs []string) error {
+	var packages []string
+	for f := range templatecover.Flags(goTestArgs) {
+		if f.Name == "" {
+			packages = append(packages, f.Args...)
+		}
+	}
+	if len(packages) > 0 {
+		return fmt.Errorf("--%s needs one package per go test; pass no packages after --, and run in the package directory or list the packages in muxt.json: %s", outputCoverProfile, strings.Join(packages, " "))
+	}
+	return nil
 }
 
 // checkTestGoTestArgs refuses a go test flag that would undo the engine
