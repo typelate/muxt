@@ -165,7 +165,7 @@ func testRunner(goTest goTestFunc, prepare prepareFunc, attribute attributeFunc)
 			}
 			// A failing package still says what its tests reached.
 			if config.CoverProfile != "" {
-				if err := addToProfile(&profile, job, engines[i], attribute); err != nil {
+				if err := addToProfile(cmd.ErrOrStderr(), &profile, job, engines[i], attribute); err != nil {
 					return errors.Join(failure, err)
 				}
 			}
@@ -184,8 +184,17 @@ func testRunner(goTest goTestFunc, prepare prepareFunc, attribute attributeFunc)
 
 // addToProfile attributes the template blocks a job's tests reached to the
 // template files of its package.
-func addToProfile(profile *templatecover.Profile, job packageJob, engine templatecover.Engine, attribute attributeFunc) error {
+//
+// What cannot be attributed is a warning on warn, not a failure: go test
+// and the engine decide the exit status.
+func addToProfile(warn io.Writer, profile *templatecover.Profile, job packageJob, engine templatecover.Engine, attribute attributeFunc) error {
 	reached, err := templatecover.ReadProfiles(engine.CoverDir)
+	if errors.Is(err, templatecover.ErrNoProfile) {
+		if _, err := fmt.Fprintf(warn, "warning: no test binary in %s ran muxt's template engine; the cover profile has nothing from that package\n", job.Dir); err != nil {
+			return fmt.Errorf("writing a warning: %w", err)
+		}
+		return nil
+	}
 	if err != nil {
 		return fmt.Errorf("reading the template coverage of %s: %w", job.Dir, err)
 	}

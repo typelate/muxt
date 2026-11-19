@@ -518,6 +518,22 @@ func TestTestWritesTheProfileOfAFailingRun(t *testing.T) {
 	assert.Equal(t, want, string(got), "profile")
 }
 
+// TestTestWarnsWhenNoTestBinaryRanTheEngine states that a package whose
+// tests wrote no profile, as with no test files, is a warning naming its
+// directory and not a failure: go test's own status is the run's.
+func TestTestWarnsWhenNoTestBinaryRanTheEngine(t *testing.T) {
+	run := newTestRun(t)
+	profile := filepath.Join(t.TempDir(), "cover.out")
+	_, stderr, err := run.run([]packageJob{{Dir: "/work/pkg"}}, testConfiguration{CoverProfile: profile})
+	require.NoError(t, err, "muxt test")
+
+	want := "warning: no test binary in /work/pkg ran muxt's template engine; the cover profile has nothing from that package\n"
+	assert.Equal(t, want, stderr, "stderr")
+	got, err := os.ReadFile(profile)
+	require.NoError(t, err, "reading the profile")
+	assert.Equal(t, "mode: set\n", string(got), "profile")
+}
+
 // TestTestFailsBeforeGoTestWhenTheProfileDirectoryIsMissing states that a
 // profile that cannot be written is found out before the tests run, not
 // after minutes of them.
