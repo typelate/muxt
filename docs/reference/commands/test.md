@@ -54,3 +54,9 @@ A package that does not load, or has no templates variable, cannot be attributed
 ```text
 warning: cannot read the template files of /abs/pkg (reading the templates: variable templates not found in package example.com/pkg); the cover profile has nothing from that package
 ```
+
+A parse name is a file's base name. When a local file and a shared fragment from another package's `embed.FS` have the same one, blocks reached under it cannot be placed in one file. They are left out with a warning naming both files, and the exit status is `go test`'s:
+
+```text
+warning: /abs/pkg/index.gohtml and /abs/ui/index.gohtml share the parse name index.gohtml; the cover profile leaves out its blocks
+```

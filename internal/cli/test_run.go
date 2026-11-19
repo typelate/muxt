@@ -205,7 +205,11 @@ func addToProfile(warn io.Writer, profile *templatecover.Profile, job packageJob
 		}
 		return nil
 	}
-	profile.Add(reached, sources)
+	for _, ambiguous := range profile.Add(reached, sources) {
+		if _, err := fmt.Fprintf(warn, "warning: %v\n", ambiguous); err != nil {
+			return fmt.Errorf("writing a warning: %w", err)
+		}
+	}
 	return nil
 }
 

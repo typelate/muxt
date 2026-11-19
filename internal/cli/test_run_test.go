@@ -563,6 +563,29 @@ func TestTestWarnsWhenAPackageCannotBeAttributed(t *testing.T) {
 	assert.Equal(t, "mode: set\n/work/b/index.gohtml:2.1,2.9 1 1\n", string(got), "profile")
 }
 
+// TestTestWarnsOfAParseNameTwoFilesShare states that blocks reached under a
+// name a local file and a shared fragment both have are left out with a
+// warning naming both, and that go test's own status is still the run's.
+func TestTestWarnsOfAParseNameTwoFilesShare(t *testing.T) {
+	run := newTestRun(t)
+	run.Wrote = writesProfile("index.gohtml:1.1,1.9 1 1\n")
+	run.Result = func(int) error { return &exec.ExitError{} }
+	run.Sources = map[string][]templatecover.Source{"/work/pkg": {
+		sourceOf("/work/pkg/index.gohtml"),
+		sourceOf("/work/ui/index.gohtml"),
+	}}
+	profile := filepath.Join(t.TempDir(), "cover.out")
+	_, stderr, err := run.run([]packageJob{{Dir: "/work/pkg"}}, testConfiguration{CoverProfile: profile})
+
+	_, ok := errors.AsType[*goTestFailure](err)
+	assert.True(t, ok, "the error is a *goTestFailure, got %T: %v", err, err)
+	want := "warning: /work/pkg/index.gohtml and /work/ui/index.gohtml share the parse name index.gohtml; the cover profile leaves out its blocks\n"
+	assert.Equal(t, want, stderr, "stderr")
+	got, err := os.ReadFile(profile)
+	require.NoError(t, err, "reading the profile")
+	assert.Equal(t, "mode: set\n", string(got), "profile")
+}
+
 // TestTestFailsBeforeGoTestWhenTheProfileDirectoryIsMissing states that a
 // profile that cannot be written is found out before the tests run, not
 // after minutes of them.
