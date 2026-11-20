@@ -67,4 +67,4 @@ warning: /abs/pkg/index.gohtml and /abs/ui/index.gohtml share the parse name ind
 
 ## Differences from go test
 
-The tests run on muxt's template engine, not on `html/template`; `go test` stays the check of correctness. The engine still escapes script and URL attributes differently, so a test that asserts such output, a Datastar `data-on-click` among them, passes under `go test` and fails here. [reference_template_coverage_escaping_gap.txt](../../../cmd/muxt/testdata/reference_template_coverage_escaping_gap.txt)
+The tests run on muxt's template engine, not on `html/template`; `go test` stays the check of correctness. The engine escapes with a copy of `html/template`'s escaper, so a test that asserts escaped output, a Datastar `data-on-click` among them, passes under both. [reference_template_coverage_escapes_as_html_template.txt](../../../cmd/muxt/testdata/reference_template_coverage_escapes_as_html_template.txt) The copy is from one Go release, so the two differ where the `html/template` of the Go that builds your tests does ([template engine](../template-engine.md)).

@@ -1,17 +1,13 @@
-# muxt test runs the tests on muxt's template engine, and that engine does
-# not escape every attribute the way html/template does. The test below
-# asserts html/template's output for a Datastar attribute, which html/template
-# treats as JavaScript: it passes under go test and fails under muxt test.
-# The failure is the finding: run go test, read the differences. The script
-# asserts that the test fails, not what the engine writes, since the
-# engine's escaping is expected to change.
+# muxt test runs the tests on muxt's template engine, which escapes with a
+# copy of html/template's escaper. The test below asserts html/template's
+# output for a Datastar attribute, which html/template treats as JavaScript:
+# it passes under go test and under muxt test.
 
 exec go test ./...
 stdout '^ok  \tserver\t'
 
-! muxt test
-stdout 'FAIL'
-stdout 'data-on-click'
+muxt test
+stdout '^ok  \tserver\t'
 ! stderr .
 
 -- go.mod --
