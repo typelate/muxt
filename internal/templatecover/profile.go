@@ -51,9 +51,23 @@ func Sources(pkg source.Package) []Source {
 	return sources
 }
 
-// Profile is template blocks by absolute file path.
+// Profile is template blocks by absolute file path, each true once a test
+// reached it.
 type Profile struct {
 	files map[string]map[Block]bool
+}
+
+// record puts b in file, reached or not. A block some test reached stays
+// reached: a fragment two packages share is covered when either's tests
+// run it.
+func (p *Profile) record(file string, b Block, reached bool) {
+	if p.files == nil {
+		p.files = make(map[string]map[Block]bool)
+	}
+	if p.files[file] == nil {
+		p.files[file] = make(map[Block]bool)
+	}
+	p.files[file][b] = p.files[file][b] || reached
 }
 
 // AmbiguousNameError is a parse name that two or more template files
@@ -75,9 +89,11 @@ func (e *AmbiguousNameError) Error() string {
 	return fmt.Sprintf("%s share the parse name %s; the cover profile leaves out its blocks", files, e.ParseName)
 }
 
-// Add attributes what was reached to the files in sources. A parse name no
-// source has is dropped, and so is one that two files have, which is
-// returned in parse name order.
+// Add attributes what was reached to the files in sources, and gives every
+// other block of those files a line that says no test reached it. A parse
+// name no source has is dropped. One that two files have is returned in
+// parse name order, and no block of either file is written for it: which
+// of them was reached is unknown.
 func (p *Profile) Add(r Reached, sources []Source) []*AmbiguousNameError {
 	filesByName := make(map[string][]string)
 	for _, s := range sources {
@@ -88,23 +104,29 @@ func (p *Profile) Add(r Reached, sources []Source) []*AmbiguousNameError {
 		}
 	}
 	var ambiguous []*AmbiguousNameError
+	leftOut := make(map[string]bool)
 	for _, name := range slices.Sorted(maps.Keys(r)) {
 		files := filesByName[name]
 		switch len(files) {
 		case 0:
 		case 1:
-			if p.files == nil {
-				p.files = make(map[string]map[Block]bool)
-			}
-			if p.files[files[0]] == nil {
-				p.files[files[0]] = make(map[Block]bool)
-			}
 			for b := range r[name] {
-				p.files[files[0]][b] = true
+				p.record(files[0], b, true)
 			}
 		default:
 			slices.Sort(files)
 			ambiguous = append(ambiguous, &AmbiguousNameError{ParseName: name, Files: files})
+			leftOut[name] = true
+		}
+	}
+	for _, s := range sources {
+		for _, tree := range s.Trees {
+			if leftOut[tree.ParseName] {
+				continue
+			}
+			for _, b := range tree.CoverBlocks() {
+				p.record(s.File, Block{StartLine: b.StartLine, StartCol: b.StartColumn, EndLine: b.EndLine, EndCol: b.EndColumn}, false)
+			}
 		}
 	}
 	return ambiguous
@@ -134,7 +156,11 @@ func (p *Profile) WriteTo(w io.Writer) (int64, error) {
 				cmp.Compare(a.EndLine, b.EndLine), cmp.Compare(a.EndCol, b.EndCol))
 		})
 		for _, b := range blocks {
-			n, err := fmt.Fprintf(w, "%s:%d.%d,%d.%d 1 1\n", file, b.StartLine, column(b.StartLine, b.StartCol), b.EndLine, column(b.EndLine, b.EndCol))
+			count := 0
+			if p.files[file][b] {
+				count = 1
+			}
+			n, err := fmt.Fprintf(w, "%s:%d.%d,%d.%d 1 %d\n", file, b.StartLine, column(b.StartLine, b.StartCol), b.EndLine, column(b.EndLine, b.EndCol), count)
 			total += int64(n)
 			if err != nil {
 				return total, err

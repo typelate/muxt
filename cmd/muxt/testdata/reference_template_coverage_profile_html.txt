@@ -1,20 +1,18 @@
-# muxt test --output-cover-profile writes the template blocks the tests
-# reached as a Go cover profile, and go tool cover -html opens it.
+# muxt test --output-cover-profile writes every block of the package's
+# template files as a Go cover profile, count 1 for a block the tests reached
+# and 0 for one they did not, and go tool cover -html opens it.
 #
-# The template file starts with its {{if}}, so the first reached span starts
-# at the file's first byte: the profile counts line 1 from column 2, which
-# is how x/tools' cover.Boundaries reads it. The test renders the admin
-# branch only. The {{else}} branch is not in the profile, so go tool cover
-# shows its text as not tracked: outside every span, neither covered nor
-# uncovered.
+# The template file starts with its {{if}}, so the first span starts at the
+# file's first byte: the profile counts line 1 from column 2, which is how
+# x/tools' cover.Boundaries reads it. The test renders the admin branch
+# only, so go tool cover shows the {{else}} branch as uncovered.
 
 muxt test --output-cover-profile cover.out
 stdout '^ok  \tserver\t'
 cmpenv cover.out want-cover.txt
 
 exec go tool cover -html=cover.out -o out.html
-grep '<span class="cov8" title="1">\{\{if \.Admin\}\}</span><span class="cov8" title="1">Welcome back, admin\.</span>\{\{else\}\}Please sign in\.<span' out.html
-! grep '<span class="cov0" title' out.html
+grep '<span class="cov8" title="1">\{\{if \.Admin\}\}</span><span class="cov8" title="1">Welcome back, admin\.</span><span class="cov0" title="0">\{\{else\}\}</span><span class="cov0" title="0">Please sign in\.</span><span class="cov8" title="1">\{\{end\}\}</span>' out.html
 
 -- go.mod --
 module server
@@ -64,5 +62,7 @@ func TestAdminPage(t *testing.T) {
 mode: set
 $WORK/index.gohtml:1.2,1.15 1 1
 $WORK/index.gohtml:1.15,1.35 1 1
+$WORK/index.gohtml:1.35,1.43 1 0
+$WORK/index.gohtml:1.43,1.58 1 0
 $WORK/index.gohtml:1.58,1.65 1 1
 $WORK/index.gohtml:1.65,2.1 1 1

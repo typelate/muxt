@@ -3,12 +3,14 @@ package templatecover_test
 import (
 	"bytes"
 	"go/token"
+	"path"
 	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/typelate/htt"
+	"github.com/typelate/htt/lex"
 
 	"github.com/typelate/muxt/internal/source"
 	"github.com/typelate/muxt/internal/templatecover"
@@ -189,4 +191,82 @@ func TestAmbiguousNameErrorNamesEveryFile(t *testing.T) {
 		err := &templatecover.AmbiguousNameError{ParseName: "index.gohtml", Files: tt.files}
 		assert.Equal(t, tt.want, err.Error())
 	}
+}
+
+// parsedFrom is a definition of the template text parsed from file, with
+// the tree the engine's blocks are listed from.
+func parsedFrom(t *testing.T, file, text string) source.Definition {
+	t.Helper()
+	name := path.Base(file)
+	tree, err := htt.ParseTree(name, name, text, map[string]*htt.Tree{}, lex.NewOptions())
+	require.NoError(t, err)
+	return source.Definition{Define: source.Span{Position: token.Position{Filename: file}}, Tree: tree}
+}
+
+// TestProfileWritesUnreachedBlocksAtCountZero states that every block of a
+// template file has a line, count 1 when a test reached it and 0 when none
+// did, which is what makes go tool cover -html show the text of a branch no
+// test took as uncovered.
+func TestProfileWritesUnreachedBlocksAtCountZero(t *testing.T) {
+	sources := templatecover.Sources(packageWith(map[string]source.Definition{
+		"index.gohtml": parsedFrom(t, "/abs/pkg/index.gohtml", "<p>\n{{if .Admin}}Hello{{else}}Sign in.{{end}}</p>"),
+	}))
+	reached := templatecover.Reached{"index.gohtml": {
+		{StartLine: 1, StartCol: 1, EndLine: 1, EndCol: 3}:   {},
+		{StartLine: 1, StartCol: 3, EndLine: 1, EndCol: 4}:   {},
+		{StartLine: 1, StartCol: 4, EndLine: 2, EndCol: 1}:   {},
+		{StartLine: 2, StartCol: 1, EndLine: 2, EndCol: 14}:  {},
+		{StartLine: 2, StartCol: 14, EndLine: 2, EndCol: 19}: {},
+		{StartLine: 2, StartCol: 35, EndLine: 2, EndCol: 42}: {},
+		{StartLine: 2, StartCol: 42, EndLine: 2, EndCol: 46}: {},
+	}}
+
+	var p templatecover.Profile
+	p.Add(reached, sources)
+
+	assert.Equal(t, "mode: set\n"+
+		"/abs/pkg/index.gohtml:1.2,1.4 1 1\n"+
+		"/abs/pkg/index.gohtml:1.4,1.5 1 1\n"+
+		"/abs/pkg/index.gohtml:1.5,2.1 1 1\n"+
+		"/abs/pkg/index.gohtml:2.1,2.14 1 1\n"+
+		"/abs/pkg/index.gohtml:2.14,2.19 1 1\n"+
+		"/abs/pkg/index.gohtml:2.19,2.27 1 0\n"+
+		"/abs/pkg/index.gohtml:2.27,2.35 1 0\n"+
+		"/abs/pkg/index.gohtml:2.35,2.42 1 1\n"+
+		"/abs/pkg/index.gohtml:2.42,2.46 1 1\n", written(t, &p))
+}
+
+// TestProfileWritesNoBlockOfAParseNameTwoFilesShare states that when a
+// block was reached under a parse name two files have, neither file gets a
+// line for any of its blocks: writing them at count 0 would call a block
+// uncovered that a test may have reached.
+func TestProfileWritesNoBlockOfAParseNameTwoFilesShare(t *testing.T) {
+	shared := parsedFrom(t, "/abs/ui/index.gohtml", "{{.Title}}")
+	shared.Package = "example.com/ui"
+	sources := templatecover.Sources(packageWith(map[string]source.Definition{
+		"index":  parsedFrom(t, "/abs/pkg/index.gohtml", "{{.Title}}"),
+		"shared": shared,
+		"nav":    parsedFrom(t, "/abs/pkg/nav.gohtml", "{{.Title}}"),
+	}))
+	reached := templatecover.Reached{"index.gohtml": {{StartLine: 1, StartCol: 1, EndLine: 1, EndCol: 11}: {}}}
+
+	var p templatecover.Profile
+	p.Add(reached, sources)
+
+	assert.Equal(t, "mode: set\n/abs/pkg/nav.gohtml:1.2,1.12 1 0\n", written(t, &p))
+}
+
+// TestProfileKeepsABlockReachedWhenAnotherPackageDoesNotReachIt states
+// that a file two packages parse is covered when either's tests run it: a
+// later package that reaches nothing does not turn the block uncovered.
+func TestProfileKeepsABlockReachedWhenAnotherPackageDoesNotReachIt(t *testing.T) {
+	sources := templatecover.Sources(packageWith(map[string]source.Definition{
+		"layout": parsedFrom(t, "/abs/ui/layout.gohtml", "{{.Title}}"),
+	}))
+
+	var p templatecover.Profile
+	p.Add(templatecover.Reached{"layout.gohtml": {{StartLine: 1, StartCol: 1, EndLine: 1, EndCol: 11}: {}}}, sources)
+	p.Add(templatecover.Reached{}, sources)
+
+	assert.Equal(t, "mode: set\n/abs/ui/layout.gohtml:1.2,1.12 1 1\n", written(t, &p))
 }
