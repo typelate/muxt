@@ -1,0 +1,68 @@
+# muxt test --output-cover-profile writes the template blocks the tests
+# reached as a Go cover profile, and go tool cover -html opens it.
+#
+# The template file starts with its {{if}}, so the first reached span starts
+# at the file's first byte: the profile counts line 1 from column 2, which
+# is how x/tools' cover.Boundaries reads it. The test renders the admin
+# branch only. The {{else}} branch is not in the profile, so go tool cover
+# shows its text as not tracked: outside every span, neither covered nor
+# uncovered.
+
+muxt test --output-cover-profile cover.out
+stdout '^ok  \tserver\t'
+cmpenv cover.out want-cover.txt
+
+exec go tool cover -html=cover.out -o out.html
+grep '<span class="cov8" title="1">\{\{if \.Admin\}\}</span><span class="cov8" title="1">Welcome back, admin\.</span>\{\{else\}\}Please sign in\.<span' out.html
+! grep '<span class="cov0" title' out.html
+
+-- go.mod --
+module server
+
+go 1.24
+-- index.gohtml --
+{{if .Admin}}Welcome back, admin.{{else}}Please sign in.{{end}}
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+	"io"
+)
+
+//go:embed *.gohtml
+var templateFiles embed.FS
+
+var templates = template.Must(template.ParseFS(templateFiles, "*.gohtml"))
+
+type Page struct {
+	Admin bool
+}
+
+func Render(w io.Writer, page Page) error {
+	return templates.ExecuteTemplate(w, "index.gohtml", page)
+}
+-- render_test.go --
+package server
+
+import (
+	"strings"
+	"testing"
+)
+
+func TestAdminPage(t *testing.T) {
+	var buf strings.Builder
+	if err := Render(&buf, Page{Admin: true}); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := buf.String(), "Welcome back, admin.\n"; got != want {
+		t.Errorf("page = %q, want %q", got, want)
+	}
+}
+-- want-cover.txt --
+mode: set
+$WORK/index.gohtml:1.2,1.15 1 1
+$WORK/index.gohtml:1.15,1.35 1 1
+$WORK/index.gohtml:1.58,1.65 1 1
+$WORK/index.gohtml:1.65,2.1 1 1

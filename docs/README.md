@@ -28,6 +28,7 @@ These pages document muxt in four kinds: tutorials, how-to guides, reference and
 - [Serve public and admin route sets](how-to/multiple-route-sets.md)
 - [Add custom template functions](how-to/template-functions.md): register `Funcs` so `muxt check` sees them
 - [Keep part of a template as written](how-to/keep-template-formatting.md): `muxt:fmt` directives
+- [See which template blocks your tests run](how-to/template-coverage.md): `muxt test --output-cover-profile` and `go tool cover -html`
 - [Move generate flags into muxt.json](how-to/muxt-json.md): one file and one `go:generate` line for many packages
 - [Share template fragments between packages](how-to/shared-template-fragments.md): one layout and one set of partials for several sub-packages
 - [Link to a route in another package](how-to/link-to-a-route-in-another-package.md): `route_paths` in `muxt.json`, `{{.Path.Blog.Get 42}}`
