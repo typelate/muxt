@@ -1,0 +1,19 @@
+# The engine requires a newer go line than this module's. muxt test raises it
+# in the copy of go.mod it hands go test, not in the module's own, and says
+# nothing about it: in a healthy run the output is go test's alone.
+
+muxt test
+stdout '^ok  \tserver\t'
+! stderr .
+grep '^go 1\.24$' go.mod
+
+-- go.mod --
+module server
+
+go 1.24
+-- render_test.go --
+package server
+
+import "testing"
+
+func TestRuns(t *testing.T) {}
