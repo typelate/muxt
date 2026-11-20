@@ -6,6 +6,8 @@ Runs `go test` with muxt's template engine in place of `html/template`. With `--
 muxt test [-- go test flags] [flags]
 ```
 
+To read the profile, see [See which template blocks your tests run](../../how-to/template-coverage.md).
+
 Everything after `--` goes to `go test` as written, after `-count=1`; a later `-count` wins. With nothing after `--`, `go test` gets no package pattern and tests the package in the directory.
 
 `go test`'s stdout and stderr reach yours unchanged. In a healthy run muxt prints nothing of its own.
