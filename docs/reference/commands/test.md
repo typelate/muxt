@@ -12,7 +12,7 @@ Everything after `--` goes to `go test` as written, after `-count=1`; a later `-
 
 `go test`'s stdout and stderr reach yours unchanged. In a healthy run muxt prints nothing of its own.
 
-The files that put the engine in place are written to a temporary directory, removed when the command ends, an interrupt included. The copy of `go.mod` among them may raise its `go` line to the engine's; your `go.mod` stays as written and muxt reports neither. [reference_template_coverage_quiet_go_line.txt](../../../cmd/muxt/testdata/reference_template_coverage_quiet_go_line.txt)
+The files that put the engine in place are written to a temporary directory, removed when the command ends, an interrupt included. The copy of `go.mod` among them may raise its `go` line and its requirements to the engine's; your `go.mod` stays as written and muxt reports neither. [reference_template_coverage_quiet_go_line.txt](../../../cmd/muxt/testdata/reference_template_coverage_quiet_go_line.txt)
 
 ## Refused arguments
 
