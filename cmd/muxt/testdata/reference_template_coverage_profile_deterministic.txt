@@ -1,0 +1,55 @@
+# The same tests give the same profile, byte for byte: blocks come from a
+# map, and the profile is sorted by file, then position.
+
+muxt test --output-cover-profile first.out
+muxt test --output-cover-profile second.out
+cmp first.out second.out
+grep '^mode: set$' first.out
+grep 'index\.gohtml:1\.2,' first.out
+
+-- go.mod --
+module server
+
+go 1.24
+-- index.gohtml --
+{{if .Admin}}Welcome back, admin.{{else}}Please sign in.{{end}}
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+	"io"
+)
+
+//go:embed *.gohtml
+var templateFiles embed.FS
+
+var templates = template.Must(template.ParseFS(templateFiles, "*.gohtml"))
+
+type Page struct {
+	Admin bool
+}
+
+func Render(w io.Writer, page Page) error {
+	return templates.ExecuteTemplate(w, "index.gohtml", page)
+}
+-- render_test.go --
+package server
+
+import (
+	"strings"
+	"testing"
+)
+
+func TestPages(t *testing.T) {
+	for _, page := range []Page{{Admin: true}, {Admin: false}} {
+		var buf strings.Builder
+		if err := Render(&buf, page); err != nil {
+			t.Fatal(err)
+		}
+		if buf.Len() == 0 {
+			t.Errorf("Render(%+v) wrote nothing", page)
+		}
+	}
+}
