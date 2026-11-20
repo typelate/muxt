@@ -749,6 +749,11 @@ func TestCommandLineConfigurations(t *testing.T) {
 			want: testConfiguration{CoverProfile: "/tmp/cover.out", GoTestArgs: []string{"-run", "TestIndex"}},
 		},
 		{
+			name: "test writing a cover profile with a flag in its test. spelling",
+			args: "test --output-cover-profile cover.out -- -test.run TestIndex -test.count=2",
+			want: testConfiguration{CoverProfile: "/work/cover.out", GoTestArgs: []string{"-test.run", "TestIndex", "-test.count=2"}},
+		},
+		{
 			name: "test with go test flags after --",
 			args: "test -- -run TestIndex -count=2",
 			want: testConfiguration{GoTestArgs: []string{"-run", "TestIndex", "-count=2"}},

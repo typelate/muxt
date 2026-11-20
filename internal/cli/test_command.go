@@ -80,8 +80,23 @@ func testCommand(workingDirectory *string, getEnv func(string) string, run func(
 // reached it, and one go test over several packages gives one cover
 // directory for all of them, where two packages' index.gohtml would meet.
 func checkProfilePackages(goTestArgs []string) error {
+	// go test takes its own flags spelled -test.NAME too, and the shared
+	// walk knows which take a value only by their short names. Read under
+	// the short name here, so a value such as the pattern of -test.run is
+	// not taken for a package; the walk itself is test-template-mutations'
+	// as well and stays as it is.
+	short := make([]string, len(goTestArgs))
+	for i, arg := range goTestArgs {
+		short[i] = arg
+		for _, prefix := range []string{"--test.", "-test."} {
+			if rest, ok := strings.CutPrefix(arg, prefix); ok {
+				short[i] = "-" + rest
+				break
+			}
+		}
+	}
 	var packages []string
-	for f := range templatecover.Flags(goTestArgs) {
+	for f := range templatecover.Flags(short) {
 		if f.Name == "" {
 			packages = append(packages, f.Args...)
 		}
