@@ -1,0 +1,27 @@
+# muxt test puts its engine in place through go test's -overlay, so a second
+# -overlay from the caller is refused before anything runs. The directory
+# holds no Go source: were go test to run, it would print something.
+# -mod and -modfile are refused for the same reason.
+
+! muxt test -- -overlay=x.json
+cmp stderr want-overlay.txt
+! stdout .
+
+! muxt test -- -mod=vendor
+cmp stderr want-mod.txt
+! stdout .
+
+! muxt test -- -modfile alt.mod
+cmp stderr want-modfile.txt
+! stdout .
+
+-- go.mod --
+module server
+
+go 1.24
+-- want-overlay.txt --
+Error: go test flag -overlay cannot be passed through: muxt test uses -overlay to put its template engine in place of html/template
+-- want-mod.txt --
+Error: go test flag -mod cannot be passed through: muxt test sets -mod=mod and -modfile to require github.com/typelate/htt, muxt's template engine, in a copy of go.mod
+-- want-modfile.txt --
+Error: go test flag -modfile cannot be passed through: muxt test sets -mod=mod and -modfile to require github.com/typelate/htt, muxt's template engine, in a copy of go.mod
