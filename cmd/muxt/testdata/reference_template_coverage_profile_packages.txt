@@ -1,0 +1,102 @@
+# From a muxt.json directory, muxt test runs every entry and writes one
+# profile. Both packages embed a file named index.gohtml; each block of the
+# profile names its own package's file by absolute path, so the two never
+# meet.
+
+muxt test --output-cover-profile cover.out
+stdout '(?m)^example\.com/m/a$'
+stdout '(?m)^example\.com/m/b$'
+grep '^'$WORK'/a/index\.gohtml:1\.2,' cover.out
+grep '^'$WORK'/b/index\.gohtml:1\.2,' cover.out
+
+-- go.mod --
+module example.com/m
+
+go 1.24
+-- muxt.json --
+{
+	"packages": {
+		"example.com/m/a": {},
+		"example.com/m/b": {}
+	}
+}
+-- a/index.gohtml --
+{{if .Admin}}Welcome back, admin.{{else}}Please sign in.{{end}}
+-- a/template.go --
+package a
+
+import (
+	"embed"
+	"html/template"
+	"io"
+)
+
+//go:embed *.gohtml
+var templateFiles embed.FS
+
+var templates = template.Must(template.ParseFS(templateFiles, "*.gohtml"))
+
+type Page struct {
+	Admin bool
+}
+
+func Render(w io.Writer, page Page) error {
+	return templates.ExecuteTemplate(w, "index.gohtml", page)
+}
+-- a/render_test.go --
+package a
+
+import (
+	"strings"
+	"testing"
+)
+
+func TestRender(t *testing.T) {
+	var buf strings.Builder
+	if err := Render(&buf, Page{Admin: true}); err != nil {
+		t.Fatal(err)
+	}
+	if buf.Len() == 0 {
+		t.Error("Render wrote nothing")
+	}
+}
+-- b/index.gohtml --
+{{.Name}}, welcome.
+-- b/template.go --
+package b
+
+import (
+	"embed"
+	"html/template"
+	"io"
+)
+
+//go:embed *.gohtml
+var templateFiles embed.FS
+
+var templates = template.Must(template.ParseFS(templateFiles, "*.gohtml"))
+
+type Page struct {
+	Name string
+}
+
+func Render(w io.Writer, page Page) error {
+	return templates.ExecuteTemplate(w, "index.gohtml", page)
+}
+-- b/render_test.go --
+package b
+
+import (
+	"strings"
+	"testing"
+)
+
+func TestRender(t *testing.T) {
+	var buf strings.Builder
+	if err := Render(&buf, Page{Name: "Ada"}); err != nil {
+		t.Fatal(err)
+	}
+	if buf.Len() == 0 {
+		t.Error("Render wrote nothing")
+	}
+}
