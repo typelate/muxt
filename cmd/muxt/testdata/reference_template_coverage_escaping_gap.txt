@@ -1,0 +1,63 @@
+# muxt test runs the tests on muxt's template engine, and that engine does
+# not escape every attribute the way html/template does. The test below
+# asserts html/template's output for a Datastar attribute, which html/template
+# treats as JavaScript: it passes under go test and fails under muxt test.
+# The failure is the finding: run go test, read the differences. The script
+# asserts that the test fails, not what the engine writes, since the
+# engine's escaping is expected to change.
+
+exec go test ./...
+stdout '^ok  \tserver\t'
+
+! muxt test
+stdout 'FAIL'
+stdout 'data-on-click'
+! stderr .
+
+-- go.mod --
+module server
+
+go 1.24
+-- index.gohtml --
+<button data-on-click="{{.Action}}">Load</button>
+-- template.go --
+package server
+
+import (
+	"embed"
+	"html/template"
+	"io"
+)
+
+//go:embed *.gohtml
+var templateFiles embed.FS
+
+var templates = template.Must(template.ParseFS(templateFiles, "*.gohtml"))
+
+type Page struct {
+	Action string
+}
+
+func Render(w io.Writer, page Page) error {
+	return templates.ExecuteTemplate(w, "index.gohtml", page)
+}
+-- render_test.go --
+package server
+
+import (
+	"strings"
+	"testing"
+)
+
+func TestDatastarAttribute(t *testing.T) {
+	var buf strings.Builder
+	if err := Render(&buf, Page{Action: "@get('/x?a=1&b=2')"}); err != nil {
+		t.Fatal(err)
+	}
+	// html/template writes the ampersand as a JavaScript escape, a backslash
+	// and u0026, inside the HTML-escaped quotes.
+	want := `<button data-on-click="&#34;@get(&#39;/x?a=1` + `\` + `u0026b=2&#39;)&#34;">Load</button>` + "\n"
+	if got := buf.String(); got != want {
+		t.Errorf("data-on-click page = %q, want %q", got, want)
+	}
+}

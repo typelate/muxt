@@ -10,7 +10,7 @@ Everything after `--` goes to `go test` as written, after `-count=1`; a later `-
 
 `go test`'s stdout and stderr reach yours unchanged. In a healthy run muxt prints nothing of its own.
 
-The files that put the engine in place are written to a temporary directory, removed when the command ends, an interrupt included.
+The files that put the engine in place are written to a temporary directory, removed when the command ends, an interrupt included. The copy of `go.mod` among them may raise its `go` line to the engine's; your `go.mod` stays as written and muxt reports neither. [reference_template_coverage_quiet_go_line.txt](../../../cmd/muxt/testdata/reference_template_coverage_quiet_go_line.txt)
 
 ## Refused arguments
 
@@ -62,3 +62,7 @@ A parse name is a file's base name. When a local file and a shared fragment from
 ```text
 warning: /abs/pkg/index.gohtml and /abs/ui/index.gohtml share the parse name index.gohtml; the cover profile leaves out its blocks
 ```
+
+## Differences from go test
+
+The tests run on muxt's template engine, not on `html/template`; `go test` stays the check of correctness. The engine still escapes script and URL attributes differently, so a test that asserts such output, a Datastar `data-on-click` among them, passes under `go test` and fails here. [reference_template_coverage_escaping_gap.txt](../../../cmd/muxt/testdata/reference_template_coverage_escaping_gap.txt)
