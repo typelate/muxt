@@ -41,7 +41,7 @@ The first package that fails ends the run; the entries after it are not tested. 
 
 ## Cover profile
 
-`--output-cover-profile FILE` writes every block of the package's template files to `FILE` when the run ends, as a Go cover profile (`mode: set`): count `1` for a block the tests reached, `0` for one they did not. Each line names a template file by absolute path, so a run over several packages writes one profile with every package's blocks. A failing run still writes the profile of what ran.
+`--output-cover-profile FILE` writes every block of the package's template files to `FILE` when the run ends, as a Go cover profile (`mode: set`): count `1` for a block the tests reached, `0` for one they did not. A block of white space alone, as between two `{{define}}`s, has a line only when reached. Each line names a template file by absolute path, so a run over several packages writes one profile with every package's blocks. A failing run still writes the profile of what ran.
 
 `go tool cover -html` shows a block no test reached as uncovered ([reference_template_coverage_profile_html.txt](../../../cmd/muxt/testdata/reference_template_coverage_profile_html.txt)). The profile leaves out string templates, files read at run time, and templates parsed only in test files or only under build tags.
 

@@ -270,3 +270,22 @@ func TestProfileKeepsABlockReachedWhenAnotherPackageDoesNotReachIt(t *testing.T)
 
 	assert.Equal(t, "mode: set\n/abs/ui/layout.gohtml:1.2,1.12 1 1\n", written(t, &p))
 }
+
+// TestProfileLeavesOutUnreachedWhiteSpace states that a block of white
+// space alone has a line only when a test reached it. The blank lines
+// between a file's {{define}}s are text of the file's own template, which a
+// package that executes its templates by name never runs: at count 0 they
+// would keep a file every test reaches below 100%.
+func TestProfileLeavesOutUnreachedWhiteSpace(t *testing.T) {
+	sources := templatecover.Sources(packageWith(map[string]source.Definition{
+		"index.gohtml": parsedFrom(t, "/abs/pkg/index.gohtml", "{{define \"a\"}}A{{end}}\n\n{{define \"b\"}}B{{end}}\n"),
+	}))
+	reached := templatecover.Reached{"index.gohtml": {{StartLine: 1, StartCol: 15, EndLine: 1, EndCol: 16}: {}}}
+
+	var p templatecover.Profile
+	p.Add(reached, sources)
+
+	assert.Equal(t, "mode: set\n"+
+		"/abs/pkg/index.gohtml:1.16,1.17 1 1\n"+
+		"/abs/pkg/index.gohtml:3.15,3.16 1 0\n", written(t, &p))
+}

@@ -124,12 +124,39 @@ func (p *Profile) Add(r Reached, sources []Source) []*AmbiguousNameError {
 			if leftOut[tree.ParseName] {
 				continue
 			}
+			text := tree.Source()
 			for _, b := range tree.CoverBlocks() {
+				if whiteSpace(text, b) {
+					continue
+				}
 				p.record(s.File, Block{StartLine: b.StartLine, StartCol: b.StartColumn, EndLine: b.EndLine, EndCol: b.EndColumn}, false)
 			}
 		}
 	}
 	return ambiguous
+}
+
+// whiteSpace reports whether the text of b is white space alone. Such a
+// block is written only when a test reached it: the blank lines between a
+// file's {{define}}s are text of the file's own template, which a package
+// that executes templates by name never runs.
+func whiteSpace(text string, b htt.CoverBlock) bool {
+	start, end := offset(text, b.StartLine, b.StartColumn), offset(text, b.EndLine, b.EndColumn)
+	return start < end && end <= len(text) && strings.TrimSpace(text[start:end]) == ""
+}
+
+// offset is the byte offset in text of a 1-based line and byte column, as
+// htt counts them.
+func offset(text string, line, column int) int {
+	at := 0
+	for range line - 1 {
+		i := strings.IndexByte(text[at:], '\n')
+		if i < 0 {
+			return len(text) + 1
+		}
+		at += i + 1
+	}
+	return at + column - 1
 }
 
 // column is col as go tool cover reads it. x/tools cover.Boundaries starts
