@@ -1,0 +1,63 @@
+# From a muxt.json directory, the first package whose tests fail ends the
+# run: the entries after it are not tested, so their keys never appear.
+# go test's output passes through, and muxt adds one line naming the entry.
+
+! muxt test
+stdout '(?m)^example\.com/m/a$'
+stdout 'FAIL'
+! stdout 'example\.com/m/b'
+stderr '(?m)^Error: example\.com/m/a: go test failed$'
+
+-- go.mod --
+module example.com/m
+
+go 1.24
+-- muxt.json --
+{
+	"packages": {
+		"example.com/m/a": {},
+		"example.com/m/b": {}
+	}
+}
+-- a/template.go --
+package a
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templateFiles embed.FS
+
+var templates = template.Must(template.ParseFS(templateFiles, "*.gohtml"))
+-- a/index.gohtml --
+Hello.
+-- a/a_test.go --
+package a
+
+import "testing"
+
+func TestFails(t *testing.T) {
+	t.Fatal("this package fails")
+}
+-- b/template.go --
+package b
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var templateFiles embed.FS
+
+var templates = template.Must(template.ParseFS(templateFiles, "*.gohtml"))
+-- b/index.gohtml --
+Hello.
+-- b/b_test.go --
+package b
+
+import "testing"
+
+func TestPasses(t *testing.T) {}
