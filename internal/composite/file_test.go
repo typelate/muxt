@@ -446,3 +446,17 @@ func TestFindReadsAnArrayOfOneEntry(t *testing.T) {
 		})
 	}
 }
+
+// TestFindReadsAnArrayOfTwoEntriesInOrder states that a key whose list holds
+// two objects holds both, in the order the file wrote them.
+func TestFindReadsAnArrayOfTwoEntriesInOrder(t *testing.T) {
+	dir := writeFile(t, `{"packages": {"example.com/m": [{"use_receiver_type": "Public"}, {"use_receiver_type": "Admin"}]}}`)
+
+	f, found, err := composite.Find(dir, testKeys())
+
+	require.NoError(t, err, "Find")
+	require.True(t, found, "found")
+	require.Len(t, f.Packages["example.com/m"], 2, "entries under example.com/m")
+	assert.JSONEq(t, `"Public"`, string(f.Packages["example.com/m"][0]["use_receiver_type"]), "use_receiver_type of the first entry")
+	assert.JSONEq(t, `"Admin"`, string(f.Packages["example.com/m"][1]["use_receiver_type"]), "use_receiver_type of the second entry")
+}
