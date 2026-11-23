@@ -42,13 +42,37 @@ func (w *shapeWalker) file() error {
 		case "route_paths":
 			return w.object("route_paths", "a JSON object", w.skipMember)
 		case "packages":
-			return w.object("packages", "an object keyed by import path", func(key string) error {
-				return w.object(fmt.Sprintf("packages[%q]", key), "a JSON object", w.skipMember)
-			})
+			return w.object("packages", "an object keyed by import path", w.sets)
 		default:
 			return w.skipMember(name)
 		}
 	})
+}
+
+// sets walks the value under the packages key: a list of objects. Until the
+// object form is refused, a bare object, or null, is walked as one entry.
+func (w *shapeWalker) sets(key string) error {
+	where := fmt.Sprintf("packages[%q]", key)
+	if w.dec.PeekKind() != '[' {
+		return w.object(where, "a JSON object", w.skipMember)
+	}
+	start := w.valueStart()
+	if _, err := w.dec.ReadToken(); err != nil {
+		return fmt.Errorf("reading %s: %w", w.path, err)
+	}
+	if w.dec.PeekKind() == ']' {
+		line, col := position(w.data, start+1)
+		return &ShapeError{Path: w.path, Line: line, Col: col, Where: where, Want: "a JSON object"}
+	}
+	for w.dec.PeekKind() != ']' {
+		if err := w.object(where, "a JSON object", w.skipMember); err != nil {
+			return err
+		}
+	}
+	if _, err := w.dec.ReadToken(); err != nil {
+		return fmt.Errorf("reading %s: %w", w.path, err)
+	}
+	return nil
 }
 
 // skipMember reads past the value of a member without looking at it.

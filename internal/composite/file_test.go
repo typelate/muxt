@@ -423,3 +423,26 @@ func TestCreateRefuses(t *testing.T) {
 		})
 	}
 }
+
+// TestFindReadsAnArrayOfOneEntry states that the value under a packages key is
+// a list of entries, and that a list of one object holds that entry. An object
+// under the key is read the same way until the object form is refused.
+func TestFindReadsAnArrayOfOneEntry(t *testing.T) {
+	for _, tt := range []struct {
+		name, file string
+	}{
+		{name: "array of one object", file: `{"packages": {"example.com/m": [{"use_receiver_type": "T"}]}}`},
+		{name: "bare object", file: `{"packages": {"example.com/m": {"use_receiver_type": "T"}}}`},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := writeFile(t, tt.file)
+
+			f, found, err := composite.Find(dir, testKeys())
+
+			require.NoError(t, err, "Find")
+			require.True(t, found, "found")
+			require.Len(t, f.Packages["example.com/m"], 1, "entries under example.com/m")
+			assert.JSONEq(t, `"T"`, string(f.Packages["example.com/m"][0]["use_receiver_type"]), "use_receiver_type")
+		})
+	}
+}

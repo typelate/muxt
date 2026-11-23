@@ -685,8 +685,17 @@ func (r rawFile) entries() map[string][]Entry {
 // form is refused.
 type entrySets []Entry
 
-// UnmarshalJSON reads a bare object, or null, as one entry.
+// UnmarshalJSON reads a list of objects, and a bare object, or null, as one
+// entry.
 func (s *entrySets) UnmarshalJSON(data []byte) error {
+	if bytes.HasPrefix(bytes.TrimSpace(data), []byte("[")) {
+		var list []Entry
+		if err := json.Unmarshal(data, &list); err != nil {
+			return fmt.Errorf("reading the entries of a key: %w", err)
+		}
+		*s = list
+		return nil
+	}
 	var one Entry
 	if err := json.Unmarshal(data, &one); err != nil {
 		return fmt.Errorf("reading an entry: %w", err)
