@@ -39,7 +39,7 @@ func newConfigurationReport(f *composite.File, key string, given givenSettings, 
 	}
 	if f != nil {
 		sources = append(sources,
-			reportSource{group: analysis.SettingGroup{Source: fmt.Sprintf("packages[%q]", key), File: f.Name}, gives: holds(f.Packages[key])},
+			reportSource{group: analysis.SettingGroup{Source: fmt.Sprintf("packages[%q]", key), File: f.Name}, gives: holds(f.Packages[key][0])},
 			reportSource{group: analysis.SettingGroup{Source: "package_defaults", File: f.Name}, gives: holds(f.Defaults)},
 		)
 	}

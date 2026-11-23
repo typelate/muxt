@@ -330,14 +330,16 @@ func TestResolveAppliesPackageDefaults(t *testing.T) {
 		{key: "example.com/m/own", receiver: `"Server"`, htmx: `false`},
 		{key: "example.com/m/missing", wantNotFound: true},
 	} {
-		got, found := f.Resolve(tt.key)
+		sets, found := f.Resolve(tt.key)
 
 		if tt.wantNotFound {
 			assert.False(t, found, "Resolve(%q) found = true, want false", tt.key)
-			assert.Empty(t, got, "Resolve(%q)", tt.key)
+			assert.Empty(t, sets, "Resolve(%q)", tt.key)
 			continue
 		}
 		require.True(t, found, "Resolve(%q) found", tt.key)
+		require.Len(t, sets, 1, "Resolve(%q) sets", tt.key)
+		got := sets[0]
 		assert.JSONEq(t, tt.receiver, string(got["use_receiver_type"]), "Resolve(%q) use_receiver_type", tt.key)
 		assert.JSONEq(t, tt.htmx, string(got["output_htmx"]), "Resolve(%q) output_htmx", tt.key)
 	}

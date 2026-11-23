@@ -2,7 +2,6 @@ package cli
 
 import (
 	"bytes"
-	"encoding/json"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -159,11 +158,11 @@ func TestGeneratePackageRecordsGivenFlags(t *testing.T) {
 			_, err := runCommand(t, root, tt.commandLine)
 
 			require.NoError(t, err)
-			var got composite.File
-			data, err := os.ReadFile(filepath.Join(root, "muxt.json"))
-			require.NoError(t, err)
-			require.NoError(t, json.Unmarshal(data, &got))
-			entry := got.Packages[importPath("workspace")]
+			got, found, err := composite.Find(root, muxtJSONKeys())
+			require.NoError(t, err, "Find")
+			require.True(t, found, "found")
+			require.Len(t, got.Packages[importPath("workspace")], 1, "entries of packages[workspace]")
+			entry := got.Packages[importPath("workspace")][0]
 			for key, want := range tt.want {
 				assert.JSONEq(t, want, string(entry[key]), "%s of packages[workspace]", key)
 			}
@@ -286,11 +285,11 @@ func TestGeneratePackageDeclaresReceiverType(t *testing.T) {
 			require.NoError(t, err, "workspace.go parses")
 			assert.Equal(t, "workspace", file.Name.Name, "package name")
 			assert.Contains(t, declaredTypeNames(file), tt.wantType, "receiver type")
-			var got composite.File
-			data, err := os.ReadFile(filepath.Join(root, "muxt.json"))
-			require.NoError(t, err)
-			require.NoError(t, json.Unmarshal(data, &got))
-			recorded, ok := got.Packages[importPath("workspace")]["use_receiver_type"]
+			got, found, err := composite.Find(root, muxtJSONKeys())
+			require.NoError(t, err, "Find")
+			require.True(t, found, "found")
+			require.Len(t, got.Packages[importPath("workspace")], 1, "entries of packages[workspace]")
+			recorded, ok := got.Packages[importPath("workspace")][0]["use_receiver_type"]
 			if tt.wantRecorded == "" {
 				assert.False(t, ok, "use_receiver_type of packages[workspace]")
 			} else {

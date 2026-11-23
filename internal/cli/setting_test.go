@@ -280,8 +280,10 @@ func TestAnEntryReadFromAFileGivesNothingForNull(t *testing.T) {
 	f, found, err := composite.Find(dir, muxtJSONKeys())
 	require.NoError(t, err, "Find")
 	require.True(t, found, "found")
-	entry, ok := f.Resolve("example.com/m")
+	sets, ok := f.Resolve("example.com/m")
 	require.True(t, ok, "entry")
+	require.Len(t, sets, 1, "entries")
+	entry := sets[0]
 
 	given := givenKeys(entry, generateSettings(new(generate.RoutesFileConfiguration)))
 

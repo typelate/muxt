@@ -238,8 +238,8 @@ func selectJobs(spec jobSpec, dir string, flags *pflag.FlagSet, getEnv func(stri
 			return selection{}, &composite.SameDirectoryError{Path: f.Name, Key: key, Other: other, Dir: realDir}
 		}
 		keyOf[realDir] = key
-		entry, _ := f.Resolve(key)
-		config, err := entryConfiguration(entry, fromMuxtJSON, generateEnv{Dir: entryDir, GetEnv: getEnv, Version: version})
+		sets, _ := f.Resolve(key)
+		config, err := entryConfiguration(sets[0], fromMuxtJSON, generateEnv{Dir: entryDir, GetEnv: getEnv, Version: version})
 		if err != nil {
 			return selection{}, &composite.InvalidEntryError{Path: f.Name, Where: fmt.Sprintf("packages[%q]", key), Err: err}
 		}

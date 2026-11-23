@@ -38,8 +38,9 @@ type File struct {
 	Name string `json:"-"`
 	// Defaults holds the keys every entry takes unless the entry sets them
 	// itself. It is a separate object so one shared value is written once.
-	Defaults Entry            `json:"package_defaults,omitempty"`
-	Packages map[string]Entry `json:"packages"`
+	Defaults Entry `json:"package_defaults,omitempty"`
+	// Packages holds the entries of each key, one per muxt generate run.
+	Packages map[string][]Entry `json:"packages"`
 	// RoutePaths is the route_paths object. nil means the key is absent.
 	RoutePaths *RoutePaths `json:"route_paths,omitempty"`
 }
@@ -59,18 +60,23 @@ type RoutePaths struct {
 	OutputPackageRouteBuilderTypeSuffix string `json:"output_package_route_builder_type_suffix,omitempty"`
 }
 
-// Resolve returns the entry for key with Defaults applied. A key the entry
-// leaves out takes the default; a key the entry holds, even set to false or an
-// empty list, is kept whole. found is false when f has no entry under key.
-func (f *File) Resolve(key string) (e Entry, found bool) {
+// Resolve returns each entry under key, in the file's order, with Defaults
+// applied to each. A key an entry leaves out takes the default; a key it holds,
+// even set to false or an empty list, is kept whole. found is false when f has
+// no entry under key.
+func (f *File) Resolve(key string) (sets []Entry, found bool) {
 	own, found := f.Packages[key]
 	if !found {
-		return Entry{}, false
+		return nil, false
 	}
-	e = Entry{}
-	maps.Copy(e, f.Defaults)
-	maps.Copy(e, own)
-	return e, true
+	sets = make([]Entry, len(own))
+	for i, entry := range own {
+		e := Entry{}
+		maps.Copy(e, f.Defaults)
+		maps.Copy(e, entry)
+		sets[i] = e
+	}
+	return sets, true
 }
 
 // Find reads the first muxt.json found walking up from wd, starting at wd
@@ -168,13 +174,17 @@ func writeNew(path string, data []byte) error {
 func (f *File) Save() error {
 	// Encode a copy: an entry that is nil would be written as null, which
 	// reads back as {}, and the caller's file is not ours to change.
-	out := *f
-	out.Packages = make(map[string]Entry, len(f.Packages))
-	for key, e := range f.Packages {
-		if e == nil {
-			e = Entry{}
+	out := savedFile{Defaults: f.Defaults, RoutePaths: f.RoutePaths}
+	out.Packages = make(map[string]savedSets, len(f.Packages))
+	for key, sets := range f.Packages {
+		cloned := make(savedSets, len(sets))
+		for i, e := range sets {
+			if e == nil {
+				e = Entry{}
+			}
+			cloned[i] = e
 		}
-		out.Packages[key] = e
+		out.Packages[key] = cloned
 	}
 	var buf bytes.Buffer
 	enc := json.NewEncoder(&buf)
@@ -203,6 +213,36 @@ func (f *File) Save() error {
 		return fmt.Errorf("writing %s: %w", f.Name, err)
 	}
 	return nil
+}
+
+// savedFile is a File as Save encodes it.
+type savedFile struct {
+	Defaults   Entry                `json:"package_defaults,omitempty"`
+	Packages   map[string]savedSets `json:"packages"`
+	RoutePaths *RoutePaths          `json:"route_paths,omitempty"`
+}
+
+// savedSets is the transitional counterpart of entrySets: a key with one entry
+// is written as the bare object, the form every reader of an older muxt.json
+// knows. Delete it, and write every key as a list, with the list form.
+type savedSets []Entry
+
+// MarshalJSON writes one entry as an object and any other count as a list.
+func (s savedSets) MarshalJSON() ([]byte, error) {
+	// The markup characters stay as written, as Save's own encoder leaves them.
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	var err error
+	if len(s) == 1 {
+		err = enc.Encode(s[0])
+	} else {
+		err = enc.Encode([]Entry(s))
+	}
+	if err != nil {
+		return nil, fmt.Errorf("encoding entries: %w", err)
+	}
+	return bytes.TrimSpace(buf.Bytes()), nil
 }
 
 // isNull reports whether value is the JSON null.
@@ -243,9 +283,9 @@ func (f *File) Add(key string, entry Entry) error {
 		return &ExistsError{Path: f.Name, Where: fmt.Sprintf("packages[%q]", key)}
 	}
 	if f.Packages == nil {
-		f.Packages = map[string]Entry{}
+		f.Packages = map[string][]Entry{}
 	}
-	f.Packages[key] = entry
+	f.Packages[key] = []Entry{entry}
 	return nil
 }
 
@@ -303,7 +343,7 @@ func read(path string, keys Keys) (*File, error) {
 	if err := checkKinds(path, raw, keys); err != nil {
 		return nil, err
 	}
-	f := File{Defaults: raw.PackageDefaults, Packages: raw.Packages, RoutePaths: raw.RoutePaths}
+	f := File{Defaults: raw.PackageDefaults, Packages: raw.entries(), RoutePaths: raw.RoutePaths}
 	f.Dir = filepath.Dir(path)
 	f.Name = path
 	var hasModule bool
@@ -320,12 +360,14 @@ func read(path string, keys Keys) (*File, error) {
 		return nil, err
 	}
 	dropNulls(f.Defaults)
-	for key, e := range f.Packages {
-		if e == nil {
-			e = Entry{}
-			f.Packages[key] = e
+	for _, sets := range f.Packages {
+		for i, e := range sets {
+			if e == nil {
+				e = Entry{}
+				sets[i] = e
+			}
+			dropNulls(e)
 		}
-		dropNulls(e)
 	}
 	return &f, nil
 }
@@ -355,8 +397,10 @@ func (f *File) checkKeys(data []byte, raw rawFile, keys Keys) error {
 		if err := f.checkPackageKey(key); err != nil {
 			return err
 		}
-		if err := checkEntryKeys(f.Name, fmt.Sprintf("packages[%q]", key), raw.Packages[key], keys.Deprecated, known); err != nil {
-			return err
+		for _, entry := range raw.Packages[key] {
+			if err := checkEntryKeys(f.Name, fmt.Sprintf("packages[%q]", key), entry, keys.Deprecated, known); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -620,9 +664,35 @@ func (f *File) spelledOnDisk(key string) (string, error) {
 // so a value's JSON type can be checked before any typed decoding names a Go
 // struct field in its error.
 type rawFile struct {
-	PackageDefaults Entry            `json:"package_defaults"`
-	Packages        map[string]Entry `json:"packages"`
-	RoutePaths      *RoutePaths      `json:"route_paths"`
+	PackageDefaults Entry                `json:"package_defaults"`
+	Packages        map[string]entrySets `json:"packages"`
+	RoutePaths      *RoutePaths          `json:"route_paths"`
+}
+
+// entries returns the entries under each packages key, without the type that
+// reads them.
+func (r rawFile) entries() map[string][]Entry {
+	out := make(map[string][]Entry, len(r.Packages))
+	for key, sets := range r.Packages {
+		out[key] = []Entry(sets)
+	}
+	return out
+}
+
+// entrySets is the value under one packages key as it is read. It is the
+// transitional type of a muxt.json written before a key held a list: a bare
+// object is read as one entry. Delete it, and read a list, when the object
+// form is refused.
+type entrySets []Entry
+
+// UnmarshalJSON reads a bare object, or null, as one entry.
+func (s *entrySets) UnmarshalJSON(data []byte) error {
+	var one Entry
+	if err := json.Unmarshal(data, &one); err != nil {
+		return fmt.Errorf("reading an entry: %w", err)
+	}
+	*s = entrySets{one}
+	return nil
 }
 
 // readRaw decodes data into the entries as written. It fails with a
@@ -645,8 +715,10 @@ func checkKinds(path string, raw rawFile, keys Keys) error {
 		return err
 	}
 	for _, key := range slices.Sorted(maps.Keys(raw.Packages)) {
-		if err := checkEntryKinds(path, fmt.Sprintf("packages[%q]", key), raw.Packages[key], keys); err != nil {
-			return err
+		for _, entry := range raw.Packages[key] {
+			if err := checkEntryKinds(path, fmt.Sprintf("packages[%q]", key), entry, keys); err != nil {
+				return err
+			}
 		}
 	}
 	return nil

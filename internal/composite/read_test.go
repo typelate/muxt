@@ -312,8 +312,10 @@ func TestFindReadsNullAsAbsent(t *testing.T) {
 
 	require.NoError(t, err, "Find")
 	require.True(t, found, "found")
-	entry, ok := f.Resolve("example.com/m")
+	sets, ok := f.Resolve("example.com/m")
 	require.True(t, ok, "entry")
+	require.Len(t, sets, 1, "entries")
+	entry := sets[0]
 	assert.JSONEq(t, "true", string(entry["output_htmx"]), "output_htmx of the resolved entry")
 	assert.NotContains(t, entry, "use_receiver_type", "the resolved entry")
 }
@@ -327,8 +329,10 @@ func TestResolveKeepsAnEntryListWhole(t *testing.T) {
 	f, _, err := composite.Find(dir, keys)
 
 	require.NoError(t, err, "Find")
-	entry, ok := f.Resolve("example.com/m")
+	sets, ok := f.Resolve("example.com/m")
 	require.True(t, ok, "entry")
+	require.Len(t, sets, 1, "entries")
+	entry := sets[0]
 	assert.JSONEq(t, "[]", string(entry["use_templates"]), "use_templates of the resolved entry")
 	assert.JSONEq(t, "true", string(entry["output_htmx"]), "output_htmx of the resolved entry")
 	assert.JSONEq(t, `["a", "b"]`, string(f.Defaults["use_templates"]), "the defaults are not changed")

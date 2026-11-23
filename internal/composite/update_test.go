@@ -144,7 +144,7 @@ func TestUpdateRemovesLock(t *testing.T) {
 	}{
 		{name: "success", change: addEntry("example.com/m/a"), want: "example.com/m/a"},
 		{name: "failing change", change: func(f *composite.File) error {
-			f.Packages["example.com/m/a"] = composite.Entry{}
+			f.Packages["example.com/m/a"] = []composite.Entry{{}}
 			return failure
 		}, wantErr: failure},
 	} {

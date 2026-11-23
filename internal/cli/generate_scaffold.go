@@ -118,11 +118,11 @@ func scaffoldPackage(out io.Writer, wd, name string, flags *pflag.FlagSet, confi
 	}
 	candidate := &composite.File{Dir: f.Dir, Name: f.Name, Defaults: f.Defaults, Packages: maps.Clone(f.Packages)}
 	if candidate.Packages == nil {
-		candidate.Packages = map[string]composite.Entry{}
+		candidate.Packages = map[string][]composite.Entry{}
 	}
-	candidate.Packages[key] = entry
+	candidate.Packages[key] = []composite.Entry{entry}
 	resolved, _ := candidate.Resolve(key)
-	resolvedConfig, err := entryConfiguration(resolved, fromCommandLine, generateEnv{Dir: dir, GetEnv: getEnv, Version: version})
+	resolvedConfig, err := entryConfiguration(resolved[0], fromCommandLine, generateEnv{Dir: dir, GetEnv: getEnv, Version: version})
 	if err != nil {
 		return &composite.InvalidEntryError{Path: f.Name, Where: fmt.Sprintf("packages[%q]", key), Err: err}
 	}
