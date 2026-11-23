@@ -460,3 +460,25 @@ func TestFindReadsAnArrayOfTwoEntriesInOrder(t *testing.T) {
 	assert.JSONEq(t, `"Public"`, string(f.Packages["example.com/m"][0]["use_receiver_type"]), "use_receiver_type of the first entry")
 	assert.JSONEq(t, `"Admin"`, string(f.Packages["example.com/m"][1]["use_receiver_type"]), "use_receiver_type of the second entry")
 }
+
+// TestResolveAppliesPackageDefaultsToEachEntry states that each of two entries
+// under one key takes the defaults it leaves out and keeps what it sets, and
+// that resolving one does not change the other or the file.
+func TestResolveAppliesPackageDefaultsToEachEntry(t *testing.T) {
+	dir := writeFile(t, `{
+		"package_defaults": {"use_receiver_type": "T", "output_htmx": true},
+		"packages": {"example.com/m": [{}, {"use_receiver_type": "Admin", "output_htmx": false}]}
+	}`)
+	f, _, err := composite.Find(dir, testKeys())
+	require.NoError(t, err, "Find")
+
+	sets, found := f.Resolve("example.com/m")
+
+	require.True(t, found, "Resolve found")
+	require.Len(t, sets, 2, "resolved entries")
+	assert.JSONEq(t, `"T"`, string(sets[0]["use_receiver_type"]), "use_receiver_type of the first entry")
+	assert.JSONEq(t, `true`, string(sets[0]["output_htmx"]), "output_htmx of the first entry")
+	assert.JSONEq(t, `"Admin"`, string(sets[1]["use_receiver_type"]), "use_receiver_type of the second entry")
+	assert.JSONEq(t, `false`, string(sets[1]["output_htmx"]), "output_htmx of the second entry")
+	assert.Empty(t, f.Packages["example.com/m"][0], "the file's own first entry")
+}
