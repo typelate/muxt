@@ -167,6 +167,35 @@ func TestGenerateNamesEachSetOfAKeyByItsFile(t *testing.T) {
 	}
 }
 
+// requireTwoSetFilesWritten fails unless dir, the package directory of
+// twoSetModuleIn, holds each set's output file with that set's routes function.
+func requireTwoSetFilesWritten(t *testing.T, dir string) {
+	t.Helper()
+	for file, function := range map[string]string{
+		"routes_public.go": "func PublicRoutes(",
+		"routes_admin.go":  "func AdminRoutes(",
+	} {
+		got, err := os.ReadFile(filepath.Join(dir, file))
+		require.NoError(t, err, "output file of a set")
+		assert.Contains(t, string(got), function, "%s declares its set's routes function", file)
+	}
+}
+
+// TestGenerateWritesEverySetFromTheFilesDirectory states that a flagless muxt
+// generate in the directory of a muxt.json whose key holds two sets writes
+// both sets' output files, each with its own routes function.
+func TestGenerateWritesEverySetFromTheFilesDirectory(t *testing.T) {
+	if testing.Short() {
+		t.Skip("loads packages with the go command")
+	}
+	root := twoSetModule(t)
+
+	_, _, err := generateWithLoader(t, root)
+
+	require.NoError(t, err, "generate")
+	requireTwoSetFilesWritten(t, root)
+}
+
 // withMissingVariableEntry rewrites the muxt.json of dir, a module entryModule
 // wrote with an entry for each of keys, so the entry for "workspace" names a
 // templates variable its package does not declare.
