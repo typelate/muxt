@@ -231,7 +231,7 @@ func TestGenerateOfOneSetKeepsTheFileOfTheOther(t *testing.T) {
 	require.NoError(t, err, "admin file")
 
 	writeMuxtJSON(t, root, `{"packages": {"`+place.Key()+`": [
-		{"use_templates_variable": ["publicTmpl"], "output_file": "routes_public.go", "output_routes_func": "PublicRoutes"}
+		{"use_templates_variable": ["publicTmpl"], "output_file": "routes_public.go", "output_routes_func": "PublicRoutes", "output_receiver_interface": "PublicReceiver", "output_template_data_type": "PublicData", "output_template_route_paths_type": "PublicPaths"}
 	]}}`)
 
 	_, _, err = generateWithLoader(t, pkg)
@@ -297,8 +297,8 @@ func TestGenerateNamesTheSetWithoutTemplatesVariable(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			root := twoSetModuleIn(t, tt.place)
 			writeMuxtJSON(t, root, `{"packages": {"`+tt.place.Key()+`": [
-				{"use_templates_variable": ["publicTmpl"], "output_file": "routes_public.go", "output_routes_func": "PublicRoutes"},
-				{"use_templates_variable": ["missingTmpl"], "output_file": "routes_admin.go", "output_routes_func": "AdminRoutes"}
+				{"use_templates_variable": ["publicTmpl"], "output_file": "routes_public.go", "output_routes_func": "PublicRoutes", "output_receiver_interface": "PublicReceiver", "output_template_data_type": "PublicData", "output_template_route_paths_type": "PublicPaths"},
+				{"use_templates_variable": ["missingTmpl"], "output_file": "routes_admin.go", "output_routes_func": "AdminRoutes", "output_receiver_interface": "AdminReceiver", "output_template_data_type": "AdminData", "output_template_route_paths_type": "AdminPaths"}
 			]}}`)
 
 			_, _, err := generateWithLoader(t, filepath.Join(root, tt.run))
@@ -476,8 +476,8 @@ var adminTmpl = template.Must(template.ParseFS(source, "admin.gohtml", "shared.g
 `)
 			writeTestFile(t, pkg, "shared.gohtml", `{{define "GET /shared"}}<p>shared</p>{{end}}`)
 			writeMuxtJSON(t, root, `{"packages": {"`+tt.place.Key()+`": [
-				{"use_templates_variable": ["publicTmpl"], "output_file": "routes_public.go", "output_routes_func": "PublicRoutes", "output_multiple_files": true},
-				{"use_templates_variable": ["adminTmpl"], "output_file": "routes_admin.go", "output_routes_func": "AdminRoutes", "output_multiple_files": true}
+				{"use_templates_variable": ["publicTmpl"], "output_file": "routes_public.go", "output_routes_func": "PublicRoutes", "output_receiver_interface": "PublicReceiver", "output_template_data_type": "PublicData", "output_template_route_paths_type": "PublicPaths", "output_multiple_files": true},
+				{"use_templates_variable": ["adminTmpl"], "output_file": "routes_admin.go", "output_routes_func": "AdminRoutes", "output_receiver_interface": "AdminReceiver", "output_template_data_type": "AdminData", "output_template_route_paths_type": "AdminPaths", "output_multiple_files": true}
 			]}}`)
 
 			_, _, err := generateWithLoader(t, filepath.Join(root, tt.run))

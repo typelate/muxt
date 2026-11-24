@@ -61,8 +61,8 @@ func TestRunsNameTheSetOfAKeyWithSeveralSets(t *testing.T) {
 				writeTestFile(t, root, "receiver.go", "package root\n\ntype S struct{}\n")
 				writeTestFile(t, root, "admin.gohtml", `{{define "GET /admin/{id} Missing(ctx, id)"}}<p>admin</p>{{end}}`)
 				writeMuxtJSON(t, root, `{"packages": {"`+testModule+`": [
-					{"use_templates_variable": ["publicTmpl"], "output_file": "routes_public.go", "output_routes_func": "PublicRoutes"},
-					{"use_templates_variable": ["adminTmpl"], "use_receiver_type": "S", "output_file": "routes_admin.go", "output_routes_func": "AdminRoutes"}
+					{"use_templates_variable": ["publicTmpl"], "output_file": "routes_public.go", "output_routes_func": "PublicRoutes", "output_receiver_interface": "PublicReceiver", "output_template_data_type": "PublicData", "output_template_route_paths_type": "PublicPaths"},
+					{"use_templates_variable": ["adminTmpl"], "use_receiver_type": "S", "output_file": "routes_admin.go", "output_routes_func": "AdminRoutes", "output_receiver_interface": "AdminReceiver", "output_template_data_type": "AdminData", "output_template_route_paths_type": "AdminPaths"}
 				]}}`)
 			},
 			run: generateRun,
@@ -93,8 +93,8 @@ func TestRunsNameTheSetOfAKeyWithSeveralSets(t *testing.T) {
 			name: "listing failure prefix",
 			change: func(t *testing.T, root string) {
 				writeMuxtJSON(t, root, `{"packages": {"`+testModule+`": [
-					{"use_templates_variable": ["publicTmpl"], "output_file": "routes_public.go", "output_routes_func": "PublicRoutes"},
-					{"use_templates_variable": ["missingTmpl"], "output_file": "routes_admin.go", "output_routes_func": "AdminRoutes"}
+					{"use_templates_variable": ["publicTmpl"], "output_file": "routes_public.go", "output_routes_func": "PublicRoutes", "output_receiver_interface": "PublicReceiver", "output_template_data_type": "PublicData", "output_template_route_paths_type": "PublicPaths"},
+					{"use_templates_variable": ["missingTmpl"], "output_file": "routes_admin.go", "output_routes_func": "AdminRoutes", "output_receiver_interface": "AdminReceiver", "output_template_data_type": "AdminData", "output_template_route_paths_type": "AdminPaths"}
 				]}}`)
 			},
 			run: func(t *testing.T, root string) (string, string, error) {
@@ -155,8 +155,8 @@ var adminTmpl = template.Must(template.ParseFS(source, "admin.gohtml"))
 	writeMuxtJSON(t, root, `{"packages": {
 		"example.com/m/lib": [{"use_receiver_type": "Lib"}],
 		"example.com/m/web": [
-			{"use_templates_variable": ["publicTmpl"], "output_file": "routes_public.go", "output_routes_func": "PublicRoutes"},
-			{"use_templates_variable": ["adminTmpl"], "output_file": "routes_admin.go", "output_routes_func": "AdminRoutes"}
+			{"use_templates_variable": ["publicTmpl"], "output_file": "routes_public.go", "output_routes_func": "PublicRoutes", "output_receiver_interface": "PublicReceiver", "output_template_data_type": "PublicData", "output_template_route_paths_type": "PublicPaths"},
+			{"use_templates_variable": ["adminTmpl"], "output_file": "routes_admin.go", "output_routes_func": "AdminRoutes", "output_receiver_interface": "AdminReceiver", "output_template_data_type": "AdminData", "output_template_route_paths_type": "AdminPaths"}
 		]}}`)
 	loads := 0
 	failing := func(dir string, dirs, patterns []string) (*load.Loaded, error) {

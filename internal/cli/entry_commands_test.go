@@ -212,8 +212,8 @@ func TestMutationsReadsMuxtJSONEntry(t *testing.T) {
 func TestMutationsReadsTheTemplatesVariablesOfEverySet(t *testing.T) {
 	dir := moduleDir(t)
 	writeMuxtJSON(t, dir, `{"packages": {"example.com/m": [
-		{"use_templates_variable": ["pages", "shared"], "output_file": "routes_public.go", "output_routes_func": "PublicRoutes"},
-		{"use_templates_variable": ["admin", "shared"], "output_file": "routes_admin.go", "output_routes_func": "AdminRoutes"}
+		{"use_templates_variable": ["pages", "shared"], "output_file": "routes_public.go", "output_routes_func": "PublicRoutes", "output_receiver_interface": "PublicReceiver", "output_template_data_type": "PublicData", "output_template_route_paths_type": "PublicPaths"},
+		{"use_templates_variable": ["admin", "shared"], "output_file": "routes_admin.go", "output_routes_func": "AdminRoutes", "output_receiver_interface": "AdminReceiver", "output_template_data_type": "AdminData", "output_template_route_paths_type": "AdminPaths"}
 	]}}`)
 
 	got, _, err := mutationsTemplatesVariables(dir, "test-template-mutations --dry-run")

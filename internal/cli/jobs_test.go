@@ -169,8 +169,8 @@ func TestSelectJobsRejectsTwoKeysForOneDirectory(t *testing.T) {
 // twoSetsOfContacts is a package with a public and an admin route set, each
 // with its own output file and routes function.
 const twoSetsOfContacts = `{"packages": {"example.com/fieldkit/contacts": [
-	{"output_file": "routes_public.go", "output_routes_func": "PublicRoutes"},
-	{"output_file": "routes_admin.go", "output_routes_func": "AdminRoutes"}
+	{"output_file": "routes_public.go", "output_routes_func": "PublicRoutes", "output_receiver_interface": "PublicReceiver", "output_template_data_type": "PublicData", "output_template_route_paths_type": "PublicPaths"},
+	{"output_file": "routes_admin.go", "output_routes_func": "AdminRoutes", "output_receiver_interface": "AdminReceiver", "output_template_data_type": "AdminData", "output_template_route_paths_type": "AdminPaths"}
 ]}}`
 
 // TestSelectJobsTakesEverySetUnderAKey states that a key holding two entries
@@ -238,8 +238,8 @@ func TestJobNameTellsSetsOfOneKeyApart(t *testing.T) {
 // is not mistaken for the first.
 func TestSelectJobsNamesTheEntryAFlagRejects(t *testing.T) {
 	base := newFieldkit(t, `{"packages": {"example.com/fieldkit/contacts": [
-		{"output_file": "routes_public.go", "output_routes_func": "PublicRoutes"},
-		{"output_file": "routes_admin.go", "output_routes_func": "AdminRoutes", "output_htmx": true, "output_datastar": true}
+		{"output_file": "routes_public.go", "output_routes_func": "PublicRoutes", "output_receiver_interface": "PublicReceiver", "output_template_data_type": "PublicData", "output_template_route_paths_type": "PublicPaths"},
+		{"output_file": "routes_admin.go", "output_routes_func": "AdminRoutes", "output_receiver_interface": "AdminReceiver", "output_template_data_type": "AdminData", "output_template_route_paths_type": "AdminPaths", "output_htmx": true, "output_datastar": true}
 	]}}`)
 	spec := jobSpec{Name: "generate", Scope: eachEntry}
 
@@ -253,8 +253,9 @@ func TestSelectJobsNamesTheEntryAFlagRejects(t *testing.T) {
 // TestSelectJobsRejectsTwoSetsThatShareOneOutput states that two entries of a
 // key may not write one file or share one routes function, since generated
 // files are owned by routes function and the later run would delete the
-// earlier one's file. The error names the file, both positions and the member
-// to change.
+// earlier one's file, nor declare one receiver interface, template data type
+// or route paths type, which would not compile in one package. Defaults count.
+// The error names the value, both positions and the member to change.
 func TestSelectJobsRejectsTwoSetsThatShareOneOutput(t *testing.T) {
 	for _, tc := range []struct {
 		name     string
@@ -264,23 +265,23 @@ func TestSelectJobsRejectsTwoSetsThatShareOneOutput(t *testing.T) {
 	}{
 		{
 			name: "output file",
-			entries: `{"output_file": "routes.go", "output_routes_func": "PublicRoutes"},
-				{"output_file": "routes.go", "output_routes_func": "AdminRoutes"}`,
+			entries: `{"output_file": "routes.go", "output_routes_func": "PublicRoutes", "output_receiver_interface": "PublicReceiver", "output_template_data_type": "PublicData", "output_template_route_paths_type": "PublicPaths"},
+				{"output_file": "routes.go", "output_routes_func": "AdminRoutes", "output_receiver_interface": "AdminReceiver", "output_template_data_type": "AdminData", "output_template_route_paths_type": "AdminPaths"}`,
 			wantErr:  composite.SetClashError{Key: "example.com/fieldkit/contacts", Member: "output_file", Value: "routes.go", First: 0, Second: 1},
 			wantText: `: packages["example.com/fieldkit/contacts"][0] and packages["example.com/fieldkit/contacts"][1] both have output_file "routes.go"; give each its own output_file`,
 		},
 		{
 			name: "routes function",
-			entries: `{"output_file": "routes_public.go", "output_routes_func": "Routes"},
-				{"output_file": "routes_admin.go"},
-				{"output_file": "routes_other.go", "output_routes_func": "Routes"}`,
+			entries: `{"output_file": "routes_public.go", "output_routes_func": "Routes", "output_receiver_interface": "PublicReceiver", "output_template_data_type": "PublicData", "output_template_route_paths_type": "PublicPaths"},
+				{"output_file": "routes_admin.go", "output_receiver_interface": "AdminReceiver", "output_template_data_type": "AdminData", "output_template_route_paths_type": "AdminPaths"},
+				{"output_file": "routes_other.go", "output_routes_func": "Routes", "output_receiver_interface": "OtherReceiver", "output_template_data_type": "OtherData", "output_template_route_paths_type": "OtherPaths"}`,
 			wantErr:  composite.SetClashError{Key: "example.com/fieldkit/contacts", Member: "output_routes_func", Value: "Routes", First: 0, Second: 2},
 			wantText: `: packages["example.com/fieldkit/contacts"][0] and packages["example.com/fieldkit/contacts"][2] both have output_routes_func "Routes"; give each its own output_routes_func`,
 		},
 		{
 			name: "output file spelled two ways",
-			entries: `{"output_file": "routes.go", "output_routes_func": "PublicRoutes"},
-				{"output_file": "./routes.go", "output_routes_func": "AdminRoutes"}`,
+			entries: `{"output_file": "routes.go", "output_routes_func": "PublicRoutes", "output_receiver_interface": "PublicReceiver", "output_template_data_type": "PublicData", "output_template_route_paths_type": "PublicPaths"},
+				{"output_file": "./routes.go", "output_routes_func": "AdminRoutes", "output_receiver_interface": "AdminReceiver", "output_template_data_type": "AdminData", "output_template_route_paths_type": "AdminPaths"}`,
 			wantErr:  composite.SetClashError{Key: "example.com/fieldkit/contacts", Member: "output_file", Value: "routes.go", First: 0, Second: 1},
 			wantText: `: packages["example.com/fieldkit/contacts"][0] and packages["example.com/fieldkit/contacts"][1] both have output_file "routes.go"; give each its own output_file`,
 		},
@@ -292,9 +293,30 @@ func TestSelectJobsRejectsTwoSetsThatShareOneOutput(t *testing.T) {
 			wantText: `: packages["example.com/fieldkit/contacts"][0] and packages["example.com/fieldkit/contacts"][1] both have output_routes_func "TemplateRoutes"; give each its own output_routes_func`,
 		},
 		{
+			name: "receiver interface by default",
+			entries: `{"output_file": "routes_public.go", "output_routes_func": "PublicRoutes"},
+				{"output_file": "routes_admin.go", "output_routes_func": "AdminRoutes"}`,
+			wantErr:  composite.SetClashError{Key: "example.com/fieldkit/contacts", Member: "output_receiver_interface", Value: "RoutesReceiver", First: 0, Second: 1},
+			wantText: `: packages["example.com/fieldkit/contacts"][0] and packages["example.com/fieldkit/contacts"][1] both have output_receiver_interface "RoutesReceiver"; give each its own output_receiver_interface`,
+		},
+		{
+			name: "template data type by default",
+			entries: `{"output_file": "routes_public.go", "output_routes_func": "PublicRoutes", "output_receiver_interface": "PublicReceiver"},
+				{"output_file": "routes_admin.go", "output_routes_func": "AdminRoutes", "output_receiver_interface": "AdminReceiver"}`,
+			wantErr:  composite.SetClashError{Key: "example.com/fieldkit/contacts", Member: "output_template_data_type", Value: "TemplateData", First: 0, Second: 1},
+			wantText: `: packages["example.com/fieldkit/contacts"][0] and packages["example.com/fieldkit/contacts"][1] both have output_template_data_type "TemplateData"; give each its own output_template_data_type`,
+		},
+		{
+			name: "template route paths type by default",
+			entries: `{"output_file": "routes_public.go", "output_routes_func": "PublicRoutes", "output_receiver_interface": "PublicReceiver", "output_template_data_type": "PublicData"},
+				{"output_file": "routes_admin.go", "output_routes_func": "AdminRoutes", "output_receiver_interface": "AdminReceiver", "output_template_data_type": "AdminData"}`,
+			wantErr:  composite.SetClashError{Key: "example.com/fieldkit/contacts", Member: "output_template_route_paths_type", Value: "TemplateRoutePaths", First: 0, Second: 1},
+			wantText: `: packages["example.com/fieldkit/contacts"][0] and packages["example.com/fieldkit/contacts"][1] both have output_template_route_paths_type "TemplateRoutePaths"; give each its own output_template_route_paths_type`,
+		},
+		{
 			name: "output file by default",
-			entries: `{"output_routes_func": "PublicRoutes"},
-				{"output_routes_func": "AdminRoutes"}`,
+			entries: `{"output_routes_func": "PublicRoutes", "output_receiver_interface": "PublicReceiver", "output_template_data_type": "PublicData", "output_template_route_paths_type": "PublicPaths"},
+				{"output_routes_func": "AdminRoutes", "output_receiver_interface": "AdminReceiver", "output_template_data_type": "AdminData", "output_template_route_paths_type": "AdminPaths"}`,
 			wantErr:  composite.SetClashError{Key: "example.com/fieldkit/contacts", Member: "output_file", Value: "template_routes.go", First: 0, Second: 1},
 			wantText: `: packages["example.com/fieldkit/contacts"][0] and packages["example.com/fieldkit/contacts"][1] both have output_file "template_routes.go"; give each its own output_file`,
 		},
@@ -324,8 +346,8 @@ func TestSelectJobsRejectsRoutePathsWithSeveralEntriesUnderAKey(t *testing.T) {
 	base := newFieldkit(t, `{"route_paths": {}, "packages": {
 		"example.com/fieldkit": {},
 		"example.com/fieldkit/contacts": [
-			{"output_file": "routes_public.go", "output_routes_func": "PublicRoutes"},
-			{"output_file": "routes_admin.go", "output_routes_func": "AdminRoutes"}
+			{"output_file": "routes_public.go", "output_routes_func": "PublicRoutes", "output_receiver_interface": "PublicReceiver", "output_template_data_type": "PublicData", "output_template_route_paths_type": "PublicPaths"},
+			{"output_file": "routes_admin.go", "output_routes_func": "AdminRoutes", "output_receiver_interface": "AdminReceiver", "output_template_data_type": "AdminData", "output_template_route_paths_type": "AdminPaths"}
 		]}}`)
 	spec := jobSpec{Name: "generate", Scope: eachEntry}
 
@@ -351,8 +373,8 @@ func TestSelectJobsInAPackageDirectoryTakesEverySetOfItsKey(t *testing.T) {
 			base := newFieldkit(t, `{"packages": {
 				"example.com/fieldkit/inventory": {},
 				"example.com/fieldkit/contacts": [
-					{"output_file": "routes_public.go", "output_routes_func": "PublicRoutes"},
-					{"output_file": "routes_admin.go", "output_routes_func": "AdminRoutes"}
+					{"output_file": "routes_public.go", "output_routes_func": "PublicRoutes", "output_receiver_interface": "PublicReceiver", "output_template_data_type": "PublicData", "output_template_route_paths_type": "PublicPaths"},
+					{"output_file": "routes_admin.go", "output_routes_func": "AdminRoutes", "output_receiver_interface": "AdminReceiver", "output_template_data_type": "AdminData", "output_template_route_paths_type": "AdminPaths"}
 				]}}`)
 
 			sel, err := selectJobs(spec, filepath.Join(base, "contacts"), nil, func(string) string { return "" })
@@ -373,7 +395,7 @@ func TestSelectJobsInAPackageDirectoryTakesEverySetOfItsKey(t *testing.T) {
 // names the keys, not an entry, since the directory is the key's.
 func TestSelectJobsRejectsTwoKeysWithSeveralEntriesForOneDirectory(t *testing.T) {
 	base := newFieldkit(t, `{"packages": {
-		"example.com/fieldkit/contacts": [{"output_file": "a.go", "output_routes_func": "A"}, {"output_file": "b.go", "output_routes_func": "B"}],
+		"example.com/fieldkit/contacts": [{"output_file": "a.go", "output_routes_func": "A", "output_receiver_interface": "AReceiver", "output_template_data_type": "AData", "output_template_route_paths_type": "APaths"}, {"output_file": "b.go", "output_routes_func": "B", "output_receiver_interface": "BReceiver", "output_template_data_type": "BData", "output_template_route_paths_type": "BPaths"}],
 		"example.com/fieldkit/people": [{"output_file": "c.go", "output_routes_func": "C"}]
 	}}`)
 	if err := os.Symlink("contacts", filepath.Join(base, "people")); err != nil {

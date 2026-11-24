@@ -263,23 +263,23 @@ func selectJobs(spec jobSpec, dir string, flags *pflag.FlagSet, getEnv func(stri
 		if f.RoutePaths != nil && len(sets) > 1 {
 			return selection{}, &composite.RoutePathsSetsError{Path: f.Name, Key: key, Sets: len(sets)}
 		}
-		fileOf := map[string]int{} // an output file to the first entry that writes it
-		funcOf := map[string]int{} // a routes function to the first entry that names it
+		members := distinctSetMembers()
+		firstWith := make([]map[string]int, len(members)) // per member, a value to the first entry that has it
+		for m := range firstWith {
+			firstWith[m] = map[string]int{}
+		}
 		for i, set := range sets {
 			config, err := entryConfiguration(set, fromMuxtJSON, generateEnv{Dir: entryDir, GetEnv: getEnv, Version: version})
 			if err != nil {
 				return selection{}, &composite.InvalidEntryError{Path: f.Name, Where: composite.SetWhere(key, i), Err: err}
 			}
-			// Cleaned, so "routes.go" and "./routes.go" are the one file they are.
-			file := filepath.Clean(config.OutputFileName)
-			if first, clash := fileOf[file]; clash {
-				return selection{}, &composite.SetClashError{Path: f.Name, Key: key, Member: "output_file", Value: file, First: first, Second: i}
+			for m, member := range members {
+				value := member.value(config)
+				if first, clash := firstWith[m][value]; clash {
+					return selection{}, &composite.SetClashError{Path: f.Name, Key: key, Member: member.name, Value: value, First: first, Second: i}
+				}
+				firstWith[m][value] = i
 			}
-			fileOf[file] = i
-			if first, clash := funcOf[config.RoutesFunction]; clash {
-				return selection{}, &composite.SetClashError{Path: f.Name, Key: key, Member: "output_routes_func", Value: config.RoutesFunction, First: first, Second: i}
-			}
-			funcOf[config.RoutesFunction] = i
 			config.Verbose = spec.Verbose
 			// One key with several sets: nothing but a name tells them apart.
 			setsNeedNames := !hubFromChild && len(sets) > 1
@@ -287,6 +287,29 @@ func selectJobs(spec jobSpec, dir string, flags *pflag.FlagSet, getEnv func(stri
 		}
 	}
 	return selection{File: f, Jobs: jobs}, nil
+}
+
+// setMember is a muxt.json member whose resolved value must differ between the
+// entries of one key, and how to read that value from an entry's configuration.
+type setMember struct {
+	name  string
+	value func(generate.RoutesFileConfiguration) string
+}
+
+// distinctSetMembers are the members two entries of one key may not share, in
+// the order a clash is reported. The files are written by one generate run
+// each and owned by routes function, and the declared types would be declared
+// twice in one package, which does not compile. They are compared after
+// defaults, so two entries that leave one unset clash.
+func distinctSetMembers() []setMember {
+	return []setMember{
+		// Cleaned, so "routes.go" and "./routes.go" are the one file they are.
+		{"output_file", func(c generate.RoutesFileConfiguration) string { return filepath.Clean(c.OutputFileName) }},
+		{"output_routes_func", func(c generate.RoutesFileConfiguration) string { return c.RoutesFunction }},
+		{"output_receiver_interface", func(c generate.RoutesFileConfiguration) string { return c.ReceiverInterface }},
+		{"output_template_data_type", func(c generate.RoutesFileConfiguration) string { return c.TemplateDataType }},
+		{"output_template_route_paths_type", func(c generate.RoutesFileConfiguration) string { return c.TemplateRoutePathsTypeName }},
+	}
 }
 
 // onePerDirectory folds the jobs of each directory into the first, in the

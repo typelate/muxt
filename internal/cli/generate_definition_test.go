@@ -510,8 +510,8 @@ func TestGenerateDefRefusesFileTheTemplatesVariableDoesNotRead(t *testing.T) {
 // nothing; sets that agree, or leave it unnamed, let it run.
 func TestGenerateDefRefusesSetsThatNameDifferentReceivers(t *testing.T) {
 	const sets = `{"packages": {"example.com/m": [
-		{"output_file": "routes_public.go", "output_routes_func": "PublicRoutes"%s},
-		{"output_file": "routes_admin.go", "output_routes_func": "AdminRoutes"%s}
+		{"output_file": "routes_public.go", "output_routes_func": "PublicRoutes", "output_receiver_interface": "PublicReceiver", "output_template_data_type": "PublicData", "output_template_route_paths_type": "PublicPaths"%s},
+		{"output_file": "routes_admin.go", "output_routes_func": "AdminRoutes", "output_receiver_interface": "AdminReceiver", "output_template_data_type": "AdminData", "output_template_route_paths_type": "AdminPaths"%s}
 	]}}`
 	for _, tt := range []struct {
 		name          string
