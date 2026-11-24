@@ -29,8 +29,8 @@ github.com/stretchr/testify v1.12.1 h1:EuwCh5fleGS7H32xRwO3wRGT7DxrDhLAT6FF8MpWD
 github.com/stretchr/testify v1.12.1/go.mod h1:MDEgiDPPsNp5cuIrHPPCyornHKgEVbtFUmoNlxoYthg=
 github.com/typelate/dom v0.10.0 h1:gFpVNqgqucVZ1hjsJNewW/DXDED0v+9G9lpx4CKmeU4=
 github.com/typelate/dom v0.10.0/go.mod h1:V69BEpQorcv7QfTB5BaNDqpVxu79gcOeqPD+y9mQv24=
-github.com/typelate/htt v0.0.0-dev.7 h1:Fe8o5JFyJlzbVzbfaQXQDIPXg27TrsX44rrRhGgnGws=
-github.com/typelate/htt v0.0.0-dev.7/go.mod h1:Cb9kB5SBVVhrTEWXOKSbKpFDI1an90SbhTFp4MIPNFM=
+github.com/typelate/htt v0.0.0 h1:XdFTf1PIEiH4QeereA4Rsxy5acI1V/M6AmAc8r6M9ws=
+github.com/typelate/htt v0.0.0/go.mod h1:Cb9kB5SBVVhrTEWXOKSbKpFDI1an90SbhTFp4MIPNFM=
 go.yaml.in/yaml/v3 v3.0.4/go.mod h1:DhzuOOF2ATzADvBadXxruRBLzYTpT36CKvDb3+aBEFg=
 go.yaml.in/yaml/v3 v3.0.5 h1:N6y/pJk8buWs9NY5ERU2HSMfm+IuD/OtfdAnq6kESPw=
 go.yaml.in/yaml/v3 v3.0.5/go.mod h1:HVTZu1O7/Vkt2N+BFy8Zza+lnLsABggaTM2ZpNIGuKg=
