@@ -73,8 +73,8 @@ func TestCheckStopsAtTheFirstFailingMuxtJSONEntry(t *testing.T) {
 	}
 	dir := generatedEntryModule(t, map[string]string{".": "Root", "workspace": "Space"}, map[string][]string{".": {"workspace"}})
 	writeMuxtJSON(t, dir, `{"packages": {
-		"example.com/m": {"use_receiver_type": "Root", "use_templates_variable": ["missing"]},
-		"example.com/m/workspace": {"use_receiver_type": "Space"}
+		"example.com/m": [{"use_receiver_type": "Root", "use_templates_variable": ["missing"]}],
+		"example.com/m/workspace": [{"use_receiver_type": "Space"}]
 	}}`)
 
 	stdout, _, _, err := analyzeWithLoader(t, dir, "check")
@@ -169,8 +169,8 @@ func TestListingsStopAtTheFirstFailingMuxtJSONEntry(t *testing.T) {
 	}
 	dir := entryModule(t, map[string]string{"workspace": "Space"}, nil)
 	writeMuxtJSON(t, dir, `{"packages": {
-		"example.com/m/workspace": {"use_receiver_type": "Space"},
-		"example.com/m/other": {"use_receiver_type": "Other"}
+		"example.com/m/workspace": [{"use_receiver_type": "Space"}],
+		"example.com/m/other": [{"use_receiver_type": "Other"}]
 	}}`)
 	require.NoError(t, os.Mkdir(filepath.Join(dir, "other"), 0o755))
 	writeTestFile(t, filepath.Join(dir, "other"), "other.go", "package other\n")

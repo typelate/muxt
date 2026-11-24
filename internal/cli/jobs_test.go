@@ -25,7 +25,7 @@ func TestSelectJobs(t *testing.T) {
 		tasks     = "example.com/fieldkit/tasks"
 		root      = "example.com/fieldkit"
 	)
-	const staleWithRoot = `{"packages": {"example.com/fieldkit": {}, "example.com/fieldkit/ghost": {}}}`
+	const staleWithRoot = `{"packages": {"example.com/fieldkit": [{}], "example.com/fieldkit/ghost": [{}]}}`
 	settings := []setting{receiverTypeSetting(new(string))}
 	writes := jobSpec{Name: "generate", Settings: settings, Scope: eachEntry, RequireEntry: true}
 	lists := jobSpec{Name: "muxt", Settings: settings, Scope: eachEntry}
@@ -67,8 +67,8 @@ func TestSelectJobs(t *testing.T) {
 
 		{name: "row 6 generate takes every entry", spec: writes, muxtJSON: fieldkitEntries, dir: ".", wantKeys: []string{contacts, inventory, tasks}, wantFile: true, wantKeyed: true},
 		{name: "row 6 listing takes every entry", spec: lists, muxtJSON: fieldkitEntries, dir: ".", wantKeys: []string{contacts, inventory, tasks}, wantFile: true, wantKeyed: true},
-		{name: "row 6 listing of a file with one entry is keyed as with two", spec: lists, muxtJSON: `{"packages": {"example.com/fieldkit/contacts": {}}}`, dir: ".", wantKeys: []string{contacts}, wantFile: true, wantKeyed: true},
-		{name: "row 6 generate of a file with one entry is keyed as with two", spec: writes, muxtJSON: `{"packages": {"example.com/fieldkit/contacts": {}}}`, dir: ".", wantKeys: []string{contacts}, wantFile: true, wantKeyed: true},
+		{name: "row 6 listing of a file with one entry is keyed as with two", spec: lists, muxtJSON: `{"packages": {"example.com/fieldkit/contacts": [{}]}}`, dir: ".", wantKeys: []string{contacts}, wantFile: true, wantKeyed: true},
+		{name: "row 6 generate of a file with one entry is keyed as with two", spec: writes, muxtJSON: `{"packages": {"example.com/fieldkit/contacts": [{}]}}`, dir: ".", wantKeys: []string{contacts}, wantFile: true, wantKeyed: true},
 		{name: "row 6 check without an entry for the file's directory", spec: reads, muxtJSON: fieldkitEntries, dir: ".", wantKeys: []string{""}, wantFile: true},
 		{name: "row 6 check with an entry for the file's directory", spec: reads, muxtJSON: fieldkitWithRoot, dir: ".", wantKeys: []string{root}, wantFile: true},
 		{name: "row 6 check validates only its own entry", spec: reads, muxtJSON: fieldkitStale, dir: ".", wantKeys: []string{""}, wantFile: true},
@@ -147,7 +147,7 @@ func TestSelectJobsCopiesVerboseOntoEveryJob(t *testing.T) {
 // link, fail with the file, both keys and the directory, since the second
 // entry's settings would otherwise win without a word.
 func TestSelectJobsRejectsTwoKeysForOneDirectory(t *testing.T) {
-	base := newFieldkit(t, `{"packages": {"example.com/fieldkit/contacts": {}, "example.com/fieldkit/people": {}}}`)
+	base := newFieldkit(t, `{"packages": {"example.com/fieldkit/contacts": [{}], "example.com/fieldkit/people": [{}]}}`)
 	if err := os.Symlink("contacts", filepath.Join(base, "people")); err != nil {
 		t.Skipf("no symbolic links here: %v", err)
 	}
@@ -344,7 +344,7 @@ func TestSelectJobsRejectsTwoSetsThatShareOneOutput(t *testing.T) {
 // package.
 func TestSelectJobsRejectsRoutePathsWithSeveralEntriesUnderAKey(t *testing.T) {
 	base := newFieldkit(t, `{"route_paths": {}, "packages": {
-		"example.com/fieldkit": {},
+		"example.com/fieldkit": [{}],
 		"example.com/fieldkit/contacts": [
 			{"output_file": "routes_public.go", "output_routes_func": "PublicRoutes", "output_receiver_interface": "PublicReceiver", "output_template_data_type": "PublicData", "output_template_route_paths_type": "PublicPaths"},
 			{"output_file": "routes_admin.go", "output_routes_func": "AdminRoutes", "output_receiver_interface": "AdminReceiver", "output_template_data_type": "AdminData", "output_template_route_paths_type": "AdminPaths"}
@@ -371,7 +371,7 @@ func TestSelectJobsInAPackageDirectoryTakesEverySetOfItsKey(t *testing.T) {
 	} {
 		t.Run(spec.Name, func(t *testing.T) {
 			base := newFieldkit(t, `{"packages": {
-				"example.com/fieldkit/inventory": {},
+				"example.com/fieldkit/inventory": [{}],
 				"example.com/fieldkit/contacts": [
 					{"output_file": "routes_public.go", "output_routes_func": "PublicRoutes", "output_receiver_interface": "PublicReceiver", "output_template_data_type": "PublicData", "output_template_route_paths_type": "PublicPaths"},
 					{"output_file": "routes_admin.go", "output_routes_func": "AdminRoutes", "output_receiver_interface": "AdminReceiver", "output_template_data_type": "AdminData", "output_template_route_paths_type": "AdminPaths"}

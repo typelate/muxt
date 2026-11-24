@@ -46,7 +46,7 @@ func writeMuxtJSON(t *testing.T, dir, file string) {
 // that run settings (-v, --format) do not count as configuration.
 func TestRoutesListsMuxtJSONEntry(t *testing.T) {
 	dir := moduleDir(t)
-	writeMuxtJSON(t, dir, `{"package_defaults": {"use_receiver_type_package": "example.com/m/types"}, "packages": {"example.com/m": {"use_templates_variable": ["pages"], "use_receiver_type": "Server"}}}`)
+	writeMuxtJSON(t, dir, `{"package_defaults": {"use_receiver_type_package": "example.com/m/types"}, "packages": {"example.com/m": [{"use_templates_variable": ["pages"], "use_receiver_type": "Server"}]}}`)
 
 	for _, commandLine := range []string{"", "-v", "--format json"} {
 		jobs, err := routesJobsOf(t, dir, commandLine)
@@ -71,7 +71,7 @@ func TestRoutesRejectsFlagsForConfiguredDirectory(t *testing.T) {
 	parent := moduleDir(t)
 	workspace := filepath.Join(parent, "workspace")
 	require.NoError(t, os.Mkdir(workspace, 0o755))
-	writeMuxtJSON(t, parent, `{"packages": {"example.com/m/workspace": {}}}`)
+	writeMuxtJSON(t, parent, `{"packages": {"example.com/m/workspace": [{}]}}`)
 
 	jobs, err := routesJobsOf(t, workspace, "--use-receiver-type=Server --use-templates-variable=pages")
 
@@ -91,7 +91,7 @@ func TestRoutesAcceptsDirectoryWithoutMuxtJSONEntry(t *testing.T) {
 	parent := moduleDir(t)
 	workspace := filepath.Join(parent, "workspace")
 	require.NoError(t, os.Mkdir(workspace, 0o755))
-	writeMuxtJSON(t, parent, `{"packages": {"example.com/m": {}}}`)
+	writeMuxtJSON(t, parent, `{"packages": {"example.com/m": [{}]}}`)
 
 	jobs, err := routesJobsOf(t, workspace, "")
 
@@ -123,7 +123,7 @@ func reportOf(t *testing.T, wd, commandLine string) string {
 // way muxt.json writes it, whether the entry sets it or not.
 func TestRoutesConfigurationHasEverySettingOnce(t *testing.T) {
 	dir := moduleDir(t)
-	writeMuxtJSON(t, dir, `{"packages": {"example.com/m": {"use_receiver_type": "Server"}}}`)
+	writeMuxtJSON(t, dir, `{"packages": {"example.com/m": [{"use_receiver_type": "Server"}]}}`)
 
 	text := reportOf(t, dir, "")
 
@@ -198,7 +198,7 @@ func TestRoutesConfigurationGroupsEntrySettings(t *testing.T) {
 	parent := moduleDir(t)
 	workspace := filepath.Join(parent, "workspace")
 	require.NoError(t, os.Mkdir(workspace, 0o755))
-	writeMuxtJSON(t, parent, `{"packages": {"example.com/m/workspace": {"use_receiver_type": "T1"}}}`)
+	writeMuxtJSON(t, parent, `{"packages": {"example.com/m/workspace": [{"use_receiver_type": "T1"}]}}`)
 
 	text := reportOf(t, workspace, "")
 
@@ -214,7 +214,7 @@ func TestRoutesConfigurationJSONNamesMuxtJSONFile(t *testing.T) {
 	parent := moduleDir(t)
 	workspace := filepath.Join(parent, "workspace")
 	require.NoError(t, os.Mkdir(workspace, 0o755))
-	writeMuxtJSON(t, parent, `{"package_defaults": {"output_htmx": true}, "packages": {"example.com/m/workspace": {"use_receiver_type": "T1"}}}`)
+	writeMuxtJSON(t, parent, `{"package_defaults": {"output_htmx": true}, "packages": {"example.com/m/workspace": [{"use_receiver_type": "T1"}]}}`)
 	jobs, err := routesJobsOf(t, workspace, "")
 	require.NoError(t, err, "muxt")
 	require.NotEmpty(t, jobs, "jobs")
@@ -285,7 +285,7 @@ func TestRoutesConfigurationDeprecatedTemplatesVariable(t *testing.T) {
 // itself stays under the packages heading.
 func TestRoutesConfigurationGroupsPackageDefaults(t *testing.T) {
 	dir := moduleDir(t)
-	writeMuxtJSON(t, dir, `{"package_defaults": {"output_htmx": true, "use_receiver_type": "T0"}, "packages": {"example.com/m": {"use_receiver_type": "T1"}}}`)
+	writeMuxtJSON(t, dir, `{"package_defaults": {"output_htmx": true, "use_receiver_type": "T0"}, "packages": {"example.com/m": [{"use_receiver_type": "T1"}]}}`)
 
 	text := reportOf(t, dir, "")
 

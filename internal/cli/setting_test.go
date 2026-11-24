@@ -276,7 +276,7 @@ func TestGivenKeysIsEachKeyTheEntryHolds(t *testing.T) {
 // setting not given, because composite drops it when it reads the file.
 func TestAnEntryReadFromAFileGivesNothingForNull(t *testing.T) {
 	dir := moduleDir(t)
-	writeMuxtJSON(t, dir, `{"packages": {"example.com/m": {"output_htmx": null, "output_file": "x.go"}}}`)
+	writeMuxtJSON(t, dir, `{"packages": {"example.com/m": [{"output_htmx": null, "output_file": "x.go"}]}}`)
 	f, found, err := composite.Find(dir, muxtJSONKeys())
 	require.NoError(t, err, "Find")
 	require.True(t, found, "found")

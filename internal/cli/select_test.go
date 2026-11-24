@@ -27,32 +27,32 @@ const (
 	fieldkitEntries = `{
 	"package_defaults": {"use_receiver_type": "Server", "use_receiver_type_package": "example.com/fieldkit/types", "output_htmx": true},
 	"packages": {
-		"example.com/fieldkit/contacts": {},
-		"example.com/fieldkit/inventory": {"use_receiver_type": "Catalog", "use_templates_variable": ["catalogTemplates"]},
-		"example.com/fieldkit/tasks": {"output_file": "tasks_routes.go", "output_routes_func_with_logger_param": true}
+		"example.com/fieldkit/contacts": [{}],
+		"example.com/fieldkit/inventory": [{"use_receiver_type": "Catalog", "use_templates_variable": ["catalogTemplates"]}],
+		"example.com/fieldkit/tasks": [{"output_file": "tasks_routes.go", "output_routes_func_with_logger_param": true}]
 	}
 }`
 	// fieldkitWithRoot also lists the module's root, the file's own directory.
 	fieldkitWithRoot = `{
 	"package_defaults": {"use_receiver_type": "Server", "output_htmx": true},
 	"packages": {
-		"example.com/fieldkit": {},
-		"example.com/fieldkit/contacts": {},
-		"example.com/fieldkit/inventory": {"use_receiver_type": "Catalog", "use_templates_variable": ["catalogTemplates"]},
-		"example.com/fieldkit/tasks": {"output_file": "tasks_routes.go", "output_routes_func_with_logger_param": true}
+		"example.com/fieldkit": [{}],
+		"example.com/fieldkit/contacts": [{}],
+		"example.com/fieldkit/inventory": [{"use_receiver_type": "Catalog", "use_templates_variable": ["catalogTemplates"]}],
+		"example.com/fieldkit/tasks": [{"output_file": "tasks_routes.go", "output_routes_func_with_logger_param": true}]
 	}
 }`
 	// fieldkitNoReceiver lists contacts with no receiver type anywhere, so
 	// generate def may fill one from its flag.
-	fieldkitNoReceiver = `{"packages": {"example.com/fieldkit/contacts": {}}}`
+	fieldkitNoReceiver = `{"packages": {"example.com/fieldkit/contacts": [{}]}}`
 	// fieldkitEmpty has package_defaults and no entry.
 	fieldkitEmpty = `{"package_defaults": {"use_receiver_type": "Server"}, "packages": {}}`
 	// fieldkitStale lists a package whose directory does not exist.
 	fieldkitStale = `{
 	"package_defaults": {"use_receiver_type": "Server"},
 	"packages": {
-		"example.com/fieldkit/contacts": {},
-		"example.com/fieldkit/ghost": {}
+		"example.com/fieldkit/contacts": [{}],
+		"example.com/fieldkit/ghost": [{}]
 	}
 }`
 )
@@ -468,9 +468,9 @@ func TestEveryCommandSelectsForTheModuleListing(t *testing.T) {
 	// tasks has a header and an entry; ghost has an entry and no directory.
 	const muxtJSON = `{
 	"packages": {
-		"example.com/fieldkit/contacts": {},
-		"example.com/fieldkit/tasks": {},
-		"example.com/fieldkit/ghost": {}
+		"example.com/fieldkit/contacts": [{}],
+		"example.com/fieldkit/tasks": [{}],
+		"example.com/fieldkit/ghost": [{}]
 	}
 }`
 	base := newFieldkit(t, muxtJSON)
@@ -524,7 +524,7 @@ func testExploreModule(t *testing.T, base string, args []string) {
 // file system says, whether the file lists the directory, lacks it or a
 // setting flag was given. Nothing is loaded: the loader fails the test.
 func TestGenerateNamesMissingDirectory(t *testing.T) {
-	const listed = `{"packages": {"example.com/fieldkit/ghost": {"use_receiver_type": "Server"}}}`
+	const listed = `{"packages": {"example.com/fieldkit/ghost": [{"use_receiver_type": "Server"}]}}`
 	for _, tt := range []struct {
 		name    string
 		muxJSON string

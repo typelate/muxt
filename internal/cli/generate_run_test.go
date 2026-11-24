@@ -53,7 +53,7 @@ type %s struct{}
 func (%s) %sPage() any { return nil }
 `, name, blank.String(), receiver, receiver, receiver))
 		writeTestFile(t, pkgDir, "page.gohtml", fmt.Sprintf(`{{define "GET /%s %sPage()"}}<p>{{.}}</p>{{end}}`, receiver, receiver))
-		entries[key] = fmt.Sprintf(`%q: {"use_receiver_type": %q}`, importPath(key), receiver)
+		entries[key] = fmt.Sprintf(`%q: [{"use_receiver_type": %q}]`, importPath(key), receiver)
 	}
 	var all []string
 	for _, e := range entries {
@@ -254,7 +254,7 @@ func withMissingVariableEntry(t *testing.T, dir string, keys ...string) {
 		if key == "workspace" {
 			entry = `{"use_receiver_type": "Space", "use_templates_variable": ["missing"]}`
 		}
-		entries = append(entries, fmt.Sprintf("%q: %s", importPath(key), entry))
+		entries = append(entries, fmt.Sprintf("%q: [%s]", importPath(key), entry))
 	}
 	writeTestFile(t, dir, composite.FileName, `{"packages": {`+strings.Join(entries, ",")+`}}`)
 }
@@ -394,7 +394,7 @@ type A struct{}
 func (A) APage() any { return nil }
 `)
 	writeTestFile(t, dir, "a/page.gohtml", `{{define "GET /A APage()"}}<p>{{.}}</p>{{end}}`)
-	writeTestFile(t, dir, composite.FileName, `{"packages": {"example.com/m/a": {"use_receiver_type": "Missing"}, "example.com/m/b": {"use_receiver_type": "B"}}}`)
+	writeTestFile(t, dir, composite.FileName, `{"packages": {"example.com/m/a": [{"use_receiver_type": "Missing"}], "example.com/m/b": [{"use_receiver_type": "B"}]}}`)
 
 	stdout, _, err := generateWithLoader(t, dir)
 
@@ -435,7 +435,7 @@ func TestGenerateChecksEveryPackageLoadedBeforeWriting(t *testing.T) {
 	}
 	dir := entryModule(t, map[string]string{"a": "A"}, nil)
 	require.NoError(t, os.Mkdir(filepath.Join(dir, "empty"), 0o755))
-	writeTestFile(t, dir, composite.FileName, `{"packages": {"example.com/m/a": {"use_receiver_type": "A"}, "example.com/m/empty": {}}}`)
+	writeTestFile(t, dir, composite.FileName, `{"packages": {"example.com/m/a": [{"use_receiver_type": "A"}], "example.com/m/empty": [{}]}}`)
 
 	_, _, err := generateWithLoader(t, dir)
 
@@ -516,7 +516,7 @@ var templates = template.Must(template.ParseFS(source, "*.gohtml"))
 type S struct{}
 `, key))
 		writeTestFile(t, dir, key+"/page.gohtml", `{{define "GET /{id} Missing(ctx, id)"}}<p>{{.}}</p>{{end}}`)
-		entries = append(entries, fmt.Sprintf(`"example.com/m/%s": {"use_receiver_type": "S"}`, key))
+		entries = append(entries, fmt.Sprintf(`"example.com/m/%s": [{"use_receiver_type": "S"}]`, key))
 	}
 	writeTestFile(t, dir, composite.FileName, `{"packages": {`+strings.Join(entries, ",")+`}}`)
 	return dir
@@ -562,7 +562,7 @@ func TestGenerateOfOnePackagePrintsItsLoadDiagnostic(t *testing.T) {
 		flags []string
 	}{
 		{name: "flags", flags: []string{"--use-receiver-type=S"}},
-		{name: "one entry", entry: `{"packages": {"example.com/m": {"use_receiver_type": "S"}}}`},
+		{name: "one entry", entry: `{"packages": {"example.com/m": [{"use_receiver_type": "S"}]}}`},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			dir := t.TempDir()

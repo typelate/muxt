@@ -43,7 +43,7 @@ func templatesVariablesOf(t *testing.T, wd, commandLine string) ([]string, error
 // templates variable that entry names.
 func TestCallersReadsMuxtJSONEntry(t *testing.T) {
 	dir := moduleDir(t)
-	writeMuxtJSON(t, dir, `{"packages": {"example.com/m": {"use_templates_variable": ["pages"]}}}`)
+	writeMuxtJSON(t, dir, `{"packages": {"example.com/m": [{"use_templates_variable": ["pages"]}]}}`)
 
 	got, err := templatesVariablesOf(t, dir, "list-template-callers")
 
@@ -56,7 +56,7 @@ func TestCallersReadsMuxtJSONEntry(t *testing.T) {
 // variable that entry names.
 func TestCallsReadsMuxtJSONEntry(t *testing.T) {
 	dir := moduleDir(t)
-	writeMuxtJSON(t, dir, `{"packages": {"example.com/m": {"use_templates_variable": ["pages"]}}}`)
+	writeMuxtJSON(t, dir, `{"packages": {"example.com/m": [{"use_templates_variable": ["pages"]}]}}`)
 
 	got, err := templatesVariablesOf(t, dir, "list-template-calls")
 
@@ -69,7 +69,7 @@ func TestCallsReadsMuxtJSONEntry(t *testing.T) {
 // entry names.
 func TestCheckReadsMuxtJSONEntry(t *testing.T) {
 	dir := moduleDir(t)
-	writeMuxtJSON(t, dir, `{"packages": {"example.com/m": {"use_templates_variable": ["pages"]}}}`)
+	writeMuxtJSON(t, dir, `{"packages": {"example.com/m": [{"use_templates_variable": ["pages"]}]}}`)
 
 	got, err := templatesVariablesOf(t, dir, "check")
 
@@ -108,7 +108,7 @@ func TestCheckAcceptsDirectoryWithoutMuxtJSONEntry(t *testing.T) {
 	parent := moduleDir(t)
 	workspace := filepath.Join(parent, "workspace")
 	require.NoError(t, os.Mkdir(workspace, 0o755))
-	writeMuxtJSON(t, parent, `{"packages": {"example.com/m": {}}}`)
+	writeMuxtJSON(t, parent, `{"packages": {"example.com/m": [{}]}}`)
 
 	got, err := templatesVariablesOf(t, workspace, "check")
 	require.NoError(t, err, "check without flags")
@@ -126,7 +126,7 @@ func TestEntryFlagsRejectedWhereMuxtJSONConfigures(t *testing.T) {
 	parent := moduleDir(t)
 	workspace := filepath.Join(parent, "workspace")
 	require.NoError(t, os.Mkdir(workspace, 0o755))
-	writeMuxtJSON(t, parent, `{"packages": {"example.com/m/workspace": {}}}`)
+	writeMuxtJSON(t, parent, `{"packages": {"example.com/m/workspace": [{}]}}`)
 
 	for _, tt := range []struct {
 		commandLine, command string
@@ -164,7 +164,7 @@ func TestEntryNonConfigurationFlagsAllowedWhereMuxtJSONConfigures(t *testing.T) 
 	parent := moduleDir(t)
 	workspace := filepath.Join(parent, "workspace")
 	require.NoError(t, os.Mkdir(workspace, 0o755))
-	writeMuxtJSON(t, parent, `{"packages": {"example.com/m/workspace": {"use_templates_variable": ["pages"]}}}`)
+	writeMuxtJSON(t, parent, `{"packages": {"example.com/m/workspace": [{"use_templates_variable": ["pages"]}]}}`)
 
 	for _, commandLine := range []string{
 		"check --allow-unused -v",
@@ -197,7 +197,7 @@ func mutationsTemplatesVariables(wd, commandLine string) (got []string, ran bool
 // templates variable that entry names.
 func TestMutationsReadsMuxtJSONEntry(t *testing.T) {
 	dir := moduleDir(t)
-	writeMuxtJSON(t, dir, `{"packages": {"example.com/m": {"use_templates_variable": ["pages"]}}}`)
+	writeMuxtJSON(t, dir, `{"packages": {"example.com/m": [{"use_templates_variable": ["pages"]}]}}`)
 
 	got, _, err := mutationsTemplatesVariables(dir, "test-template-mutations --dry-run")
 
@@ -229,7 +229,7 @@ func TestMutationsRejectsFlagsForConfiguredDirectory(t *testing.T) {
 	parent := moduleDir(t)
 	workspace := filepath.Join(parent, "workspace")
 	require.NoError(t, os.Mkdir(workspace, 0o755))
-	writeMuxtJSON(t, parent, `{"packages": {"example.com/m/workspace": {}}}`)
+	writeMuxtJSON(t, parent, `{"packages": {"example.com/m/workspace": [{}]}}`)
 
 	_, ran, err := mutationsTemplatesVariables(workspace, "test-template-mutations --use-templates-variable=x")
 
@@ -247,7 +247,7 @@ func TestMutationsRejectsFlagsForConfiguredDirectory(t *testing.T) {
 // package to mutate.
 func TestMutationsInMuxtJSONDirectoryNamesPackages(t *testing.T) {
 	dir := moduleDir(t)
-	writeMuxtJSON(t, dir, `{"packages": {"example.com/m/tasks": {}, "example.com/m/contacts": {}}}`)
+	writeMuxtJSON(t, dir, `{"packages": {"example.com/m/tasks": [{}], "example.com/m/contacts": [{}]}}`)
 
 	_, ran, err := mutationsTemplatesVariables(dir, "test-template-mutations --dry-run")
 

@@ -283,8 +283,8 @@ func TestGenerateMuxtJSONEntriesSharingAnEmbedFS(t *testing.T) {
 		"billing/billing.go":      strings.Replace(workspaceReadingFS("example.com/m/fragments", "fragments.TemplateSource"), "package workspace", "package billing", 1),
 		"billing/page.gohtml":     `{{define "GET /billing Home()"}}{{template "layout" .}}{{end}}`,
 		"muxt.json": `{"packages": {
-	"example.com/m/workspace": {"use_receiver_type": "T"},
-	"example.com/m/billing": {"use_receiver_type": "T"}
+	"example.com/m/workspace": [{"use_receiver_type": "T"}],
+	"example.com/m/billing": [{"use_receiver_type": "T"}]
 }}`,
 	})
 	before, err := os.ReadDir(filepath.Join(dir, "fragments"))

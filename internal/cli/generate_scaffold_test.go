@@ -47,7 +47,7 @@ func TestGenerateConfigWritesEmptyMuxtJSON(t *testing.T) {
 // fails, and writes nothing, when the working directory has a muxt.json.
 func TestGenerateConfigLeavesExistingMuxtJSON(t *testing.T) {
 	dir := moduleDir(t)
-	const existing = "{\n  \"packages\": {\"example.com/m\": {\"output_htmx\": true}}\n}\n"
+	const existing = "{\n  \"packages\": {\"example.com/m\": [{\"output_htmx\": true}]}\n}\n"
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "muxt.json"), []byte(existing), 0o644))
 
 	_, err := runCommand(t, dir, "generate config")
@@ -63,7 +63,7 @@ func TestGenerateConfigLeavesExistingMuxtJSON(t *testing.T) {
 // directory, keeps the entries already there, and rewrites the file in its
 // stable form.
 func TestGeneratePackageAddsEntryToMuxtJSON(t *testing.T) {
-	const existing = `{"package_defaults": {"use_templates_variable": ["pages"]}, "packages": {"example.com/m/admin": {"output_htmx": true}}}`
+	const existing = `{"package_defaults": {"use_templates_variable": ["pages"]}, "packages": {"example.com/m/admin": [{"output_htmx": true}]}}`
 	const want = "{\n" +
 		"\t\"package_defaults\": {\n" +
 		"\t\t\"use_templates_variable\": [\n" +
@@ -472,7 +472,7 @@ func declaredVarNames(file *ast.File) []string {
 // package, even though its directory does not exist.
 func TestGeneratePackageRefusesExistingEntry(t *testing.T) {
 	root := moduleDir(t)
-	existing := `{"packages": {"` + importPath("widgets") + `": {"use_templates_variable": ["x"]}}}`
+	existing := `{"packages": {"` + importPath("widgets") + `": [{"use_templates_variable": ["x"]}]}}`
 	require.NoError(t, os.WriteFile(filepath.Join(root, "muxt.json"), []byte(existing), 0o644))
 
 	_, err := runCommand(t, root, "generate package widgets")
@@ -492,7 +492,7 @@ func TestGeneratePackageRefusesExistingEntry(t *testing.T) {
 // a module's muxt.json files do not nest.
 func TestGenerateConfigRefusesDirectoryBelowMuxtJSON(t *testing.T) {
 	root := moduleDir(t)
-	const existing = `{"packages": {"example.com/m/contacts": {"output_htmx": true}}}`
+	const existing = `{"packages": {"example.com/m/contacts": [{"output_htmx": true}]}}`
 	require.NoError(t, os.WriteFile(filepath.Join(root, "muxt.json"), []byte(existing), 0o644))
 	contacts := filepath.Join(root, "contacts")
 	require.NoError(t, os.Mkdir(contacts, 0o755))

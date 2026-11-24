@@ -281,7 +281,7 @@ func TestGenerateDefInMuxtJSONDirectoryNamesPackages(t *testing.T) {
 	dir := t.TempDir()
 	writeTestFile(t, dir, "go.mod", "module example.com/m\n\ngo 1.24\n")
 	writeTestFile(t, dir, "m.go", "package m\n")
-	writeMuxtJSON(t, dir, `{"packages": {"example.com/m/tasks": {}, "example.com/m/contacts": {}}}`)
+	writeMuxtJSON(t, dir, `{"packages": {"example.com/m/tasks": [{}], "example.com/m/contacts": [{}]}}`)
 
 	_, _, err := runCommandArgs(dir, []string{"generate", "def", "GET /foo Index()", "--output-file=index.gohtml"}, runners{load: load.InDirectories})
 
@@ -303,7 +303,7 @@ func TestGenerateDefInMuxtJSONDirectoryAddsToAPackageThere(t *testing.T) {
 	writeTestFile(t, dir, "go.mod", "module example.com/m\n\ngo 1.24\n")
 	writeTestFile(t, dir, "m.go", "package m\n\nimport (\n\t\"embed\"\n\t\"html/template\"\n)\n\n//go:embed *.gohtml\nvar source embed.FS\n\nvar templates = template.Must(template.ParseFS(source, \"*.gohtml\"))\n")
 	writeTestFile(t, dir, "index.gohtml", `{{define "GET / Home()"}}{{end}}`+"\n")
-	writeMuxtJSON(t, dir, `{"packages": {"example.com/m/tasks": {}, "example.com/m/contacts": {}}}`)
+	writeMuxtJSON(t, dir, `{"packages": {"example.com/m/tasks": [{}], "example.com/m/contacts": [{}]}}`)
 
 	_, _, err := runCommandArgs(dir, []string{"generate", "def", "GET /foo Index()", "--output-file=index.gohtml"}, runners{load: load.InDirectories})
 
@@ -382,10 +382,10 @@ func TestGenerateDefPrintsMethodStubForUndefinedMethod(t *testing.T) {
 		flags    []string
 		want     string
 	}{
-		{name: "entry names the receiver", muxtJSON: `{"packages": {"example.com/m": {"use_receiver_type": "T"}}}`, want: valueStub},
-		{name: "package_defaults names the receiver", muxtJSON: `{"package_defaults": {"use_receiver_type": "T"}, "packages": {"example.com/m": {}}}`, want: valueStub},
-		{name: "flag names the receiver in a configured directory", muxtJSON: `{"packages": {"example.com/m": {}}}`, flags: []string{"--use-receiver-type=T"}, want: valueStub},
-		{name: "flag names the receiver when only package_defaults is set", muxtJSON: `{"package_defaults": {"use_templates_variable": ["templates"]}, "packages": {"example.com/m": {}}}`, flags: []string{"--use-receiver-type=T"}, want: valueStub},
+		{name: "entry names the receiver", muxtJSON: `{"packages": {"example.com/m": [{"use_receiver_type": "T"}]}}`, want: valueStub},
+		{name: "package_defaults names the receiver", muxtJSON: `{"package_defaults": {"use_receiver_type": "T"}, "packages": {"example.com/m": [{}]}}`, want: valueStub},
+		{name: "flag names the receiver in a configured directory", muxtJSON: `{"packages": {"example.com/m": [{}]}}`, flags: []string{"--use-receiver-type=T"}, want: valueStub},
+		{name: "flag names the receiver when only package_defaults is set", muxtJSON: `{"package_defaults": {"use_templates_variable": ["templates"]}, "packages": {"example.com/m": [{}]}}`, flags: []string{"--use-receiver-type=T"}, want: valueStub},
 		{name: "flag names the receiver", flags: []string{"--use-receiver-type=T"}, want: valueStub},
 		{name: "type has a pointer method", methods: "\nfunc (*T) Other() any { return nil }\n", flags: []string{"--use-receiver-type=T"}, want: pointerStub},
 		{name: "no receiver type known", want: ""},
@@ -411,7 +411,7 @@ func TestGenerateDefPrintsMethodStubForUndefinedMethod(t *testing.T) {
 // directory has a muxt.json entry, since the entry already names the receiver.
 func TestGenerateDefRejectsReceiverTypeFlagInConfiguredDirectory(t *testing.T) {
 	dir := moduleDir(t)
-	writeTestFile(t, dir, "muxt.json", `{"packages": {"example.com/m": {"use_receiver_type": "T"}}}`)
+	writeTestFile(t, dir, "muxt.json", `{"packages": {"example.com/m": [{"use_receiver_type": "T"}]}}`)
 
 	_, _, err := runCommandArgs(dir, []string{"generate", "def", "GET /foo Index()", "--output-file=index.gohtml", "--use-receiver-type=U"}, runners{})
 
@@ -427,7 +427,7 @@ func TestGenerateDefRejectsReceiverTypeFlagInConfiguredDirectory(t *testing.T) {
 // resolved entry names one.
 func TestGenerateDefRejectsReceiverTypeFlagWhenPackageDefaultsNamesOne(t *testing.T) {
 	dir := moduleDir(t)
-	writeTestFile(t, dir, "muxt.json", `{"package_defaults": {"use_receiver_type": "T"}, "packages": {"example.com/m": {}}}`)
+	writeTestFile(t, dir, "muxt.json", `{"package_defaults": {"use_receiver_type": "T"}, "packages": {"example.com/m": [{}]}}`)
 
 	_, _, err := runCommandArgs(dir, []string{"generate", "def", "GET /foo Index()", "--output-file=index.gohtml", "--use-receiver-type=U"}, runners{})
 
@@ -445,7 +445,7 @@ func TestGenerateDefPrintsNoStubForDefinedMethod(t *testing.T) {
 		t.Skip("loads packages with the go command")
 	}
 	dir := definitionModule(t, "\nfunc (T) Index(ctx context.Context, id string) any { return nil }\n", map[string]string{
-		"muxt.json": `{"packages": {"example.com/m": {"use_receiver_type": "T"}}}`,
+		"muxt.json": `{"packages": {"example.com/m": [{"use_receiver_type": "T"}]}}`,
 	})
 	goFile, err := os.ReadFile(filepath.Join(dir, "m.go"))
 	require.NoError(t, err)

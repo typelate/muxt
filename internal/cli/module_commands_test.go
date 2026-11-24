@@ -202,7 +202,7 @@ func TestExploreModuleGenerateCommandForConfiguredPackage(t *testing.T) {
 		_, _, err := execute(t, wd, "-C", name, "generate", "--output-routes-func-with-logger-param")
 		require.NoError(t, err, "generate %s", name)
 	}
-	writeTestFile(t, wd, "muxt.json", `{"packages": {"example.com/a": {"output_routes_func_with_logger_param": true}}}`)
+	writeTestFile(t, wd, "muxt.json", `{"packages": {"example.com/a": [{"output_routes_func_with_logger_param": true}]}}`)
 
 	stdout, _, err := execute(t, wd, "explore-module", "--format=json")
 	require.NoError(t, err, "explore-module")
@@ -232,7 +232,7 @@ func brokenEntryModule(t *testing.T) string {
 	wd := newTwoPackageModule(t)
 	_, _, err := execute(t, wd, "-C", "a", "generate")
 	require.NoError(t, err, "generate")
-	writeTestFile(t, wd, "muxt.json", `{"packages": {"example.com/a": {"output_htmx": true, "output_datastar": true}}}`)
+	writeTestFile(t, wd, "muxt.json", `{"packages": {"example.com/a": [{"output_htmx": true, "output_datastar": true}]}}`)
 	return wd
 }
 

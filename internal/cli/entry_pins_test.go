@@ -23,12 +23,12 @@ func TestGenerateReportsTheFirstErrorOfAFile(t *testing.T) {
 	}{
 		{
 			name: "two entries",
-			file: `{"packages": {"example.com/m/b": {"output_routes_func": "1x"}, "example.com/m/a": {"output_htmx": true, "output_datastar": true}}}`,
+			file: `{"packages": {"example.com/m/b": [{"output_routes_func": "1x"}], "example.com/m/a": [{"output_htmx": true, "output_datastar": true}]}}`,
 			want: `packages["example.com/m/a"][0]: output_htmx and output_datastar are mutually exclusive; a package targets one frontend library (to mix frontends, generate separate packages that share a mux)`,
 		},
 		{
 			name: "one entry",
-			file: `{"packages": {"example.com/m/a": {"output_routes_func": "1x", "output_htmx": true, "output_datastar": true, "output_receiver_interface": ""}}}`,
+			file: `{"packages": {"example.com/m/a": [{"output_routes_func": "1x", "output_htmx": true, "output_datastar": true, "output_receiver_interface": ""}]}}`,
 			want: `packages["example.com/m/a"][0]: output_receiver_interface value must not be empty`,
 		},
 	} {
@@ -83,7 +83,7 @@ func TestGeneratePackageRecordsDeprecatedTemplatesVariableUnderCurrentKey(t *tes
 // so the entry still does not inherit the default's list, and an empty
 // package_defaults is not written.
 func TestGeneratePackageRewritesOtherEntries(t *testing.T) {
-	const file = `{"package_defaults": {}, "packages": {"example.com/m/a": {"output_routes_func": "Root", "use_templates_variable": []}}}`
+	const file = `{"package_defaults": {}, "packages": {"example.com/m/a": [{"output_routes_func": "Root", "use_templates_variable": []}]}}`
 	root := moduleDir(t)
 	require.NoError(t, os.Mkdir(filepath.Join(root, "a"), 0o755))
 	writeMuxtJSON(t, root, file)

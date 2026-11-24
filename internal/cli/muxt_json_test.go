@@ -91,7 +91,7 @@ func TestMuxtJSONEntryAcceptsEveryGenerateFlag(t *testing.T) {
 			dir := moduleDir(t)
 			want := generateConfigurationOf(t, dir, "generate "+strings.Join(args, " "))
 
-			file, err := json.Marshal(map[string]any{"packages": map[string]any{testModule: entry}})
+			file, err := json.Marshal(map[string]any{"packages": map[string]any{testModule: []any{entry}}})
 			require.NoError(t, err)
 			require.NoError(t, os.WriteFile(filepath.Join(dir, "muxt.json"), file, 0o644))
 			got := generateConfigurationOf(t, dir, "generate")
@@ -107,7 +107,7 @@ func TestMuxtJSONEntryAcceptsEveryGenerateFlag(t *testing.T) {
 // so the entry must mark its name as given to keep it.
 func TestMuxtJSONEntryNameSurvivesUnexportedDefaults(t *testing.T) {
 	dir := moduleDir(t)
-	const file = `{"packages": {"example.com/m": {"output_exported_default_identifiers": false, "output_routes_func": "Mount"}}}`
+	const file = `{"packages": {"example.com/m": [{"output_exported_default_identifiers": false, "output_routes_func": "Mount"}]}}`
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "muxt.json"), []byte(file), 0o644))
 
 	got := generateConfigurationOf(t, dir, "generate")
@@ -136,7 +136,7 @@ func generateConfigurationOf(t *testing.T, dir, commandLine string) generate.Rou
 // generate runner records the job it is handed.
 func TestGenerateWithMuxtJSONEntry(t *testing.T) {
 	dir := moduleDir(t)
-	const file = `{"packages": {"example.com/m": {"use_receiver_type": "Server", "output_routes_func": "templateRoutes"}}}`
+	const file = `{"packages": {"example.com/m": [{"use_receiver_type": "Server", "output_routes_func": "templateRoutes"}]}}`
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "muxt.json"), []byte(file), 0o644))
 
 	// The defaults a flagless run gets with no muxt.json, and the same
@@ -165,7 +165,7 @@ func TestGenerateWithMuxtJSONEntry(t *testing.T) {
 // generate. Nothing is loaded: the generate runner records the job it is handed.
 func TestGenerateAppliesPackageDefaults(t *testing.T) {
 	dir := moduleDir(t)
-	const file = `{"package_defaults": {"use_receiver_type": "T"}, "packages": {"example.com/m": {}}}`
+	const file = `{"package_defaults": {"use_receiver_type": "T"}, "packages": {"example.com/m": [{}]}}`
 	require.NoError(t, os.WriteFile(filepath.Join(dir, composite.FileName), []byte(file), 0o644))
 
 	jobs := generateJobsOf(t, dir, "generate")
@@ -199,7 +199,7 @@ func TestGenerateRejectsMalformedMuxtJSON(t *testing.T) {
 // entry, and the file. The runner is not called.
 func TestGenerateRejectsUnknownMuxtJSONKey(t *testing.T) {
 	dir := moduleDir(t)
-	const file = `{"packages": {"example.com/m": {"nope": true}}}`
+	const file = `{"packages": {"example.com/m": [{"nope": true}]}}`
 	path := filepath.Join(dir, composite.FileName)
 	require.NoError(t, os.WriteFile(path, []byte(file), 0o644))
 
@@ -223,13 +223,13 @@ func TestGenerateRejectsDeprecatedMuxtJSONKey(t *testing.T) {
 	}{
 		{
 			name:        "receiver type",
-			file:        `{"packages": {"example.com/m": {"receiver_type": "Server"}}}`,
+			file:        `{"packages": {"example.com/m": [{"receiver_type": "Server"}]}}`,
 			key:         "receiver_type",
 			replacement: "use_receiver_type",
 		},
 		{
 			name:        "templates variable",
-			file:        `{"packages": {"example.com/m": {"templates_variable": "views"}}}`,
+			file:        `{"packages": {"example.com/m": [{"templates_variable": "views"}]}}`,
 			key:         "templates_variable",
 			replacement: "use_templates_variable",
 		},
@@ -260,7 +260,7 @@ func TestGenerateRejectsDeprecatedMuxtJSONKey(t *testing.T) {
 func TestGenerateMuxtJSONKeysUseUnderscores(t *testing.T) {
 	t.Run("underscored keys reach the generator", func(t *testing.T) {
 		dir := moduleDir(t)
-		const file = `{"packages": {"example.com/m": {"use_receiver_type": "Server", "output_routes_func": "Mount"}}}`
+		const file = `{"packages": {"example.com/m": [{"use_receiver_type": "Server", "output_routes_func": "Mount"}]}}`
 		require.NoError(t, os.WriteFile(filepath.Join(dir, composite.FileName), []byte(file), 0o644))
 
 		got := generateConfigurationOf(t, dir, "generate")
@@ -271,7 +271,7 @@ func TestGenerateMuxtJSONKeysUseUnderscores(t *testing.T) {
 
 	t.Run("dashed key fails naming the underscore form", func(t *testing.T) {
 		dir := moduleDir(t)
-		const file = `{"packages": {"example.com/m": {"use-receiver-type": "Server"}}}`
+		const file = `{"packages": {"example.com/m": [{"use-receiver-type": "Server"}]}}`
 		require.NoError(t, os.WriteFile(filepath.Join(dir, composite.FileName), []byte(file), 0o644))
 
 		called, err := generateFailureOf(t, dir)
@@ -292,7 +292,7 @@ func TestGenerateMuxtJSONKeysUseUnderscores(t *testing.T) {
 // flag's own error under the entry's location. The runner is not called.
 func TestGenerateRejectsMuxtJSONEntryFlagConflict(t *testing.T) {
 	dir := moduleDir(t)
-	const file = `{"packages": {"example.com/m": {"output_htmx": true, "output_datastar": true}}}`
+	const file = `{"packages": {"example.com/m": [{"output_htmx": true, "output_datastar": true}]}}`
 	require.NoError(t, os.WriteFile(filepath.Join(dir, composite.FileName), []byte(file), 0o644))
 
 	called, err := generateFailureOf(t, dir)
@@ -314,7 +314,7 @@ func TestGenerateRejectsMuxtJSONEntryFlagConflict(t *testing.T) {
 // the flag's own error. The runner is not called.
 func TestGenerateRejectsMuxtJSONMultipartMaxMemoryValue(t *testing.T) {
 	dir := moduleDir(t)
-	const file = `{"packages": {"example.com/m": {"output_multipart_max_memory": "lots"}}}`
+	const file = `{"packages": {"example.com/m": [{"output_multipart_max_memory": "lots"}]}}`
 	require.NoError(t, os.WriteFile(filepath.Join(dir, composite.FileName), []byte(file), 0o644))
 
 	called, err := generateFailureOf(t, dir)
@@ -343,7 +343,7 @@ func TestGenerateRejectsRelativeMuxtJSONKey(t *testing.T) {
 	} {
 		t.Run(tt.key, func(t *testing.T) {
 			dir := moduleDir(t)
-			file, err := json.Marshal(map[string]any{"packages": map[string]any{tt.key: map[string]any{}}})
+			file, err := json.Marshal(map[string]any{"packages": map[string]any{tt.key: []any{map[string]any{}}}})
 			require.NoError(t, err)
 			require.NoError(t, os.WriteFile(filepath.Join(dir, composite.FileName), file, 0o644))
 
@@ -370,7 +370,7 @@ func TestGenerateJoinsModulePathAndDirectoryOfMuxtJSON(t *testing.T) {
 	hypertext := filepath.Join(root, "internal", "hypertext")
 	workspace := filepath.Join(hypertext, "workspace")
 	require.NoError(t, os.MkdirAll(workspace, 0o755))
-	writeMuxtJSON(t, hypertext, `{"packages": {"example.com/m/internal/hypertext": {"use_receiver_type": "Server"}, "example.com/m/internal/hypertext/workspace": {"use_receiver_type": "T1"}}}`)
+	writeMuxtJSON(t, hypertext, `{"packages": {"example.com/m/internal/hypertext": [{"use_receiver_type": "Server"}], "example.com/m/internal/hypertext/workspace": [{"use_receiver_type": "T1"}]}}`)
 
 	jobs := generateJobsOf(t, hypertext, "generate")
 
@@ -397,7 +397,7 @@ func TestGenerateRejectsDirectoryWithoutMuxtJSONEntry(t *testing.T) {
 	parent := moduleDir(t)
 	workspace := filepath.Join(parent, "workspace")
 	require.NoError(t, os.Mkdir(workspace, 0o755))
-	const file = `{"packages": {"example.com/m": {}}}`
+	const file = `{"packages": {"example.com/m": [{}]}}`
 	require.NoError(t, os.WriteFile(filepath.Join(parent, composite.FileName), []byte(file), 0o644))
 
 	called, err := generateFailureOf(t, workspace)
@@ -422,7 +422,7 @@ func TestGenerateRejectsFlagsForConfiguredDirectory(t *testing.T) {
 	parent := moduleDir(t)
 	workspace := filepath.Join(parent, "workspace")
 	require.NoError(t, os.Mkdir(workspace, 0o755))
-	const file = `{"packages": {"example.com/m/workspace": {}}}`
+	const file = `{"packages": {"example.com/m/workspace": [{}]}}`
 	require.NoError(t, os.WriteFile(filepath.Join(parent, composite.FileName), []byte(file), 0o644))
 
 	called, err := generateFailureOfLine(t, workspace, "generate --templates-variable=x --output-htmx")
@@ -442,7 +442,7 @@ func TestGenerateRejectsFlagsForConfiguredDirectory(t *testing.T) {
 // entry. The runner records the job it is handed.
 func TestGenerateVerboseGeneratesFromConfiguredDirectory(t *testing.T) {
 	dir := moduleDir(t)
-	const file = `{"packages": {"example.com/m": {"use_receiver_type": "Server"}}}`
+	const file = `{"packages": {"example.com/m": [{"use_receiver_type": "Server"}]}}`
 	require.NoError(t, os.WriteFile(filepath.Join(dir, composite.FileName), []byte(file), 0o644))
 
 	var jobs []packageJob
@@ -474,7 +474,7 @@ func TestGenerateVerboseSetsEveryEntryJob(t *testing.T) {
 		t.Run(tc.commandLine, func(t *testing.T) {
 			dir := moduleDir(t)
 			require.NoError(t, os.Mkdir(filepath.Join(dir, "workspace"), 0o755))
-			require.NoError(t, os.WriteFile(filepath.Join(dir, composite.FileName), []byte(`{"packages": {"example.com/m": {}, "example.com/m/workspace": {}}}`), 0o644))
+			require.NoError(t, os.WriteFile(filepath.Join(dir, composite.FileName), []byte(`{"packages": {"example.com/m": [{}], "example.com/m/workspace": [{}]}}`), 0o644))
 
 			jobs := generateJobsOf(t, dir, tc.commandLine)
 
@@ -495,7 +495,7 @@ func TestGenerateChangeDirectorySelectsMuxtJSONEntry(t *testing.T) {
 	parent := moduleDir(t)
 	workspace := filepath.Join(parent, "workspace")
 	require.NoError(t, os.Mkdir(workspace, 0o755))
-	const file = `{"packages": {"example.com/m": {"use_receiver_type": "Root"}, "example.com/m/workspace": {"use_receiver_type": "T1"}}}`
+	const file = `{"packages": {"example.com/m": [{"use_receiver_type": "Root"}], "example.com/m/workspace": [{"use_receiver_type": "T1"}]}}`
 	require.NoError(t, os.WriteFile(filepath.Join(parent, composite.FileName), []byte(file), 0o644))
 
 	var jobs []packageJob
@@ -519,7 +519,7 @@ func TestGenerateEveryMuxtJSONEntry(t *testing.T) {
 	dir := moduleDir(t)
 	workspace := filepath.Join(dir, "workspace")
 	require.NoError(t, os.Mkdir(workspace, 0o755))
-	const file = `{"packages": {"example.com/m/workspace": {"use_receiver_type": "T1"}, "example.com/m": {"use_receiver_type": "Root"}}}`
+	const file = `{"packages": {"example.com/m/workspace": [{"use_receiver_type": "T1"}], "example.com/m": [{"use_receiver_type": "Root"}]}}`
 	require.NoError(t, os.WriteFile(filepath.Join(dir, composite.FileName), []byte(file), 0o644))
 
 	jobs := generateJobsOf(t, dir, "generate")
@@ -539,7 +539,7 @@ func TestGenerateEveryMuxtJSONEntry(t *testing.T) {
 func TestGenerateEveryMuxtJSONEntryValidatesEachEntry(t *testing.T) {
 	dir := moduleDir(t)
 	require.NoError(t, os.Mkdir(filepath.Join(dir, "workspace"), 0o755))
-	const file = `{"packages": {"example.com/m": {"use_receiver_type": "Root"}, "example.com/m/workspace": {"output_htmx": true, "output_datastar": true}}}`
+	const file = `{"packages": {"example.com/m": [{"use_receiver_type": "Root"}], "example.com/m/workspace": [{"output_htmx": true, "output_datastar": true}]}}`
 	require.NoError(t, os.WriteFile(filepath.Join(dir, composite.FileName), []byte(file), 0o644))
 
 	called, err := generateFailureOf(t, dir)
@@ -561,7 +561,7 @@ func TestGenerateMuxtJSONWithOnlyWorkspaceEntry(t *testing.T) {
 	dir := moduleDir(t)
 	workspace := filepath.Join(dir, "workspace")
 	require.NoError(t, os.Mkdir(workspace, 0o755))
-	const file = `{"packages": {"example.com/m/workspace": {"use_receiver_type": "T1"}}}`
+	const file = `{"packages": {"example.com/m/workspace": [{"use_receiver_type": "T1"}]}}`
 	require.NoError(t, os.WriteFile(filepath.Join(dir, composite.FileName), []byte(file), 0o644))
 
 	jobs := generateJobsOf(t, dir, "generate")
@@ -579,7 +579,7 @@ func TestGenerateInSubdirectorySkipsOtherEntries(t *testing.T) {
 	dir := moduleDir(t)
 	workspace := filepath.Join(dir, "workspace")
 	require.NoError(t, os.Mkdir(workspace, 0o755))
-	const file = `{"packages": {"example.com/m": {"output_htmx": true, "output_datastar": true}, "example.com/m/workspace": {"use_receiver_type": "T1"}}}`
+	const file = `{"packages": {"example.com/m": [{"output_htmx": true, "output_datastar": true}], "example.com/m/workspace": [{"use_receiver_type": "T1"}]}}`
 	require.NoError(t, os.WriteFile(filepath.Join(dir, composite.FileName), []byte(file), 0o644))
 
 	jobs := generateJobsOf(t, workspace, "generate")
@@ -608,7 +608,7 @@ func TestGenerateRejectsMissingMuxtJSONDirectory(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			dir := moduleDir(t)
 			tt.setup(t, dir)
-			const file = `{"packages": {"example.com/m": {"use_receiver_type": "Root"}, "example.com/m/gone": {"use_receiver_type": "T1"}}}`
+			const file = `{"packages": {"example.com/m": [{"use_receiver_type": "Root"}], "example.com/m/gone": [{"use_receiver_type": "T1"}]}}`
 			require.NoError(t, os.WriteFile(filepath.Join(dir, composite.FileName), []byte(file), 0o644))
 
 			called, err := generateFailureOf(t, dir)
@@ -634,7 +634,7 @@ func TestGenerateRejectsMuxtJSONBelowEntry(t *testing.T) {
 	web := filepath.Join(dir, "web")
 	require.NoError(t, os.Mkdir(web, 0o755))
 	writeMuxtJSON(t, web, `{"packages": {}}`)
-	writeMuxtJSON(t, dir, `{"packages": {"example.com/m/web": {"use_receiver_type": "T1"}}}`)
+	writeMuxtJSON(t, dir, `{"packages": {"example.com/m/web": [{"use_receiver_type": "T1"}]}}`)
 
 	called, err := generateFailureOf(t, dir)
 
@@ -689,7 +689,7 @@ func TestGenerateWithMuxtJSONInParentDirectory(t *testing.T) {
 	parent := moduleDir(t)
 	workspace := filepath.Join(parent, "workspace")
 	require.NoError(t, os.Mkdir(workspace, 0o755))
-	const file = `{"packages": {"example.com/m/workspace": {"use_receiver_type": "T1"}}}`
+	const file = `{"packages": {"example.com/m/workspace": [{"use_receiver_type": "T1"}]}}`
 	require.NoError(t, os.WriteFile(filepath.Join(parent, "muxt.json"), []byte(file), 0o644))
 
 	var jobs []packageJob
@@ -713,7 +713,7 @@ func TestGenerateRejectsMuxtJSONKeyOutsideModule(t *testing.T) {
 	for _, key := range []string{"example.com/other/x"} {
 		t.Run(key, func(t *testing.T) {
 			dir := moduleDir(t)
-			writeMuxtJSON(t, dir, `{"packages": {"`+key+`": {}}}`)
+			writeMuxtJSON(t, dir, `{"packages": {"`+key+`": [{}]}}`)
 
 			called, err := generateFailureOf(t, dir)
 
@@ -735,7 +735,7 @@ func TestGenerateRejectsMuxtJSONKeyInModuleOutsideDirectory(t *testing.T) {
 	root := moduleDir(t)
 	hypertext := filepath.Join(root, "internal", "hypertext")
 	require.NoError(t, os.MkdirAll(hypertext, 0o755))
-	writeMuxtJSON(t, hypertext, `{"packages": {"example.com/m/internal/other": {}}}`)
+	writeMuxtJSON(t, hypertext, `{"packages": {"example.com/m/internal/other": [{}]}}`)
 
 	called, err := generateFailureOf(t, hypertext)
 
@@ -755,7 +755,7 @@ func TestGenerateRejectsMuxtJSONLinkOutsideDirectory(t *testing.T) {
 	elsewhere := filepath.Join(root, "elsewhere")
 	require.NoError(t, os.Mkdir(project, 0o755))
 	require.NoError(t, os.Mkdir(elsewhere, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(project, composite.FileName), []byte(`{"packages": {"example.com/m/project/linked": {}}}`), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(project, composite.FileName), []byte(`{"packages": {"example.com/m/project/linked": [{}]}}`), 0o644))
 	if err := os.Symlink(elsewhere, filepath.Join(project, "linked")); err != nil {
 		t.Skipf("creating a symbolic link: %v", err)
 	}
@@ -779,7 +779,7 @@ func TestGenerateAcceptsMuxtJSONLinkInsideDirectory(t *testing.T) {
 	dir := moduleDir(t)
 	inside := filepath.Join(dir, "inside")
 	require.NoError(t, os.Mkdir(inside, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(dir, composite.FileName), []byte(`{"packages": {"example.com/m/linked": {}}}`), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, composite.FileName), []byte(`{"packages": {"example.com/m/linked": [{}]}}`), 0o644))
 	if err := os.Symlink(inside, filepath.Join(dir, "linked")); err != nil {
 		t.Skipf("creating a symbolic link: %v", err)
 	}
@@ -795,7 +795,7 @@ func TestGenerateAcceptsMuxtJSONLinkInsideDirectory(t *testing.T) {
 // import paths and the module path names them. The runner is not called.
 func TestGenerateRejectsMuxtJSONWithoutGoMod(t *testing.T) {
 	dir := t.TempDir()
-	writeMuxtJSON(t, dir, `{"packages": {"example.com/m": {}}}`)
+	writeMuxtJSON(t, dir, `{"packages": {"example.com/m": [{}]}}`)
 
 	called, err := generateFailureOf(t, dir)
 
