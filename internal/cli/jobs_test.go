@@ -312,6 +312,29 @@ func TestSelectJobsInAPackageDirectoryTakesEverySetOfItsKey(t *testing.T) {
 	}
 }
 
+// TestSelectJobsRejectsTwoKeysWithSeveralEntriesForOneDirectory states that two
+// keys reaching one directory fail as they do with one entry each: the error
+// names the keys, not an entry, since the directory is the key's.
+func TestSelectJobsRejectsTwoKeysWithSeveralEntriesForOneDirectory(t *testing.T) {
+	base := newFieldkit(t, `{"packages": {
+		"example.com/fieldkit/contacts": [{"output_file": "a.go", "output_routes_func": "A"}, {"output_file": "b.go", "output_routes_func": "B"}],
+		"example.com/fieldkit/people": [{"output_file": "c.go", "output_routes_func": "C"}]
+	}}`)
+	if err := os.Symlink("contacts", filepath.Join(base, "people")); err != nil {
+		t.Skipf("no symbolic links here: %v", err)
+	}
+	spec := jobSpec{Name: "generate", Scope: eachEntry}
+
+	_, err := selectJobs(spec, base, nil, func(string) string { return "" })
+
+	var same *composite.SameDirectoryError
+	require.ErrorAs(t, err, &same, "error %v", err)
+	realBase, evalErr := filepath.EvalSymlinks(base)
+	require.NoError(t, evalErr)
+	want := filepath.Join(base, composite.FileName) + `: packages["example.com/fieldkit/people"] is the same directory as packages["example.com/fieldkit/contacts"], ` + filepath.Join(realBase, "contacts") + `; keep one`
+	assert.Equal(t, want, err.Error(), "message")
+}
+
 // asError reports whether err is, or wraps, an E.
 func asError[E error](err error) bool {
 	_, ok := errors.AsType[E](err)
