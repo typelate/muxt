@@ -208,6 +208,50 @@ func TestSelectJobsNamesTheEntryAFlagRejects(t *testing.T) {
 	assert.Equal(t, `packages["example.com/fieldkit/contacts"][1]`, invalid.Where, "where")
 }
 
+// TestSelectJobsRejectsTwoSetsThatShareOneOutput states that two entries of a
+// key may not write one file or share one routes function, since generated
+// files are owned by routes function and the later run would delete the
+// earlier one's file. The error names the file, both positions and the member
+// to change.
+func TestSelectJobsRejectsTwoSetsThatShareOneOutput(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		entries  string
+		wantErr  composite.SetClashError
+		wantText string
+	}{
+		{
+			name: "output file",
+			entries: `{"output_file": "routes.go", "output_routes_func": "PublicRoutes"},
+				{"output_file": "routes.go", "output_routes_func": "AdminRoutes"}`,
+			wantErr:  composite.SetClashError{Key: "example.com/fieldkit/contacts", Member: "output_file", Value: "routes.go", First: 0, Second: 1},
+			wantText: `: packages["example.com/fieldkit/contacts"][0] and packages["example.com/fieldkit/contacts"][1] both set output_file "routes.go"; give each its own output_file`,
+		},
+		{
+			name: "output file by default",
+			entries: `{"output_routes_func": "PublicRoutes"},
+				{"output_routes_func": "AdminRoutes"}`,
+			wantErr:  composite.SetClashError{Key: "example.com/fieldkit/contacts", Member: "output_file", Value: "template_routes.go", First: 0, Second: 1},
+			wantText: `: packages["example.com/fieldkit/contacts"][0] and packages["example.com/fieldkit/contacts"][1] both set output_file "template_routes.go"; give each its own output_file`,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			base := newFieldkit(t, `{"packages": {"example.com/fieldkit/contacts": [`+tc.entries+`]}}`)
+			spec := jobSpec{Name: "generate", Scope: eachEntry}
+
+			_, err := selectJobs(spec, base, nil, func(string) string { return "" })
+
+			var clash *composite.SetClashError
+			require.ErrorAs(t, err, &clash, "error %v", err)
+			path := filepath.Join(base, composite.FileName)
+			want := tc.wantErr
+			want.Path = path
+			assert.Equal(t, want, *clash, "error")
+			assert.Equal(t, path+tc.wantText, err.Error(), "message")
+		})
+	}
+}
+
 // asError reports whether err is, or wraps, an E.
 func asError[E error](err error) bool {
 	_, ok := errors.AsType[E](err)
