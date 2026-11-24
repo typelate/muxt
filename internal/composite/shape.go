@@ -62,7 +62,7 @@ func (w *shapeWalker) sets(key string) error {
 	}
 	if w.dec.PeekKind() == ']' {
 		line, col := position(w.data, start+1)
-		return &ShapeError{Path: w.path, Line: line, Col: col, Where: where, Want: "a JSON object"}
+		return &ShapeError{Path: w.path, Line: line, Col: col, Where: where, Want: "an array of JSON objects with at least one entry; add an entry or delete the key"}
 	}
 	for i := 0; w.dec.PeekKind() != ']'; i++ {
 		if w.dec.PeekKind() == 'n' {

@@ -157,9 +157,9 @@ func TestFindRejectsAWrongOuterShape(t *testing.T) {
 			line: 1, col: 22,
 		},
 		{
-			name: "entry is a list",
+			name: "key holds an empty list",
 			file: `{"packages": {"example.com/m": []}}`,
-			want: `packages["example.com/m"] must be a JSON object`,
+			want: `packages["example.com/m"] must be an array of JSON objects with at least one entry; add an entry or delete the key`,
 			line: 1, col: 32,
 		},
 		{
