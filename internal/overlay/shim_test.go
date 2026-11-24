@@ -59,7 +59,9 @@ func TestShimDeclaresHTMLTemplate(t *testing.T) {
 }
 
 // TestShimTypesHaveHTMLTemplateMethods states that each type the shim
-// aliases has the exported methods html/template's has, by name.
+// aliases has every exported method html/template's has, by name. The
+// engine's types may have more: its Template also has text/template's
+// methods and its tree's, which code written for html/template cannot name.
 func TestShimTypesHaveHTMLTemplateMethods(t *testing.T) {
 	for _, tt := range []struct{ std, engine reflect.Type }{
 		{reflect.TypeFor[*stdtemplate.Template](), reflect.TypeFor[*template.Template]()},
@@ -67,9 +69,11 @@ func TestShimTypesHaveHTMLTemplateMethods(t *testing.T) {
 		{reflect.TypeFor[stdtemplate.ErrorCode](), reflect.TypeFor[template.ErrorCode]()},
 		{reflect.TypeFor[stdtemplate.HTML](), reflect.TypeFor[template.HTML]()},
 	} {
-		want, got := methodNames(tt.std), methodNames(tt.engine)
-		if !slices.Equal(got, want) {
-			t.Errorf("%v has methods %q, %v has %q", tt.engine, got, tt.std, want)
+		got := methodNames(tt.engine)
+		for _, name := range methodNames(tt.std) {
+			if !slices.Contains(got, name) {
+				t.Errorf("%v has no method %s, which %v has", tt.engine, name, tt.std)
+			}
 		}
 	}
 }
