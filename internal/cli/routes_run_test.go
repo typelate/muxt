@@ -396,6 +396,27 @@ func TestRoutesJSONNamesEachEntry(t *testing.T) {
 	assert.Equal(t, []string{""}, keysOf(t, filepath.Join(dir, "workspace")), "keys over one package")
 }
 
+// TestRoutesJSONTellsSetsOfOneKeyApart states that with --format json a
+// listing over two sets of one key gives each object a Key member holding the
+// key and the set's output file, so a reader can tell the objects apart.
+func TestRoutesJSONTellsSetsOfOneKeyApart(t *testing.T) {
+	if testing.Short() {
+		t.Skip("loads packages with the go command")
+	}
+	dir := twoSetModule(t)
+
+	stdout, _, err := listWithLoader(t, dir, "--format", "json")
+
+	require.NoError(t, err, "muxt --format json")
+	var listings []struct{ Key string }
+	require.NoError(t, json.Unmarshal([]byte(stdout), &listings), "output:\n%s", stdout)
+	var keys []string
+	for _, listing := range listings {
+		keys = append(keys, listing.Key)
+	}
+	assert.Equal(t, []string{testModule + " (routes_public.go)", testModule + " (routes_admin.go)"}, keys, "keys")
+}
+
 // TestRoutesJSONOverSeveralEntriesIsOneDocument states that with --format json
 // a listing over several entries is one JSON array holding each package's
 // object in import order, and a listing over one package is the object alone.
