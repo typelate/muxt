@@ -169,6 +169,12 @@ func TestFindRejectsAWrongOuterShape(t *testing.T) {
 			line: 1, col: 37,
 		},
 		{
+			name: "second element is null",
+			file: `{"packages": {"example.com/m": [{}, null]}}`,
+			want: `packages["example.com/m"][1] must be a JSON object, not null; delete the element`,
+			line: 1, col: 37,
+		},
+		{
 			name: "first element is a list",
 			file: `{"packages": {"example.com/m": [[]]}}`,
 			want: `packages["example.com/m"][0] must be a JSON object`,
