@@ -202,6 +202,11 @@ func TestJobNameTellsSetsOfOneKeyApart(t *testing.T) {
 		want     []string
 	}{
 		{
+			name:     "one set",
+			muxtJSON: `{"packages": {"example.com/fieldkit/contacts": [{"output_file": "routes_public.go"}]}}`,
+			want:     []string{"example.com/fieldkit/contacts"},
+		},
+		{
 			name:     "several sets",
 			muxtJSON: twoSetsOfContacts,
 			want: []string{
