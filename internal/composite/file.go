@@ -321,7 +321,7 @@ func read(path string, keys Keys) (*File, error) {
 	if err := checkKinds(path, raw, keys); err != nil {
 		return nil, err
 	}
-	f := File{Defaults: raw.PackageDefaults, Packages: raw.entries(), RoutePaths: raw.RoutePaths}
+	f := File{Defaults: raw.PackageDefaults, Packages: raw.Packages, RoutePaths: raw.RoutePaths}
 	f.Dir = filepath.Dir(path)
 	f.Name = path
 	var hasModule bool
@@ -642,44 +642,9 @@ func (f *File) spelledOnDisk(key string) (string, error) {
 // so a value's JSON type can be checked before any typed decoding names a Go
 // struct field in its error.
 type rawFile struct {
-	PackageDefaults Entry                `json:"package_defaults"`
-	Packages        map[string]entrySets `json:"packages"`
-	RoutePaths      *RoutePaths          `json:"route_paths"`
-}
-
-// entries returns the entries under each packages key, without the type that
-// reads them.
-func (r rawFile) entries() map[string][]Entry {
-	out := make(map[string][]Entry, len(r.Packages))
-	for key, sets := range r.Packages {
-		out[key] = []Entry(sets)
-	}
-	return out
-}
-
-// entrySets is the value under one packages key as it is read. It is the
-// transitional type of a muxt.json written before a key held a list: a bare
-// object is read as one entry. Delete it, and read a list, when the object
-// form is refused.
-type entrySets []Entry
-
-// UnmarshalJSON reads a list of objects, and a bare object, or null, as one
-// entry.
-func (s *entrySets) UnmarshalJSON(data []byte) error {
-	if bytes.HasPrefix(bytes.TrimSpace(data), []byte("[")) {
-		var list []Entry
-		if err := json.Unmarshal(data, &list); err != nil {
-			return fmt.Errorf("reading the entries of a key: %w", err)
-		}
-		*s = list
-		return nil
-	}
-	var one Entry
-	if err := json.Unmarshal(data, &one); err != nil {
-		return fmt.Errorf("reading an entry: %w", err)
-	}
-	*s = entrySets{one}
-	return nil
+	PackageDefaults Entry              `json:"package_defaults"`
+	Packages        map[string][]Entry `json:"packages"`
+	RoutePaths      *RoutePaths        `json:"route_paths"`
 }
 
 // readRaw decodes data into the entries as written. It fails with a

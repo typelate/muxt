@@ -168,6 +168,18 @@ func TestFindRejectsAWrongOuterShape(t *testing.T) {
 			line: 1, col: 32,
 		},
 		{
+			name: "key holds an object",
+			file: `{"packages": {"example.com/m": {"use_receiver_type": "T"}}}`,
+			want: `packages["example.com/m"] must be an array of JSON objects; wrap the entry in [ ]`,
+			line: 1, col: 32,
+		},
+		{
+			name: "key holds null",
+			file: `{"packages": {"example.com/m": null}}`,
+			want: `packages["example.com/m"] must be an array of JSON objects with at least one entry; add an entry or delete the key`,
+			line: 1, col: 32,
+		},
+		{
 			name: "second element is a string",
 			file: `{"packages": {"example.com/m": [{}, "x"]}}`,
 			want: `packages["example.com/m"][1] must be a JSON object`,
@@ -286,9 +298,10 @@ func TestFindRejectsATopLevelKeyInAnotherCase(t *testing.T) {
 }
 
 // TestFindAcceptsNullWhereAnObjectGoes states that null is an absent object
-// everywhere the shape check wants one.
+// where the shape check wants one object: package_defaults and route_paths.
+// Under a packages key it is not, because a key holds a list.
 func TestFindAcceptsNullWhereAnObjectGoes(t *testing.T) {
-	dir := writeFile(t, `{"package_defaults": null, "packages": {"example.com/m": null}}`)
+	dir := writeFile(t, `{"package_defaults": null, "route_paths": null, "packages": {}}`)
 
 	_, _, err := composite.Find(dir, testKeys())
 

@@ -49,23 +49,28 @@ func (w *shapeWalker) file() error {
 	})
 }
 
-// sets walks the value under the packages key: a list of objects. Until the
-// object form is refused, a bare object, or null, is walked as one entry.
+// sets walks the value under the packages key: a list of objects. A bare
+// object is refused, with the fix, because it was the form before a key held
+// a list and a file still written that way needs one edit.
 func (w *shapeWalker) sets(key string) error {
+	const atLeastOne = "an array of JSON objects with at least one entry; add an entry or delete the key"
 	where := fmt.Sprintf("packages[%q]", key)
-	if kind := w.dec.PeekKind(); kind != '[' {
-		if kind == '{' {
-			where = SetWhere(key, 0)
-		}
-		return w.object(where, "a JSON object", w.skipMember)
-	}
 	start := w.valueStart()
+	switch w.dec.PeekKind() {
+	case '[':
+	case '{':
+		line, col := position(w.data, start+1)
+		return &ShapeError{Path: w.path, Line: line, Col: col, Where: where, Want: "an array of JSON objects; wrap the entry in [ ]"}
+	default:
+		line, col := position(w.data, start+1)
+		return &ShapeError{Path: w.path, Line: line, Col: col, Where: where, Want: atLeastOne}
+	}
 	if _, err := w.dec.ReadToken(); err != nil {
 		return fmt.Errorf("reading %s: %w", w.path, err)
 	}
 	if w.dec.PeekKind() == ']' {
 		line, col := position(w.data, start+1)
-		return &ShapeError{Path: w.path, Line: line, Col: col, Where: where, Want: "an array of JSON objects with at least one entry; add an entry or delete the key"}
+		return &ShapeError{Path: w.path, Line: line, Col: col, Where: where, Want: atLeastOne}
 	}
 	for i := 0; w.dec.PeekKind() != ']'; i++ {
 		if w.dec.PeekKind() == 'n' {
