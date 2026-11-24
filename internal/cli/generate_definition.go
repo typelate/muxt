@@ -13,6 +13,7 @@ import (
 	"golang.org/x/tools/txtar"
 
 	"github.com/typelate/muxt/internal/check"
+	"github.com/typelate/muxt/internal/composite"
 	"github.com/typelate/muxt/internal/generate"
 	"github.com/typelate/muxt/internal/load"
 	"github.com/typelate/muxt/internal/muxt"
@@ -69,6 +70,9 @@ The stub is a placeholder to rewrite: it returns any and its body returns nil. I
 			if err != nil {
 				return err
 			}
+			if err := requireAgreeingSets(sel.Jobs); err != nil {
+				return err
+			}
 			job := sel.Jobs[0]
 			config := job.Config
 			if job.File != "" && cmd.Flags().Changed(useReceiverType) {
@@ -90,6 +94,21 @@ The stub is a placeholder to rewrite: it returns any and its body returns nil. I
 	cmd.Flags().BoolVar(&fragment, outputFragment, false, "make the template an empty fragment (the default)")
 	cmd.Flags().BoolVar(&document, outputDocument, false, "make the template a full HTML document")
 	return cmd
+}
+
+// requireAgreeingSets refuses sets that name different receivers. def writes
+// one method stub for the package, and choosing a set's receiver silently
+// would put the stub on a type the other sets do not serve. Every job of a
+// run in one directory is a set of one key, so the first is the one the rest
+// are compared with.
+func requireAgreeingSets(jobs []packageJob) error {
+	first := jobs[0]
+	for _, job := range jobs[1:] {
+		if job.Config.ReceiverType != first.Config.ReceiverType || job.Config.ReceiverPackage != first.Config.ReceiverPackage {
+			return &composite.ReceiverClashError{Path: job.File, Key: job.Key, First: first.Set, Second: job.Set}
+		}
+	}
+	return nil
 }
 
 // notAPackage replaces err when def ran in a muxt.json's own directory, that

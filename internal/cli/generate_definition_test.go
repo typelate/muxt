@@ -503,3 +503,44 @@ func TestGenerateDefRefusesFileTheTemplatesVariableDoesNotRead(t *testing.T) {
 		assert.FileExists(t, filepath.Join(dir, "extra.gohtml"))
 	})
 }
+
+// TestGenerateDefRefusesSetsThatNameDifferentReceivers states that generate
+// def in a directory with several sets, which writes one stub for one receiver
+// type, fails naming the first two sets that disagree on it, and writes
+// nothing; sets that agree, or leave it unnamed, let it run.
+func TestGenerateDefRefusesSetsThatNameDifferentReceivers(t *testing.T) {
+	const sets = `{"packages": {"example.com/m": [
+		{"output_file": "routes_public.go", "output_routes_func": "PublicRoutes"%s},
+		{"output_file": "routes_admin.go", "output_routes_func": "AdminRoutes"%s}
+	]}}`
+	for _, tt := range []struct {
+		name          string
+		first, second string
+		wantErr       bool
+	}{
+		{name: "different types", first: `, "use_receiver_type": "Public"`, second: `, "use_receiver_type": "Admin"`, wantErr: true},
+		{name: "different packages", first: `, "use_receiver_type": "S", "use_receiver_type_package": "example.com/a"`, second: `, "use_receiver_type": "S", "use_receiver_type_package": "example.com/b"`, wantErr: true},
+		{name: "one names none", first: `, "use_receiver_type": "S"`, wantErr: true},
+		{name: "the same type", first: `, "use_receiver_type": "S"`, second: `, "use_receiver_type": "S"`},
+		{name: "neither names one"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			writeTestFile(t, dir, "go.mod", "module example.com/m\n\ngo 1.24\n")
+			writeMuxtJSON(t, dir, fmt.Sprintf(sets, tt.first, tt.second))
+
+			_, _, err := runCommandArgs(dir, []string{"generate", "def", "GET /foo Index()", "--output-file=index.gohtml"}, runners{})
+
+			if !tt.wantErr {
+				require.NoError(t, err, "generate def")
+				assert.FileExists(t, filepath.Join(dir, "index.gohtml"))
+				return
+			}
+			want := filepath.Join(dir, composite.FileName) + `: packages["example.com/m"][0] and packages["example.com/m"][1] name different receiver types; generate def cannot choose one; give them the same use_receiver_type`
+			require.EqualError(t, err, want, "generate def")
+			var clash *composite.ReceiverClashError
+			assert.ErrorAs(t, err, &clash, "error type")
+			assert.NoFileExists(t, filepath.Join(dir, "index.gohtml"))
+		})
+	}
+}
