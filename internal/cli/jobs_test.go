@@ -282,6 +282,36 @@ func TestSelectJobsRejectsRoutePathsWithSeveralEntriesUnderAKey(t *testing.T) {
 	assert.Equal(t, path+`: route_paths takes one entry per package, and packages["example.com/fieldkit/contacts"] has 2; keep one entry or remove route_paths`, err.Error(), "message")
 }
 
+// TestSelectJobsInAPackageDirectoryTakesEverySetOfItsKey states that a run in
+// the directory of a key with two entries acts on both, whatever the scope,
+// and on no other key.
+func TestSelectJobsInAPackageDirectoryTakesEverySetOfItsKey(t *testing.T) {
+	for _, spec := range []jobSpec{
+		{Name: "generate", Scope: eachEntry, RequireEntry: true},
+		{Name: "check", Scope: itsEntry},
+		{Name: "test-template-mutations", Scope: itsEntryOnly},
+	} {
+		t.Run(spec.Name, func(t *testing.T) {
+			base := newFieldkit(t, `{"packages": {
+				"example.com/fieldkit/inventory": {},
+				"example.com/fieldkit/contacts": [
+					{"output_file": "routes_public.go", "output_routes_func": "PublicRoutes"},
+					{"output_file": "routes_admin.go", "output_routes_func": "AdminRoutes"}
+				]}}`)
+
+			sel, err := selectJobs(spec, filepath.Join(base, "contacts"), nil, func(string) string { return "" })
+
+			require.NoError(t, err)
+			var got []string
+			for _, job := range sel.Jobs {
+				got = append(got, fmt.Sprintf("%s %s", job.Key, job.Config.RoutesFunction))
+			}
+			want := []string{"example.com/fieldkit/contacts PublicRoutes", "example.com/fieldkit/contacts AdminRoutes"}
+			assert.Equal(t, want, got, "jobs")
+		})
+	}
+}
+
 // asError reports whether err is, or wraps, an E.
 func asError[E error](err error) bool {
 	_, ok := errors.AsType[E](err)

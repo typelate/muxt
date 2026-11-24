@@ -38,8 +38,7 @@ func lookupMuxtJSONEntry(wd string) (entryLookup, error) {
 	if err != nil {
 		return entryLookup{}, fmt.Errorf("muxt.json entry for %s: %w", wd, err)
 	}
-	_, hasEntry := f.Packages[key]
-	return entryLookup{File: f, Key: key, HasEntry: hasEntry}, nil
+	return entryLookup{File: f, Key: key, HasEntry: len(f.Packages[key]) > 0}, nil
 }
 
 // requireEntryDirectory returns a *composite.MissingDirectoryError unless dir,
