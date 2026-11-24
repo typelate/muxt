@@ -85,7 +85,9 @@ working tree is never written to.`,
 			if err != nil {
 				return err
 			}
-			config.TemplatesVariables = sel.Jobs[0].Config.TemplatesVariables
+			// The sets of one package are mutated through one go test, so
+			// their templates variables are read together.
+			config.TemplatesVariables = onePerDirectory(sel.Jobs)[0].Config.TemplatesVariables
 			// go test runs its default, ./..., from the package directory.
 			config.Packages = []string{}
 			if err := mutation.CheckGoTestArgs(config.GoTestArgs); err != nil {

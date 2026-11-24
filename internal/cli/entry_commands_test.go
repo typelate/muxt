@@ -205,6 +205,23 @@ func TestMutationsReadsMuxtJSONEntry(t *testing.T) {
 	assert.Equal(t, []string{"pages"}, got, "templates variables")
 }
 
+// TestMutationsReadsTheTemplatesVariablesOfEverySet states that
+// test-template-mutations in a directory with two sets mutates the templates
+// of both: one go test run covers the package, so the mutants are the union
+// of what its sets' templates variables name, not the first set's alone.
+func TestMutationsReadsTheTemplatesVariablesOfEverySet(t *testing.T) {
+	dir := moduleDir(t)
+	writeMuxtJSON(t, dir, `{"packages": {"example.com/m": [
+		{"use_templates_variable": ["pages", "shared"], "output_file": "routes_public.go", "output_routes_func": "PublicRoutes"},
+		{"use_templates_variable": ["admin", "shared"], "output_file": "routes_admin.go", "output_routes_func": "AdminRoutes"}
+	]}}`)
+
+	got, _, err := mutationsTemplatesVariables(dir, "test-template-mutations --dry-run")
+
+	require.NoError(t, err, "muxt test-template-mutations")
+	assert.Equal(t, []string{"pages", "shared", "admin"}, got, "templates variables")
+}
+
 // TestMutationsRejectsFlagsForConfiguredDirectory states that
 // test-template-mutations given a setting flag in a directory a muxt.json
 // entry configures fails with the error generate returns, and nothing runs.
