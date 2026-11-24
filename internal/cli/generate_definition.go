@@ -98,6 +98,21 @@ The stub is a placeholder to rewrite: it returns any and its body returns nil. I
 	return cmd
 }
 
+// ReceiverClashError reports two entries under one packages key that name
+// different receiver types, for generate def, which writes one method stub for
+// the package. It lives here, not in composite, because its message names the
+// command. Path is the muxt.json, and First and Second the zero-based positions
+// under Key, First being the earlier.
+type ReceiverClashError struct {
+	Path, Key     string
+	First, Second int
+}
+
+// Error returns the path, both positions and the fix on one line.
+func (e *ReceiverClashError) Error() string {
+	return fmt.Sprintf("%s: %s and %s name different receiver types; generate def cannot choose one; give them the same use_receiver_type", e.Path, composite.SetWhere(e.Key, e.First), composite.SetWhere(e.Key, e.Second))
+}
+
 // requireAgreeingSets refuses sets that name different receivers. def writes
 // one method stub for the package, and choosing a set's receiver silently
 // would put the stub on a type the other sets do not serve. Every job of a
@@ -107,7 +122,7 @@ func requireAgreeingSets(jobs []packageJob) error {
 	first := jobs[0]
 	for _, job := range jobs[1:] {
 		if job.Config.ReceiverType != first.Config.ReceiverType || job.Config.ReceiverPackage != first.Config.ReceiverPackage {
-			return &composite.ReceiverClashError{Path: job.File, Key: job.Key, First: first.Set, Second: job.Set}
+			return &ReceiverClashError{Path: job.File, Key: job.Key, First: first.Set, Second: job.Set}
 		}
 	}
 	return nil

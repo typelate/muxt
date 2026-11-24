@@ -227,20 +227,6 @@ func (e *GeneratedFileClashError) Error() string {
 	return fmt.Sprintf("%s: %s and %s would both write it under output_multiple_files; give them different template files or turn output_multiple_files off", e.File, SetWhere(e.Key, e.First), SetWhere(e.Key, e.Second))
 }
 
-// ReceiverClashError reports two entries under one packages key that name
-// different receiver types, for a command that acts on the package and must use
-// one: generate def writes one method stub. Path is the muxt.json, and First
-// and Second the zero-based positions under Key, First being the earlier.
-type ReceiverClashError struct {
-	Path, Key     string
-	First, Second int
-}
-
-// Error returns the path, both positions and the fix on one line.
-func (e *ReceiverClashError) Error() string {
-	return fmt.Sprintf("%s: %s and %s name different receiver types; generate def cannot choose one; give them the same use_receiver_type", e.Path, SetWhere(e.Key, e.First), SetWhere(e.Key, e.Second))
-}
-
 // InvalidEntryError reports a muxt.json entry whose values a generate flag
 // rejects, such as two frontends set at once. Err is the flag's own error, so
 // the message matches the one the command line gives. Where names the entry.

@@ -538,7 +538,7 @@ func TestGenerateDefRefusesSetsThatNameDifferentReceivers(t *testing.T) {
 			}
 			want := filepath.Join(dir, composite.FileName) + `: packages["example.com/m"][0] and packages["example.com/m"][1] name different receiver types; generate def cannot choose one; give them the same use_receiver_type`
 			require.EqualError(t, err, want, "generate def")
-			var clash *composite.ReceiverClashError
+			var clash *ReceiverClashError
 			assert.ErrorAs(t, err, &clash, "error type")
 			assert.NoFileExists(t, filepath.Join(dir, "index.gohtml"))
 		})
