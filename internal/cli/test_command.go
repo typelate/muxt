@@ -66,13 +66,30 @@ func testCommand(workingDirectory *string, getEnv func(string) string, run func(
 			if err != nil {
 				return err
 			}
-			return run(cmd, sel.Jobs, config)
+			return run(cmd, onePerDirectory(sel.Jobs), config)
 		},
 	}
 
 	cmd.Flags().StringVar(&config.CoverProfile, outputCoverProfile, "", "write the template blocks the tests reached to this file, as a Go cover profile for go tool cover -html")
 
 	return cmd
+}
+
+// onePerDirectory keeps the first job of each directory, in the order the
+// directories first appear. Several sets of one key are one package, and go
+// test runs on a package, not on a route set: running it once per set would
+// repeat every test.
+func onePerDirectory(jobs []packageJob) []packageJob {
+	var folded []packageJob
+	seen := map[string]bool{}
+	for _, job := range jobs {
+		if seen[job.Dir] {
+			continue
+		}
+		seen[job.Dir] = true
+		folded = append(folded, job)
+	}
+	return folded
 }
 
 // checkProfilePackages refuses a package pattern after --. A profile

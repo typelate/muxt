@@ -588,3 +588,29 @@ func TestTestSelectsOneDirectoryOutsideTheFilesDirectory(t *testing.T) {
 		})
 	}
 }
+
+// TestTestRunsGoTestOnceForTwoSetsOfOneDirectory states that muxt test over a
+// key with two sets runs go test once in the package directory: both sets are
+// one package, and a second run would repeat every test and count the
+// package's template blocks twice.
+func TestTestRunsGoTestOnceForTwoSetsOfOneDirectory(t *testing.T) {
+	for _, tt := range twoSetRuns() {
+		t.Run(tt.name, func(t *testing.T) {
+			root := twoSetModuleIn(t, tt.place)
+			run := newTestRun(t)
+			var stdout bytes.Buffer
+
+			err := commands(filepath.Join(root, tt.place.Sub), []string{testCommandName}, func(string) string { return "" }, func() (string, bool) { return "v1.2.3", true }, strings.NewReader(""), &stdout, new(bytes.Buffer), runners{
+				test: testRunner(run.goTest, run.prepare, run.attribute),
+			})
+			require.NoError(t, err, "muxt test")
+
+			var dirs []string
+			for _, call := range run.Calls {
+				dirs = append(dirs, call.Dir)
+			}
+			assert.Equal(t, []string{filepath.Join(root, tt.place.Sub)}, dirs, "directories go test ran in")
+			assert.Equal(t, tt.place.Key()+"\n", stdout.String(), "stdout names the package once, by its key")
+		})
+	}
+}
