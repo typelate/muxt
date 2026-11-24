@@ -289,6 +289,14 @@ func (f *File) Add(key string, entry Entry) error {
 	return nil
 }
 
+// SetWhere returns the position in a muxt.json of the i-th entry, counting from
+// zero, under key: packages["example.com/m"][0]. A position is always written
+// with its index, also for a key with one entry, so an error reads the same
+// when a second entry is added.
+func SetWhere(key string, i int) string {
+	return fmt.Sprintf("packages[%q][%d]", key, i)
+}
+
 // DirOf returns the absolute directory of a packages key, which Find has
 // checked is an import path in f's module.
 func (f *File) DirOf(key string) string {

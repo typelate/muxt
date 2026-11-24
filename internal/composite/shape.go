@@ -64,8 +64,8 @@ func (w *shapeWalker) sets(key string) error {
 		line, col := position(w.data, start+1)
 		return &ShapeError{Path: w.path, Line: line, Col: col, Where: where, Want: "a JSON object"}
 	}
-	for w.dec.PeekKind() != ']' {
-		if err := w.object(where, "a JSON object", w.skipMember); err != nil {
+	for i := 0; w.dec.PeekKind() != ']'; i++ {
+		if err := w.object(SetWhere(key, i), "a JSON object", w.skipMember); err != nil {
 			return err
 		}
 	}

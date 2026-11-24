@@ -162,6 +162,18 @@ func TestFindRejectsAWrongOuterShape(t *testing.T) {
 			want: `packages["example.com/m"] must be a JSON object`,
 			line: 1, col: 32,
 		},
+		{
+			name: "second element is a string",
+			file: `{"packages": {"example.com/m": [{}, "x"]}}`,
+			want: `packages["example.com/m"][1] must be a JSON object`,
+			line: 1, col: 37,
+		},
+		{
+			name: "first element is a list",
+			file: `{"packages": {"example.com/m": [[]]}}`,
+			want: `packages["example.com/m"][0] must be a JSON object`,
+			line: 1, col: 33,
+		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			dir := writeFile(t, tt.file)
