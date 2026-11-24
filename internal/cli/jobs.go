@@ -315,29 +315,45 @@ func distinctSetMembers() []setMember {
 // onePerDirectory folds the jobs of each directory into the first, in the
 // order the directories first appear. Several sets of one key are one package,
 // and a command that runs go test acts on a package, not on a route set:
-// running it once per set would repeat every test. The folded job reads the
-// templates variables of every set it replaces, so what a run attributes to
-// the package covers all of its sets' template files. No caller's slice is
-// changed.
+// running it once per set would repeat every test. The folded job stands for
+// the package, so a caller names it by Key, not Name, which would single out
+// the first set's file. It carries the first set's configuration except for
+// its templates variables, which are the union of every set's, so what a run
+// attributes to the package covers all of its sets' template files. No
+// caller's slice is changed.
 func onePerDirectory(jobs []packageJob) []packageJob {
-	var folded []packageJob
-	at := map[string]int{} // a directory to the position of its job in folded
+	var dirs []string // in order of first appearance
+	byDir := map[string][]packageJob{}
 	for _, job := range jobs {
-		i, seen := at[job.Dir]
-		if !seen {
-			at[job.Dir] = len(folded)
-			folded = append(folded, job)
-			continue
+		if _, seen := byDir[job.Dir]; !seen {
+			dirs = append(dirs, job.Dir)
 		}
-		vars := folded[i].Config.TemplatesVariables
-		for _, name := range job.Config.TemplatesVariables {
-			if !slices.Contains(vars, name) {
-				vars = append(slices.Clip(vars), name)
-			}
+		byDir[job.Dir] = append(byDir[job.Dir], job)
+	}
+	folded := make([]packageJob, 0, len(dirs))
+	for _, dir := range dirs {
+		sets := byDir[dir]
+		job := sets[0]
+		if len(sets) > 1 {
+			job.Config.TemplatesVariables = unionTemplatesVariables(sets)
 		}
-		folded[i].Config.TemplatesVariables = vars
+		folded = append(folded, job)
 	}
 	return folded
+}
+
+// unionTemplatesVariables is the templates variables of sets, each once, in the
+// order they are first named. It builds a new slice.
+func unionTemplatesVariables(sets []packageJob) []string {
+	var union []string
+	for _, set := range sets {
+		for _, name := range set.Config.TemplatesVariables {
+			if !slices.Contains(union, name) {
+				union = append(union, name)
+			}
+		}
+	}
+	return union
 }
 
 // severalPackages names the directories of f's entries, relative to f, for a

@@ -52,7 +52,10 @@ func hubNamespaces(hub *routePathsTarget, jobs []packageJob) (map[string]string,
 
 // generateRunner generates jobs from one load, one directory at a time, a
 // package after the packages it imports. A job's files are all written before
-// the next job is resolved, so a failure leaves the earlier jobs written.
+// the next job is resolved, so a failure leaves the earlier jobs written. The
+// exception is a directory whose muxt.json sets write with output_multiple_files:
+// its sets are resolved together, before the first of them writes, so a clash
+// between their files is refused with nothing of that directory written.
 func generateRunner(loadPackages packageLoader) func(*cobra.Command, []packageJob) error {
 	return func(cmd *cobra.Command, jobs []packageJob) error {
 		if len(jobs) == 0 {
@@ -121,7 +124,7 @@ func generateRunner(loadPackages packageLoader) func(*cobra.Command, []packageJo
 				// resolves the others, quietly, before anything is written there.
 				if !checked[job.Dir] {
 					checked[job.Dir] = true
-					if err := checkSetsOfDirectory(cmd, l, jobs, job.Dir, namespaces, failed); err != nil {
+					if err := checkSetsOfDirectory(setsCheck{Cmd: cmd, Loaded: l, Jobs: jobs, Dir: job.Dir, Namespaces: namespaces, Failed: failed}); err != nil {
 						return false, err
 					}
 				}
@@ -154,17 +157,28 @@ func generateRunner(loadPackages packageLoader) func(*cobra.Command, []packageJo
 	}
 }
 
-// checkSetsOfDirectory resolves every muxt.json set of dir that writes with
+// setsCheck is what checkSetsOfDirectory needs: the run's Jobs and the one
+// load they share, the directory Dir to check, the hub Namespaces by packages
+// key, and Failed, which names a job's failure as the job's own run would.
+type setsCheck struct {
+	Cmd        *cobra.Command
+	Loaded     *load.Loaded
+	Jobs       []packageJob
+	Dir        string
+	Namespaces map[string]string
+	Failed     func(packageJob, error) error
+}
+
+// checkSetsOfDirectory resolves every muxt.json set of c.Dir that writes with
 // output_multiple_files, so two that would write one generated file are refused
 // before the first writes. The files of one directory are named by template
 // file alone, so only resolving knows them. What resolving prints is dropped:
-// each set resolves again, in turn, when it is written. A resolve failure is
-// named by failed, as the set's own run would name it.
-func checkSetsOfDirectory(cmd *cobra.Command, l *load.Loaded, jobs []packageJob, dir string, namespaces map[string]string, failed func(packageJob, error) error) error {
+// each set resolves again, in turn, when it is written.
+func checkSetsOfDirectory(c setsCheck) error {
 	var sets []packageJob
 	multiple := false
-	for _, job := range jobs {
-		if job.Dir != dir || job.File == "" || job.ReadOnly {
+	for _, job := range c.Jobs {
+		if job.Dir != c.Dir || job.File == "" || job.ReadOnly {
 			continue
 		}
 		sets = append(sets, job)
@@ -177,9 +191,9 @@ func checkSetsOfDirectory(cmd *cobra.Command, l *load.Loaded, jobs []packageJob,
 	for i, set := range sets {
 		quiet := set
 		quiet.ReadOnly = true
-		result, err := resolveJob(cmd, l, quiet, set.Named(), namespaces[set.Key])
+		result, err := resolveJob(c.Cmd, c.Loaded, quiet, set.Named(), c.Namespaces[set.Key])
 		if err != nil {
-			return failed(set, err)
+			return c.Failed(set, err)
 		}
 		results[i] = result
 	}
