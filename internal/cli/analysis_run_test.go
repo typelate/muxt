@@ -341,6 +341,30 @@ func TestCallsListsEachSetOfAKeyItsOwnCalls(t *testing.T) {
 	assert.NotContains(t, sections[adminSet], `GET /public`, "admin set in\n%s", stdout)
 }
 
+// TestCallersListsEachSetOfAKeyItsOwnCallers states that muxt
+// list-template-callers over a key with two sets lists, under each set's name,
+// the callers of that set's templates, which are in that set's generated file.
+func TestCallersListsEachSetOfAKeyItsOwnCallers(t *testing.T) {
+	if testing.Short() {
+		t.Skip("loads packages with the go command")
+	}
+	root := twoSetModule(t)
+	_, _, err := generateWithLoader(t, root)
+	require.NoError(t, err, "muxt generate")
+
+	stdout, _, _, err := analyzeWithLoader(t, root, "list-template-callers")
+
+	require.NoError(t, err, "muxt list-template-callers")
+	sections := setSections(stdout)
+	public, admin := sections[testModule+" (routes_public.go)"], sections[adminSet]
+	assert.Contains(t, public, `template "GET /public" called by:`, "public set in\n%s", stdout)
+	assert.Contains(t, public, filepath.Join(root, "routes_public.go"), "public set in\n%s", stdout)
+	assert.NotContains(t, public, "GET /admin", "public set in\n%s", stdout)
+	assert.Contains(t, admin, `template "GET /admin" called by:`, "admin set in\n%s", stdout)
+	assert.Contains(t, admin, filepath.Join(root, "routes_admin.go"), "admin set in\n%s", stdout)
+	assert.NotContains(t, admin, "GET /public", "admin set in\n%s", stdout)
+}
+
 // TestCheckNamesEachSetOfAKeyByItsFile states that muxt check over a key with
 // two sets heads each summary with the key and the set's output file, so the
 // two summaries can be told apart.
