@@ -271,6 +271,38 @@ func twoSetRuns() []struct {
 	}
 }
 
+// TestCheckChecksEachSetOfAKeyAgainstItsOwnTemplates states that muxt check
+// over a key with two sets checks each set's templates and no others: a mistake
+// in the first set's template fails the run at that set, naming it, and one in
+// the second set's template fails at the second after the first's summary.
+func TestCheckChecksEachSetOfAKeyAgainstItsOwnTemplates(t *testing.T) {
+	if testing.Short() {
+		t.Skip("loads packages with the go command")
+	}
+	for _, tt := range []struct {
+		name       string
+		file       string
+		wantStdout string
+		failed     string
+	}{
+		{name: "first set", file: "public.gohtml", wantStdout: "", failed: testModule + " (routes_public.go)"},
+		{name: "second set", file: "admin.gohtml", wantStdout: testModule + " (routes_public.go)\nok: 1 template\n", failed: adminSet},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			root := twoSetModule(t)
+			_, _, err := generateWithLoader(t, root)
+			require.NoError(t, err, "muxt generate")
+			writeTestFile(t, root, tt.file, `{{define "GET /`+strings.TrimSuffix(tt.file, ".gohtml")+`"}}<p>{{.Missing}}</p>{{end}}`)
+
+			stdout, stderr, _, err := analyzeWithLoader(t, root, "check")
+
+			require.Error(t, err, "muxt check")
+			assert.Equal(t, tt.wantStdout, stdout, "stdout")
+			assert.Contains(t, stderr, "Error: "+tt.failed+": 1 error\n", "stderr")
+		})
+	}
+}
+
 // TestCheckNamesEachSetOfAKeyByItsFile states that muxt check over a key with
 // two sets heads each summary with the key and the set's output file, so the
 // two summaries can be told apart.
