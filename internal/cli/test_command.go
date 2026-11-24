@@ -75,33 +75,6 @@ func testCommand(workingDirectory *string, getEnv func(string) string, run func(
 	return cmd
 }
 
-// onePerDirectory folds the jobs of each directory into the first, in the
-// order the directories first appear. Several sets of one key are one package,
-// and go test runs on a package, not on a route set: running it once per set
-// would repeat every test. The folded job reads the templates variables of
-// every set it replaces, so what a run attributes to the package covers all
-// of its sets' template files. No caller's slice is changed.
-func onePerDirectory(jobs []packageJob) []packageJob {
-	var folded []packageJob
-	at := map[string]int{} // a directory to the position of its job in folded
-	for _, job := range jobs {
-		i, seen := at[job.Dir]
-		if !seen {
-			at[job.Dir] = len(folded)
-			folded = append(folded, job)
-			continue
-		}
-		vars := folded[i].Config.TemplatesVariables
-		for _, name := range job.Config.TemplatesVariables {
-			if !slices.Contains(vars, name) {
-				vars = append(slices.Clip(vars), name)
-			}
-		}
-		folded[i].Config.TemplatesVariables = vars
-	}
-	return folded
-}
-
 // checkProfilePackages refuses a package pattern after --. A profile
 // attributes a block to the template files of the package whose go test
 // reached it, and one go test over several packages gives one cover

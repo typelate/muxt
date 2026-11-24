@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 
 	"github.com/spf13/pflag"
 
@@ -286,6 +287,34 @@ func selectJobs(spec jobSpec, dir string, flags *pflag.FlagSet, getEnv func(stri
 		}
 	}
 	return selection{File: f, Jobs: jobs}, nil
+}
+
+// onePerDirectory folds the jobs of each directory into the first, in the
+// order the directories first appear. Several sets of one key are one package,
+// and a command that runs go test acts on a package, not on a route set:
+// running it once per set would repeat every test. The folded job reads the
+// templates variables of every set it replaces, so what a run attributes to
+// the package covers all of its sets' template files. No caller's slice is
+// changed.
+func onePerDirectory(jobs []packageJob) []packageJob {
+	var folded []packageJob
+	at := map[string]int{} // a directory to the position of its job in folded
+	for _, job := range jobs {
+		i, seen := at[job.Dir]
+		if !seen {
+			at[job.Dir] = len(folded)
+			folded = append(folded, job)
+			continue
+		}
+		vars := folded[i].Config.TemplatesVariables
+		for _, name := range job.Config.TemplatesVariables {
+			if !slices.Contains(vars, name) {
+				vars = append(slices.Clip(vars), name)
+			}
+		}
+		folded[i].Config.TemplatesVariables = vars
+	}
+	return folded
 }
 
 // severalPackages names the directories of f's entries, relative to f, for a
