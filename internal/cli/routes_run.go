@@ -24,7 +24,7 @@ type routesJob struct {
 func newRoutesJobs(sel selection) []routesJob {
 	jobs := make([]routesJob, len(sel.Jobs))
 	for i, job := range sel.Jobs {
-		report := newConfigurationReport(sel.EntryFile(job), job.Key, job.Given, job.Config)
+		report := newConfigurationReport(sel.EntryFile(job), job)
 		jobs[i] = routesJob{packageJob: job, Report: report}
 	}
 	return jobs

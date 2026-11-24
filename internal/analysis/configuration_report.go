@@ -16,7 +16,7 @@ import (
 //		{"Source": "defaults", "Settings": [{"Key": "output_file", "Value": "template_routes.go"}]}
 //	]
 //
-// The two groups from a muxt.json, packages["<key>"] and package_defaults, also
+// The two groups from a muxt.json, packages["<key>"][<i>] and package_defaults, also
 // have a File member holding that file's absolute path, so an editor can open
 // it from any directory. Text writes that path once above both, since a reader sees the
 // file first and then its entry. The groups and their settings are arrays, not

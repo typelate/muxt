@@ -58,8 +58,8 @@ generate key="example.com/fieldkit/inventory" file="muxt.json" dir="inventory" r
 generate key="example.com/fieldkit/tasks" file="muxt.json" dir="tasks" receiver="Server" receiver-package="example.com/fieldkit/types" templates=[templates] output="tasks_routes.go" htmx=true logger=true verbose=true
 == entries, file directory: muxt
 routes key="example.com/fieldkit/contacts" file="muxt.json" dir="contacts" receiver="Server" receiver-package="example.com/fieldkit/types" templates=[templates] htmx=true verbose=false report=[package_defaults@muxt.json defaults@]
-routes key="example.com/fieldkit/inventory" file="muxt.json" dir="inventory" receiver="Catalog" receiver-package="example.com/fieldkit/types" templates=[catalogTemplates] htmx=true verbose=false report=[packages["example.com/fieldkit/inventory"]@muxt.json package_defaults@muxt.json defaults@]
-routes key="example.com/fieldkit/tasks" file="muxt.json" dir="tasks" receiver="Server" receiver-package="example.com/fieldkit/types" templates=[templates] htmx=true verbose=false report=[packages["example.com/fieldkit/tasks"]@muxt.json package_defaults@muxt.json defaults@]
+routes key="example.com/fieldkit/inventory" file="muxt.json" dir="inventory" receiver="Catalog" receiver-package="example.com/fieldkit/types" templates=[catalogTemplates] htmx=true verbose=false report=[packages["example.com/fieldkit/inventory"][0]@muxt.json package_defaults@muxt.json defaults@]
+routes key="example.com/fieldkit/tasks" file="muxt.json" dir="tasks" receiver="Server" receiver-package="example.com/fieldkit/types" templates=[templates] htmx=true verbose=false report=[packages["example.com/fieldkit/tasks"][0]@muxt.json package_defaults@muxt.json defaults@]
 == entries, file directory: check check
 check dir="contacts" templates=[templates] allow-unused=false
 check dir="inventory" templates=[catalogTemplates] allow-unused=false
@@ -89,8 +89,8 @@ generate key="example.com/fieldkit/tasks" file="muxt.json" dir="tasks" receiver=
 == entries and root entry, file directory: muxt
 routes key="example.com/fieldkit" file="muxt.json" dir="." receiver="Server" receiver-package="" templates=[templates] htmx=true verbose=false report=[package_defaults@muxt.json defaults@]
 routes key="example.com/fieldkit/contacts" file="muxt.json" dir="contacts" receiver="Server" receiver-package="" templates=[templates] htmx=true verbose=false report=[package_defaults@muxt.json defaults@]
-routes key="example.com/fieldkit/inventory" file="muxt.json" dir="inventory" receiver="Catalog" receiver-package="" templates=[catalogTemplates] htmx=true verbose=false report=[packages["example.com/fieldkit/inventory"]@muxt.json package_defaults@muxt.json defaults@]
-routes key="example.com/fieldkit/tasks" file="muxt.json" dir="tasks" receiver="Server" receiver-package="" templates=[templates] htmx=true verbose=false report=[packages["example.com/fieldkit/tasks"]@muxt.json package_defaults@muxt.json defaults@]
+routes key="example.com/fieldkit/inventory" file="muxt.json" dir="inventory" receiver="Catalog" receiver-package="" templates=[catalogTemplates] htmx=true verbose=false report=[packages["example.com/fieldkit/inventory"][0]@muxt.json package_defaults@muxt.json defaults@]
+routes key="example.com/fieldkit/tasks" file="muxt.json" dir="tasks" receiver="Server" receiver-package="" templates=[templates] htmx=true verbose=false report=[packages["example.com/fieldkit/tasks"][0]@muxt.json package_defaults@muxt.json defaults@]
 == entries and root entry, file directory: check check
 check dir="." templates=[templates] allow-unused=false
 check dir="contacts" templates=[templates] allow-unused=false
@@ -136,7 +136,7 @@ test key="example.com/fieldkit/contacts" file="muxt.json" dir="contacts"
 == entries, inventory: generate generate -v
 generate key="example.com/fieldkit/inventory" file="muxt.json" dir="inventory" receiver="Catalog" receiver-package="example.com/fieldkit/types" templates=[catalogTemplates] output="template_routes.go" htmx=true logger=false verbose=true
 == entries, inventory: muxt
-routes key="example.com/fieldkit/inventory" file="muxt.json" dir="inventory" receiver="Catalog" receiver-package="example.com/fieldkit/types" templates=[catalogTemplates] htmx=true verbose=false report=[packages["example.com/fieldkit/inventory"]@muxt.json package_defaults@muxt.json defaults@]
+routes key="example.com/fieldkit/inventory" file="muxt.json" dir="inventory" receiver="Catalog" receiver-package="example.com/fieldkit/types" templates=[catalogTemplates] htmx=true verbose=false report=[packages["example.com/fieldkit/inventory"][0]@muxt.json package_defaults@muxt.json defaults@]
 == entries, inventory: check check
 check dir="inventory" templates=[catalogTemplates] allow-unused=false
 == entries, inventory: calls list-template-calls
@@ -153,7 +153,7 @@ test key="example.com/fieldkit/inventory" file="muxt.json" dir="inventory"
 == entries, tasks: generate generate -v
 generate key="example.com/fieldkit/tasks" file="muxt.json" dir="tasks" receiver="Server" receiver-package="example.com/fieldkit/types" templates=[templates] output="tasks_routes.go" htmx=true logger=true verbose=true
 == entries, tasks: muxt
-routes key="example.com/fieldkit/tasks" file="muxt.json" dir="tasks" receiver="Server" receiver-package="example.com/fieldkit/types" templates=[templates] htmx=true verbose=false report=[packages["example.com/fieldkit/tasks"]@muxt.json package_defaults@muxt.json defaults@]
+routes key="example.com/fieldkit/tasks" file="muxt.json" dir="tasks" receiver="Server" receiver-package="example.com/fieldkit/types" templates=[templates] htmx=true verbose=false report=[packages["example.com/fieldkit/tasks"][0]@muxt.json package_defaults@muxt.json defaults@]
 == entries, tasks: check check
 check dir="tasks" templates=[templates] allow-unused=false
 == entries, tasks: calls list-template-calls
@@ -361,8 +361,8 @@ generate key="example.com/fieldkit/inventory" file="muxt.json" dir="inventory" r
 generate key="example.com/fieldkit/tasks" file="muxt.json" dir="tasks" receiver="Server" receiver-package="example.com/fieldkit/types" templates=[templates] output="tasks_routes.go" htmx=true logger=true verbose=true
 == -C module: muxt
 routes key="example.com/fieldkit/contacts" file="muxt.json" dir="contacts" receiver="Server" receiver-package="example.com/fieldkit/types" templates=[templates] htmx=true verbose=false report=[package_defaults@muxt.json defaults@]
-routes key="example.com/fieldkit/inventory" file="muxt.json" dir="inventory" receiver="Catalog" receiver-package="example.com/fieldkit/types" templates=[catalogTemplates] htmx=true verbose=false report=[packages["example.com/fieldkit/inventory"]@muxt.json package_defaults@muxt.json defaults@]
-routes key="example.com/fieldkit/tasks" file="muxt.json" dir="tasks" receiver="Server" receiver-package="example.com/fieldkit/types" templates=[templates] htmx=true verbose=false report=[packages["example.com/fieldkit/tasks"]@muxt.json package_defaults@muxt.json defaults@]
+routes key="example.com/fieldkit/inventory" file="muxt.json" dir="inventory" receiver="Catalog" receiver-package="example.com/fieldkit/types" templates=[catalogTemplates] htmx=true verbose=false report=[packages["example.com/fieldkit/inventory"][0]@muxt.json package_defaults@muxt.json defaults@]
+routes key="example.com/fieldkit/tasks" file="muxt.json" dir="tasks" receiver="Server" receiver-package="example.com/fieldkit/types" templates=[templates] htmx=true verbose=false report=[packages["example.com/fieldkit/tasks"][0]@muxt.json package_defaults@muxt.json defaults@]
 == -C module: check check
 check dir="contacts" templates=[templates] allow-unused=false
 check dir="inventory" templates=[catalogTemplates] allow-unused=false
@@ -387,7 +387,7 @@ test key="example.com/fieldkit/tasks" file="muxt.json" dir="tasks"
 == -C inventory: generate generate -v
 generate key="example.com/fieldkit/inventory" file="muxt.json" dir="inventory" receiver="Catalog" receiver-package="example.com/fieldkit/types" templates=[catalogTemplates] output="template_routes.go" htmx=true logger=false verbose=true
 == -C inventory: muxt
-routes key="example.com/fieldkit/inventory" file="muxt.json" dir="inventory" receiver="Catalog" receiver-package="example.com/fieldkit/types" templates=[catalogTemplates] htmx=true verbose=false report=[packages["example.com/fieldkit/inventory"]@muxt.json package_defaults@muxt.json defaults@]
+routes key="example.com/fieldkit/inventory" file="muxt.json" dir="inventory" receiver="Catalog" receiver-package="example.com/fieldkit/types" templates=[catalogTemplates] htmx=true verbose=false report=[packages["example.com/fieldkit/inventory"][0]@muxt.json package_defaults@muxt.json defaults@]
 == -C inventory: check check
 check dir="inventory" templates=[catalogTemplates] allow-unused=false
 == -C inventory: calls list-template-calls

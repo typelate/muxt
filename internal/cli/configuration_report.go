@@ -8,12 +8,14 @@ import (
 
 	"github.com/typelate/muxt/internal/analysis"
 	"github.com/typelate/muxt/internal/composite"
-	"github.com/typelate/muxt/internal/generate"
 )
 
-// newConfigurationReport reports every setting of config, which the entry for
-// key in f produced, under the source that gave it. f is nil when no entry did.
-func newConfigurationReport(f *composite.File, key string, given givenSettings, config generate.RoutesFileConfiguration) analysis.ConfigurationReport {
+// newConfigurationReport reports every setting of job's configuration under the
+// source that gave it. f is the muxt.json the job's entry came from, nil when
+// no entry did; the entry's source is its position, so two sets of one key are
+// reported apart.
+func newConfigurationReport(f *composite.File, job packageJob) analysis.ConfigurationReport {
+	given, config := job.Given, job.Config
 	// The sources in the order a setting looks for its value: the command
 	// line, the entry itself, then package_defaults. A setting none of them
 	// gives is a default. Flags and an entry never configure one run, so at
@@ -39,7 +41,7 @@ func newConfigurationReport(f *composite.File, key string, given givenSettings, 
 	}
 	if f != nil {
 		sources = append(sources,
-			reportSource{group: analysis.SettingGroup{Source: fmt.Sprintf("packages[%q]", key), File: f.Name}, gives: holds(f.Packages[key][0])},
+			reportSource{group: analysis.SettingGroup{Source: job.Where(), File: f.Name}, gives: holds(f.Packages[job.Key][job.Set])},
 			reportSource{group: analysis.SettingGroup{Source: "package_defaults", File: f.Name}, gives: holds(f.Defaults)},
 		)
 	}

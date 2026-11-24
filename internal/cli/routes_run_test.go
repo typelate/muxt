@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -201,7 +202,7 @@ func TestRoutesConfigurationGroupsEntrySettings(t *testing.T) {
 
 	text := reportOf(t, workspace, "")
 
-	want := "Configuration:\n  " + filepath.Join(parent, composite.FileName) + ":\n    packages[\"example.com/m/workspace\"]:\n      \"use_receiver_type\": \"T1\"\n  defaults:\n"
+	want := "Configuration:\n  " + filepath.Join(parent, composite.FileName) + ":\n    packages[\"example.com/m/workspace\"][0]:\n      \"use_receiver_type\": \"T1\"\n  defaults:\n"
 	assert.True(t, strings.HasPrefix(text, want), "section starts with\n%s\ngot\n%s", want, text)
 	assert.Equal(t, 1, strings.Count(text, "\"use_receiver_type\":"), "lines for use_receiver_type")
 }
@@ -224,11 +225,33 @@ func TestRoutesConfigurationJSONNamesMuxtJSONFile(t *testing.T) {
 	var groups []struct{ Source, File string }
 	require.NoError(t, json.Unmarshal(data, &groups), "groups:\n%s", data)
 	want := []struct{ Source, File string }{
-		{Source: `packages["example.com/m/workspace"]`, File: filepath.Join(parent, composite.FileName)},
+		{Source: `packages["example.com/m/workspace"][0]`, File: filepath.Join(parent, composite.FileName)},
 		{Source: "package_defaults", File: filepath.Join(parent, composite.FileName)},
 		{Source: "defaults"},
 	}
 	assert.Equal(t, want, groups, "groups")
+}
+
+// TestRoutesConfigurationGroupsEachSetUnderItsPosition states that over two
+// sets of one key each set's Configuration holds the settings of its own
+// entry under packages["KEY"][i], and nothing of the other's.
+func TestRoutesConfigurationGroupsEachSetUnderItsPosition(t *testing.T) {
+	dir := twoSetModule(t)
+	jobs, err := routesJobsOf(t, dir, "")
+	require.NoError(t, err, "muxt")
+	require.Len(t, jobs, 2, "jobs")
+
+	muxtJSON := filepath.Join(dir, composite.FileName)
+	files := []string{"routes_public.go", "routes_admin.go"}
+	for i, wantFile := range files {
+		var text strings.Builder
+		_, err := jobs[i].Report.WriteTo(&text)
+		require.NoError(t, err, "writing the section of set %d", i)
+		want := "Configuration:\n  " + muxtJSON + ":\n    packages[\"" + testModule + "\"][" + strconv.Itoa(i) + "]:\n"
+		assert.True(t, strings.HasPrefix(text.String(), want), "set %d starts with\n%s\ngot\n%s", i, want, text.String())
+		assert.Contains(t, text.String(), `"output_file": "`+wantFile+`"`, "output_file of set %d", i)
+		assert.NotContains(t, text.String(), `"output_file": "`+files[1-i]+`"`, "output_file of the other set in set %d", i)
+	}
 }
 
 // TestRoutesConfigurationDefaults states that where no muxt.json is found the
@@ -266,7 +289,7 @@ func TestRoutesConfigurationGroupsPackageDefaults(t *testing.T) {
 
 	text := reportOf(t, dir, "")
 
-	want := "Configuration:\n  " + filepath.Join(dir, composite.FileName) + ":\n    packages[\"example.com/m\"]:\n      \"use_receiver_type\": \"T1\"\n    package_defaults:\n      \"output_htmx\": true\n  defaults:\n"
+	want := "Configuration:\n  " + filepath.Join(dir, composite.FileName) + ":\n    packages[\"example.com/m\"][0]:\n      \"use_receiver_type\": \"T1\"\n    package_defaults:\n      \"output_htmx\": true\n  defaults:\n"
 	assert.True(t, strings.HasPrefix(text, want), "section starts with\n%s\ngot\n%s", want, text)
 }
 
@@ -348,7 +371,7 @@ func TestRoutesListsOnlyTheEntriesAMuxtJSONHas(t *testing.T) {
 
 	below, _, err := listWithLoader(t, filepath.Join(dir, "workspace"))
 	require.NoError(t, err, "muxt in workspace")
-	assert.Regexp(t, `\A(?s:Configuration:\n  `+regexp.QuoteMeta(filepath.Join(dir, composite.FileName))+`:\n    packages\["example\.com/m/workspace"\]:\n      "use_receiver_type": "Space"\n  defaults:\n.*Template Routes:\n  - GET /Space SpacePage\(\)\n.*)\z`, below, "stdout in workspace")
+	assert.Regexp(t, `\A(?s:Configuration:\n  `+regexp.QuoteMeta(filepath.Join(dir, composite.FileName))+`:\n    packages\["example\.com/m/workspace"\]\[0\]:\n      "use_receiver_type": "Space"\n  defaults:\n.*Template Routes:\n  - GET /Space SpacePage\(\)\n.*)\z`, below, "stdout in workspace")
 }
 
 // TestRoutesConfigurationGroupsFlags states that a setting given as a flag, in
