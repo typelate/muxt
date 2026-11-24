@@ -61,8 +61,8 @@ You are splitting a hypertext package into sub-packages, and they should keep on
    {
    	"package_defaults": {"use_receiver_type": "Server"},
    	"packages": {
-   		"example.com/m/billing": {},
-   		"example.com/m/workspace": {}
+   		"example.com/m/billing": [{}],
+   		"example.com/m/workspace": [{}]
    	}
    }
    ```

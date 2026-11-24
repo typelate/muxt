@@ -15,6 +15,35 @@ var adminTmpl = template.Must(template.Must(template.ParseFS(templateSource, "sh
 
 Both generated files share the package, so every default identifier is renamed with its `--output-*` flag ([flags](../reference/cli.md#flags)): the routes function, file, receiver interface, template data type, and paths type. Check each set separately: `muxt check --use-templates-variable=publicTmpl` and again for `adminTmpl`.
 
+With a [muxt.json](../reference/muxt-json.md), the two lines become two entries in the array under the package, and `muxt generate` writes both files in one run ([test](../../cmd/muxt/testdata/reference_muxt_json_two_sets_in_one_package.txt)):
+
+```json
+{
+	"packages": {
+		"example.com/m/web": [
+			{
+				"use_templates_variable": ["publicTmpl"],
+				"output_routes_func": "PublicRoutes",
+				"output_file": "routes_public.go",
+				"output_receiver_interface": "PublicHandler",
+				"output_template_data_type": "PublicData",
+				"output_template_route_paths_type": "PublicPaths"
+			},
+			{
+				"use_templates_variable": ["adminTmpl"],
+				"output_routes_func": "AdminRoutes",
+				"output_file": "routes_admin.go",
+				"output_receiver_interface": "AdminHandler",
+				"output_template_data_type": "AdminData",
+				"output_template_route_paths_type": "AdminPaths"
+			}
+		]
+	}
+}
+```
+
+Two entries that share one of those names fail `muxt generate` before it writes anything ([rules](../reference/muxt-json.md#several-entries-in-one-package)).
+
 Register each set with its own receiver, with your own constructors:
 
 ```go

@@ -1,17 +1,18 @@
 # muxt.json
 
-`muxt.json` holds the `muxt generate` flags of each package. Each package's settings are an **entry**, the object under its `packages` key. The file is found by walking up from the working directory; the walk stops at the directory holding `go.mod`, and the file needs a `go.mod` at or above it. A module's `muxt.json` files do not nest. A command fails, naming both files, when it meets one below another in the same module: a run at or below the lower file, a run at the upper file for an entry whose directory is at or below the lower file, or `muxt generate config` with a file already below. Files in sibling directories, and in a nested module, are fine.
+`muxt.json` holds the `muxt generate` flags of each package. Each package's settings are an array of **entries**, the objects under its `packages` key, one per `muxt generate` run. The file is found by walking up from the working directory; the walk stops at the directory holding `go.mod`, and the file needs a `go.mod` at or above it. A module's `muxt.json` files do not nest. A command fails, naming both files, when it meets one below another in the same module: a run at or below the lower file, a run at the upper file for an entry whose directory is at or below the lower file, or `muxt generate config` with a file already below. Files in sibling directories, and in a nested module, are fine.
 
 ```json
 {
 	"package_defaults": {"output_htmx": true},
 	"packages": {
-		"example.com/m/workspace": {"use_receiver_type": "T"}
+		"example.com/m/workspace": [{"use_receiver_type": "T"}]
 	}
 }
 ```
 
 - `packages` keys are import paths of packages at or below the file's directory. Two keys that reach one directory, such as through a symbolic link, are an error to a command that reads every entry (the table below).
+- The value of a key is always an array, also for one entry. An empty array, an element that is not an object, and `null` are errors.
 - Entry keys are the `generate` flag names without `--`, dashes written `_`: [flags](cli.md#flags). `verbose` is not a key.
 - A boolean flag is a JSON boolean, a string flag a JSON string, `use_templates_variable` a list of strings, and `output_multipart_max_memory` a string such as `"64MB"`.
 - `muxt generate package` rewrites the file in one sorted form, tab-indented; a hand-written order and spacing do not survive it.
@@ -34,6 +35,37 @@ In the file's directory, a package with a templates variable and no entry is nei
 Only a flagless `muxt generate` needs an entry. In a directory with none, the other commands use their own flags and defaults.
 
 `muxt generate config` creates the file, `muxt generate package NAME` adds an entry, `muxt generate def NAME` adds a route template.
+
+## Several entries in one package
+
+Each entry is one `muxt generate` run, so one package holds several route sets ([steps](../how-to/multiple-route-sets.md)). `package_defaults` applies to each entry. A position in an error is always indexed, also for one entry: `packages["KEY"][0]`. Output names an entry `KEY`, or `KEY (FILE)` for a key with several, `FILE` being its `output_file`.
+
+Two generated files share one package, so entries that share a name would write one file or declare one type twice. Muxt compares the resolved values, so a default counts: two entries that leave `output_file` unset both have `template_routes.go`. Set these in every entry of a key with several:
+
+- `output_file`
+- `output_routes_func`
+- `output_receiver_interface`
+- `output_template_data_type`
+- `output_template_route_paths_type`
+- `output_sse_template_data_type`, when both have `sse` routes; muxt does not compare it, and `go build` reports the redeclared type
+
+A `package_defaults` that sets one of the first five gives every entry the same value, and the check fails.
+
+The first of the first five names that two entries share, in the order above, fails the command and nothing is written. With `output_multiple_files`, two entries that would write one file fail too.
+
+| Rule | Error |
+|---|---|
+| One value in two entries | `/home/me/app/muxt.json: packages["example.com/m"][0] and packages["example.com/m"][1] both have output_file "template_routes.go"; give each its own output_file` |
+| `route_paths` with several entries | `/home/me/app/muxt.json: route_paths takes one entry per package, and packages["example.com/m"] has 2; keep one entry or remove route_paths` |
+| `output_multiple_files` writes one file twice | `/home/me/app/b.go: packages["example.com/m"][0] and packages["example.com/m"][1] would both write it under output_multiple_files; give them different template files or turn output_multiple_files off` |
+
+In a directory with several entries:
+
+- `muxt generate`, `check`, `list-template-calls`, `list-template-callers` and bare `muxt` act on each entry.
+- `muxt test` runs `go test` once, and its profile holds the template files of every entry.
+- `muxt test-template-mutations` mutates the templates variables of every entry.
+- `muxt generate def` needs the entries to agree on the receiver type, else it fails: `/home/me/app/muxt.json: packages["example.com/m"][0] and packages["example.com/m"][1] name different receiver types; generate def cannot choose one; give them the same use_receiver_type`.
+- `muxt explore-module` has a row per generated file ([explore-module](commands/explore-module.md)); `generate-fake-server` fails, because it serves one routes function ([generate-fake-server](commands/generate-fake-server.md)).
 
 ## route_paths
 
@@ -80,6 +112,6 @@ Errors:
 - `Error: route paths name "AdminPaths" is made by both output_paths_type and output_package_paths_type_suffix for package "example.com/m/admin"; change one of them` ([err_route_paths_type_names_clash.txt](../../cmd/muxt/testdata/err_route_paths_type_names_clash.txt))
 - `TemplateRoutePaths method name collision: templates "GET /items list(ctx)" and "GET /items/{id} List(ctx, id)" both produce method "List"; rename one receiver method so the exported names differ by more than the case of the first letter, leading underscores, or characters that drop out` ([err_route_paths_method_collision.txt](../../cmd/muxt/testdata/err_route_paths_method_collision.txt))
 
-Errors name the file and the fix: `packages key "workspace" is not an import path; write "example.com/m/workspace"`, `key "use-receiver-type" uses dashes; write "use_receiver_type"`, `unknown key "KEY"; did you mean "KNOWN"?`, `key "output_htmx" takes a JSON boolean`, `packages must be an object keyed by import path`, `key "output_htmx" is repeated`, `packages["KEY"][0]: output_routes_func value must not be empty`, `no packages entry "KEY"; add one to generate this directory`.
+Errors name the file and the fix: `packages key "workspace" is not an import path; write "example.com/m/workspace"`, `key "use-receiver-type" uses dashes; write "use_receiver_type"`, `unknown key "KEY"; did you mean "KNOWN"?`, `key "output_htmx" takes a JSON boolean`, `packages must be an object keyed by import path`, `packages["KEY"] must be an array of JSON objects with at least one entry; add an entry or delete the key`, `packages["KEY"][1] must be a JSON object, not null; delete the element`, `key "output_htmx" is repeated`, `packages["KEY"][0]: output_routes_func value must not be empty`, `no packages entry "KEY"; add one to generate this directory`.
 
 Steps: [move generate flags](../how-to/muxt-json.md).

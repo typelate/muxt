@@ -12,11 +12,11 @@ Your module has several muxt packages and a `muxt.json`, and a page in one packa
    		"output_routes_func_with_path_prefix_param": true
    	},
    	"packages": {
-   		"example.com/site/internal/hypertext/admin": {},
-   		"example.com/site/internal/hypertext/blog": {
+   		"example.com/site/internal/hypertext/admin": [{}],
+   		"example.com/site/internal/hypertext/blog": [{
    			"input_static_assets_directory": "assets",
    			"output_static_assets_path": "/static"
-   		}
+   		}]
    	}
    }
    ```

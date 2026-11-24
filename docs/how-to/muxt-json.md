@@ -31,19 +31,19 @@ The file starts as `{"packages": {}}`. The command refuses to overwrite one: `/h
 
 ## 2. Write an entry for each package
 
-Both flags lines become entries ([keys](../reference/muxt-json.md)):
+Both flags lines become entries, each in an array under its package ([keys](../reference/muxt-json.md)). A package that needs two `muxt generate` lines gets two entries in its array ([steps](multiple-route-sets.md)).
 
 ```json
 {
 	"packages": {
-		"example.com/m": {
+		"example.com/m": [{
 			"use_receiver_type": "Server",
 			"output_htmx": true
-		},
-		"example.com/m/workspace": {
+		}],
+		"example.com/m/workspace": [{
 			"use_receiver_type": "T",
 			"output_htmx": true
-		}
+		}]
 	}
 }
 ```
@@ -58,12 +58,12 @@ Both flags lines become entries ([keys](../reference/muxt-json.md)):
 		"output_htmx": true
 	},
 	"packages": {
-		"example.com/m": {
+		"example.com/m": [{
 			"use_receiver_type": "Server"
-		},
-		"example.com/m/workspace": {
+		}],
+		"example.com/m/workspace": [{
 			"use_receiver_type": "T"
-		}
+		}]
 	}
 }
 ```
