@@ -1,0 +1,103 @@
+# A package key holds an array of entries, one per muxt generate run. Two entries
+# of one package write two route files, each with its own routes function,
+# receiver interface and types, and the package compiles and serves both.
+
+muxt generate
+exists routes_public.go
+exists routes_admin.go
+! exists template_routes.go
+
+muxt check
+stdout 'example.com/m \(routes_public.go\)'
+stdout 'example.com/m \(routes_admin.go\)'
+
+exec go test ./...
+
+-- go.mod --
+module example.com/m
+
+go 1.22
+-- muxt.json --
+{
+	"packages": {
+		"example.com/m": [
+			{
+				"use_templates_variable": ["publicTmpl"],
+				"use_receiver_type": "public",
+				"output_file": "routes_public.go",
+				"output_routes_func": "PublicRoutes",
+				"output_receiver_interface": "PublicHandler",
+				"output_template_data_type": "PublicData",
+				"output_template_route_paths_type": "PublicPaths"
+			},
+			{
+				"use_templates_variable": ["adminTmpl"],
+				"use_receiver_type": "admin",
+				"output_file": "routes_admin.go",
+				"output_routes_func": "AdminRoutes",
+				"output_receiver_interface": "AdminHandler",
+				"output_template_data_type": "AdminData",
+				"output_template_route_paths_type": "AdminPaths"
+			}
+		]
+	}
+}
+-- web.go --
+package main
+
+import (
+	"context"
+	"embed"
+	"html/template"
+)
+
+//go:embed public.gohtml admin.gohtml
+var templateSource embed.FS
+
+var (
+	publicTmpl = template.Must(template.ParseFS(templateSource, "public.gohtml"))
+	adminTmpl  = template.Must(template.ParseFS(templateSource, "admin.gohtml"))
+)
+
+type public struct{}
+
+func (public) Home(context.Context) string { return "welcome" }
+
+type admin struct{}
+
+func (admin) Dashboard(context.Context) string { return "dashboard" }
+-- public.gohtml --
+{{define "GET / Home(ctx)"}}<h1>{{.Result}}</h1>{{end}}
+-- admin.gohtml --
+{{define "GET /admin Dashboard(ctx)"}}<h2>{{.Result}}</h2>{{end}}
+-- web_test.go --
+package main
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func TestEachRoutesFunctionServesItsRoutes(t *testing.T) {
+	mux := http.NewServeMux()
+	PublicRoutes(mux, public{})
+	AdminRoutes(mux, admin{})
+
+	for _, tt := range []struct {
+		path, want string
+	}{
+		{PublicPaths{}.Home(), "<h1>welcome</h1>"},
+		{AdminPaths{}.Dashboard(), "<h2>dashboard</h2>"},
+	} {
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, tt.path, nil))
+		if got := rec.Result().StatusCode; got != http.StatusOK {
+			t.Errorf("GET %s status = %d, want %d", tt.path, got, http.StatusOK)
+		}
+		if body := rec.Body.String(); !strings.Contains(body, tt.want) {
+			t.Errorf("GET %s body = %q, want it to contain %q", tt.path, body, tt.want)
+		}
+	}
+}
