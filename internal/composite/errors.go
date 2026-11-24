@@ -180,12 +180,13 @@ func (e *SameDirectoryError) Error() string {
 	return fmt.Sprintf("%s: packages[%q] is the same directory as packages[%q], %s; keep one", e.Path, e.Key, e.Other, e.Dir)
 }
 
-// SetClashError reports two entries under one packages key that set one value
+// SetClashError reports two entries under one packages key that have one value
 // for a member that must differ: output_file, since both would write one file,
 // or output_routes_func, since generated files are owned by routes function and
-// a run of one entry would delete the other's file. Member is the JSON member,
-// Value what both resolve to, and First and Second the zero-based positions
-// under Key, First being the earlier.
+// a run of one entry would delete the other's file. "Have", not "set": a
+// default counts, and neither entry may have written the member. Member is the
+// JSON member, Value what both resolve to, and First and Second the zero-based
+// positions under Key, First being the earlier.
 type SetClashError struct {
 	Path, Key, Member, Value string
 	First, Second            int
@@ -193,7 +194,7 @@ type SetClashError struct {
 
 // Error returns the path, both positions, the member and the fix on one line.
 func (e *SetClashError) Error() string {
-	return fmt.Sprintf("%s: %s and %s both set %s %q; give each its own %s", e.Path, SetWhere(e.Key, e.First), SetWhere(e.Key, e.Second), e.Member, e.Value, e.Member)
+	return fmt.Sprintf("%s: %s and %s both have %s %q; give each its own %s", e.Path, SetWhere(e.Key, e.First), SetWhere(e.Key, e.Second), e.Member, e.Value, e.Member)
 }
 
 // RoutePathsSetsError reports a packages key with several entries in a file

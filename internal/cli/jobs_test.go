@@ -267,7 +267,7 @@ func TestSelectJobsRejectsTwoSetsThatShareOneOutput(t *testing.T) {
 			entries: `{"output_file": "routes.go", "output_routes_func": "PublicRoutes"},
 				{"output_file": "routes.go", "output_routes_func": "AdminRoutes"}`,
 			wantErr:  composite.SetClashError{Key: "example.com/fieldkit/contacts", Member: "output_file", Value: "routes.go", First: 0, Second: 1},
-			wantText: `: packages["example.com/fieldkit/contacts"][0] and packages["example.com/fieldkit/contacts"][1] both set output_file "routes.go"; give each its own output_file`,
+			wantText: `: packages["example.com/fieldkit/contacts"][0] and packages["example.com/fieldkit/contacts"][1] both have output_file "routes.go"; give each its own output_file`,
 		},
 		{
 			name: "routes function",
@@ -275,14 +275,21 @@ func TestSelectJobsRejectsTwoSetsThatShareOneOutput(t *testing.T) {
 				{"output_file": "routes_admin.go"},
 				{"output_file": "routes_other.go", "output_routes_func": "Routes"}`,
 			wantErr:  composite.SetClashError{Key: "example.com/fieldkit/contacts", Member: "output_routes_func", Value: "Routes", First: 0, Second: 2},
-			wantText: `: packages["example.com/fieldkit/contacts"][0] and packages["example.com/fieldkit/contacts"][2] both set output_routes_func "Routes"; give each its own output_routes_func`,
+			wantText: `: packages["example.com/fieldkit/contacts"][0] and packages["example.com/fieldkit/contacts"][2] both have output_routes_func "Routes"; give each its own output_routes_func`,
+		},
+		{
+			name: "routes function by default",
+			entries: `{"output_file": "routes_public.go"},
+				{"output_file": "routes_admin.go"}`,
+			wantErr:  composite.SetClashError{Key: "example.com/fieldkit/contacts", Member: "output_routes_func", Value: "TemplateRoutes", First: 0, Second: 1},
+			wantText: `: packages["example.com/fieldkit/contacts"][0] and packages["example.com/fieldkit/contacts"][1] both have output_routes_func "TemplateRoutes"; give each its own output_routes_func`,
 		},
 		{
 			name: "output file by default",
 			entries: `{"output_routes_func": "PublicRoutes"},
 				{"output_routes_func": "AdminRoutes"}`,
 			wantErr:  composite.SetClashError{Key: "example.com/fieldkit/contacts", Member: "output_file", Value: "template_routes.go", First: 0, Second: 1},
-			wantText: `: packages["example.com/fieldkit/contacts"][0] and packages["example.com/fieldkit/contacts"][1] both set output_file "template_routes.go"; give each its own output_file`,
+			wantText: `: packages["example.com/fieldkit/contacts"][0] and packages["example.com/fieldkit/contacts"][1] both have output_file "template_routes.go"; give each its own output_file`,
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
