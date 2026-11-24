@@ -21,7 +21,7 @@ func TestSaveWritesEachValueAsTheFileSpelledIt(t *testing.T) {
 	}{
 		{
 			name: "an empty list stays",
-			file: `{"packages": {"example.com/m": {"use_templates": []}}}`,
+			file: `{"packages": {"example.com/m": [{"use_templates": []}]}}`,
 			want: "{\n\t\"packages\": {\n\t\t\"example.com/m\": [\n\t\t\t{\n\t\t\t\t\"use_templates\": []\n\t\t\t}\n\t\t]\n\t}\n}\n",
 		},
 		{
@@ -31,17 +31,17 @@ func TestSaveWritesEachValueAsTheFileSpelledIt(t *testing.T) {
 		},
 		{
 			name: "an empty package_defaults is dropped",
-			file: `{"package_defaults": {}, "packages": {"example.com/m": {}}}`,
+			file: `{"package_defaults": {}, "packages": {"example.com/m": [{}]}}`,
 			want: "{\n\t\"packages\": {\n\t\t\"example.com/m\": [\n\t\t\t{}\n\t\t]\n\t}\n}\n",
 		},
 		{
 			name: "package_defaults first, keys sorted",
-			file: `{"packages": {"example.com/m/b": {"use_templates": ["x"], "use_receiver_type": "T"}, "example.com/m/a": {}}, "package_defaults": {"use_receiver_type": "D"}}`,
+			file: `{"packages": {"example.com/m/b": [{"use_templates": ["x"], "use_receiver_type": "T"}], "example.com/m/a": [{}]}, "package_defaults": {"use_receiver_type": "D"}}`,
 			want: "{\n\t\"package_defaults\": {\n\t\t\"use_receiver_type\": \"D\"\n\t},\n\t\"packages\": {\n\t\t\"example.com/m/a\": [\n\t\t\t{}\n\t\t],\n\t\t\"example.com/m/b\": [\n\t\t\t{\n\t\t\t\t\"use_receiver_type\": \"T\",\n\t\t\t\t\"use_templates\": [\n\t\t\t\t\t\"x\"\n\t\t\t\t]\n\t\t\t}\n\t\t]\n\t}\n}\n",
 		},
 		{
 			name: "markup characters are not escaped",
-			file: `{"packages": {"example.com/m": {"use_receiver_type": "T[<&>]"}}}`,
+			file: `{"packages": {"example.com/m": [{"use_receiver_type": "T[<&>]"}]}}`,
 			want: "{\n\t\"packages\": {\n\t\t\"example.com/m\": [\n\t\t\t{\n\t\t\t\t\"use_receiver_type\": \"T[<&>]\"\n\t\t\t}\n\t\t]\n\t}\n}\n",
 		},
 		{

@@ -47,7 +47,7 @@ func TestFindRejectsWrongJSONType(t *testing.T) {
 	}{
 		{
 			name: "string where a boolean goes",
-			file: `{"packages": {"example.com/m": {"output_htmx": "yes"}}}`,
+			file: `{"packages": {"example.com/m": [{"output_htmx": "yes"}]}}`,
 			want: `packages["example.com/m"][0]: key "output_htmx" takes a JSON boolean`,
 		},
 		{
@@ -57,47 +57,47 @@ func TestFindRejectsWrongJSONType(t *testing.T) {
 		},
 		{
 			name: "boolean where a string goes",
-			file: `{"packages": {"example.com/m": {"use_receiver_type": true}}}`,
+			file: `{"packages": {"example.com/m": [{"use_receiver_type": true}]}}`,
 			want: `packages["example.com/m"][0]: key "use_receiver_type" takes a JSON string`,
 		},
 		{
 			name: "string where a list goes",
-			file: `{"packages": {"example.com/m": {"use_templates": "views"}}}`,
+			file: `{"packages": {"example.com/m": [{"use_templates": "views"}]}}`,
 			want: `packages["example.com/m"][0]: key "use_templates" takes a JSON array of strings`,
 		},
 		{
 			name: "list of numbers",
-			file: `{"packages": {"example.com/m": {"use_templates": [1]}}}`,
+			file: `{"packages": {"example.com/m": [{"use_templates": [1]}]}}`,
 			want: `packages["example.com/m"][0]: key "use_templates" takes a JSON array of strings`,
 		},
 		{
 			name: "package defaults",
-			file: `{"package_defaults": {"output_htmx": 1}, "packages": {"example.com/m": {}}}`,
+			file: `{"package_defaults": {"output_htmx": 1}, "packages": {"example.com/m": [{}]}}`,
 			want: `package_defaults: key "output_htmx" takes a JSON boolean`,
 		},
 		{
 			name: "first key in sorted order",
-			file: `{"packages": {"example.com/m": {"use_receiver_type": 1, "output_htmx": 1}}}`,
+			file: `{"packages": {"example.com/m": [{"use_receiver_type": 1, "output_htmx": 1}]}}`,
 			want: `packages["example.com/m"][0]: key "output_htmx" takes a JSON boolean`,
 		},
 		{
 			name: "defaults before packages",
-			file: `{"packages": {"example.com/m": {"output_htmx": 1}}, "package_defaults": {"use_receiver_type": 1}}`,
+			file: `{"packages": {"example.com/m": [{"output_htmx": 1}]}, "package_defaults": {"use_receiver_type": 1}}`,
 			want: `package_defaults: key "use_receiver_type" takes a JSON string`,
 		},
 		{
 			name: "wrong kind before the module check",
-			file: `{"packages": {"example.org/other": {"output_htmx": 1}}}`,
+			file: `{"packages": {"example.org/other": [{"output_htmx": 1}]}}`,
 			want: `packages["example.org/other"][0]: key "output_htmx" takes a JSON boolean`,
 		},
 		{
 			name: "unknown key is not a kind error",
-			file: `{"packages": {"example.com/m": {"zzzzzzzz": 1}}}`,
+			file: `{"packages": {"example.com/m": [{"zzzzzzzz": 1}]}}`,
 			want: `packages["example.com/m"][0]: unknown key "zzzzzzzz"`,
 		},
 		{
 			name: "null is absent",
-			file: `{"packages": {"example.com/m": {"output_htmx": null}}}`,
+			file: `{"packages": {"example.com/m": [{"output_htmx": null}]}}`,
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -119,7 +119,7 @@ func TestFindRejectsWrongJSONType(t *testing.T) {
 // TestFindRejectsWrongJSONTypeWithAnError states that the wrong-kind error is
 // a *composite.ValueTypeError, so a caller can say what the key takes.
 func TestFindRejectsWrongJSONTypeWithAnError(t *testing.T) {
-	dir := writeFile(t, `{"packages": {"example.com/m": {"output_htmx": "yes"}}}`)
+	dir := writeFile(t, `{"packages": {"example.com/m": [{"output_htmx": "yes"}]}}`)
 
 	_, _, err := composite.Find(dir, testKeys())
 
@@ -215,13 +215,13 @@ func TestFindRejectsARepeatedKey(t *testing.T) {
 		},
 		{
 			name: "packages key",
-			file: `{"packages": {"example.com/m": {}, "example.com/m": {}}}`,
-			at:   `"example.com/m": {}}}`,
+			file: `{"packages": {"example.com/m": [{}], "example.com/m": [{}]}}`,
+			at:   `"example.com/m": [{}]}}`,
 			want: `packages: key "example.com/m" is repeated`,
 		},
 		{
 			name: "entry key",
-			file: "{\"packages\": {\"example.com/m\": {\n\t\"output_htmx\": true,\n\t\"output_htmx\": false}}}",
+			file: "{\"packages\": {\"example.com/m\": [{\n\t\"output_htmx\": true,\n\t\"output_htmx\": false}]}}",
 			at:   `"output_htmx": false`,
 			want: `packages["example.com/m"][0]: key "output_htmx" is repeated`,
 		},
@@ -306,7 +306,7 @@ func TestFindRejectsANullKeyItDoesNotAccept(t *testing.T) {
 	}{
 		{
 			name: "unknown",
-			file: `{"packages": {"example.com/m": {"no_such_key": null}}}`,
+			file: `{"packages": {"example.com/m": [{"no_such_key": null}]}}`,
 			want: `packages["example.com/m"][0]: unknown key "no_such_key"`,
 		},
 		{
@@ -316,7 +316,7 @@ func TestFindRejectsANullKeyItDoesNotAccept(t *testing.T) {
 		},
 		{
 			name: "dashed",
-			file: `{"package_defaults": {"output-htmx": null}, "packages": {"example.com/m": {}}}`,
+			file: `{"package_defaults": {"output-htmx": null}, "packages": {"example.com/m": [{}]}}`,
 			want: `package_defaults: key "output-htmx" uses dashes; write "output_htmx"`,
 		},
 		{
@@ -331,7 +331,7 @@ func TestFindRejectsANullKeyItDoesNotAccept(t *testing.T) {
 		},
 		{
 			name: "deprecated",
-			file: `{"packages": {"example.com/m": {"receiver_type": null}}}`,
+			file: `{"packages": {"example.com/m": [{"receiver_type": null}]}}`,
 			want: `packages["example.com/m"][0]: key "receiver_type" is deprecated; write "use_receiver_type"`,
 		},
 	} {
@@ -350,7 +350,7 @@ func TestFindRejectsANullKeyItDoesNotAccept(t *testing.T) {
 // TestFindReadsNullAsAbsent states that a null value is the same as a key that
 // is not there: a default fills it.
 func TestFindReadsNullAsAbsent(t *testing.T) {
-	dir := writeFile(t, `{"package_defaults": {"output_htmx": true}, "packages": {"example.com/m": {"output_htmx": null, "use_receiver_type": null}}}`)
+	dir := writeFile(t, `{"package_defaults": {"output_htmx": true}, "packages": {"example.com/m": [{"output_htmx": null, "use_receiver_type": null}]}}`)
 
 	f, found, err := composite.Find(dir, testKeys())
 
@@ -367,7 +367,7 @@ func TestFindReadsNullAsAbsent(t *testing.T) {
 // TestResolveKeepsAnEntryListWhole states that a list an entry holds replaces
 // the default's list, and that an empty one still does.
 func TestResolveKeepsAnEntryListWhole(t *testing.T) {
-	dir := writeFile(t, `{"package_defaults": {"use_templates": ["a", "b"], "output_htmx": true}, "packages": {"example.com/m": {"use_templates": []}}}`)
+	dir := writeFile(t, `{"package_defaults": {"use_templates": ["a", "b"], "output_htmx": true}, "packages": {"example.com/m": [{"use_templates": []}]}}`)
 	keys := composite.Keys{Kinds: map[string]composite.Kind{"use_templates": composite.KindList, "output_htmx": composite.KindBool}}
 
 	f, _, err := composite.Find(dir, keys)

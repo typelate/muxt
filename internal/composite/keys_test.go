@@ -19,27 +19,27 @@ func TestFindRejectsUnknownKeys(t *testing.T) {
 	}{
 		{
 			name: "top level typo",
-			file: `{"package_default": {}, "packages": {"example.com/m": {}}}`,
+			file: `{"package_default": {}, "packages": {"example.com/m": [{}]}}`,
 			want: `unknown key "package_default"; did you mean "package_defaults"?`,
 		},
 		{
 			name: "top level nothing close",
-			file: `{"zzzzzzzz": {}, "packages": {"example.com/m": {}}}`,
+			file: `{"zzzzzzzz": {}, "packages": {"example.com/m": [{}]}}`,
 			want: `unknown key "zzzzzzzz"`,
 		},
 		{
 			name: "entry typo",
-			file: `{"packages": {"example.com/m": {"use_reciever_type": "T"}}}`,
+			file: `{"packages": {"example.com/m": [{"use_reciever_type": "T"}]}}`,
 			want: `packages["example.com/m"][0]: unknown key "use_reciever_type"; did you mean "use_receiver_type"?`,
 		},
 		{
 			name: "defaults typo",
-			file: `{"package_defaults": {"output_htmx_": true}, "packages": {"example.com/m": {}}}`,
+			file: `{"package_defaults": {"output_htmx_": true}, "packages": {"example.com/m": [{}]}}`,
 			want: `package_defaults: unknown key "output_htmx_"; did you mean "output_htmx"?`,
 		},
 		{
 			name: "entry nothing close",
-			file: `{"packages": {"example.com/m": {"zzz": true}}}`,
+			file: `{"packages": {"example.com/m": [{"zzz": true}]}}`,
 			want: `packages["example.com/m"][0]: unknown key "zzz"`,
 		},
 	} {
@@ -61,7 +61,7 @@ func TestFindRejectsUnknownKeys(t *testing.T) {
 // TestFindRejectsDeprecatedKeys states that a key Keys lists as deprecated is
 // an error naming the key to write instead, not an unknown key.
 func TestFindRejectsDeprecatedKeys(t *testing.T) {
-	dir := writeFile(t, `{"packages": {"example.com/m": {"output_htmx_helpers": true}}}`)
+	dir := writeFile(t, `{"packages": {"example.com/m": [{"output_htmx_helpers": true}]}}`)
 	keys := testKeys()
 	keys.Deprecated = map[string]string{"output_htmx_helpers": "output_htmx"}
 
@@ -92,7 +92,7 @@ func TestFindRejectsKeyWithOtherLetterCase(t *testing.T) {
 			require.NoError(t, os.MkdirAll(filepath.Join(dir, "contacts"), 0o755))
 			require.NoError(t, os.MkdirAll(filepath.Join(dir, "internal", "hypertext"), 0o755))
 			path := filepath.Join(dir, composite.FileName)
-			require.NoError(t, os.WriteFile(path, []byte(`{"packages": {"`+tt.key+`": {}}}`), 0o644))
+			require.NoError(t, os.WriteFile(path, []byte(`{"packages": {"`+tt.key+`": [{}]}}`), 0o644))
 
 			_, _, err := composite.Find(dir, testKeys())
 
@@ -109,7 +109,7 @@ func TestFindRejectsKeyWithOtherLetterCase(t *testing.T) {
 func TestFindAcceptsKeysSpelledAsOnDisk(t *testing.T) {
 	for _, key := range []string{"example.com/m/contacts", "example.com/m/Missing", "example.com/m"} {
 		t.Run(key, func(t *testing.T) {
-			dir := writeFile(t, `{"packages": {"`+key+`": {}}}`)
+			dir := writeFile(t, `{"packages": {"`+key+`": [{}]}}`)
 			require.NoError(t, os.MkdirAll(filepath.Join(dir, "contacts"), 0o755))
 
 			_, found, err := composite.Find(dir, testKeys())

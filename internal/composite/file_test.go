@@ -151,7 +151,7 @@ func TestFindRejectsPackageKeysThatAreNotImportPathsBelowTheFile(t *testing.T) {
 			root := t.TempDir()
 			writeIn(t, root, "go.mod", "module example.com/m\n")
 			dir := filepath.Join(root, tt.dir)
-			writeIn(t, dir, composite.FileName, `{"packages": {"`+tt.key+`": {}}}`)
+			writeIn(t, dir, composite.FileName, `{"packages": {"`+tt.key+`": [{}]}}`)
 
 			_, _, err := composite.Find(dir, testKeys())
 
@@ -180,17 +180,17 @@ func TestFindRejectsKeysOfPackageDefaults(t *testing.T) {
 	}{
 		{
 			name: "deprecated",
-			file: `{"package_defaults": {"receiver_type": "T"}, "packages": {"example.com/m": {}}}`,
+			file: `{"package_defaults": {"receiver_type": "T"}, "packages": {"example.com/m": [{}]}}`,
 			want: `package_defaults: key "receiver_type" is deprecated; write "use_receiver_type"`,
 		},
 		{
 			name: "dashed",
-			file: `{"package_defaults": {"use-receiver-type": "T"}, "packages": {"example.com/m": {}}}`,
+			file: `{"package_defaults": {"use-receiver-type": "T"}, "packages": {"example.com/m": [{}]}}`,
 			want: `package_defaults: key "use-receiver-type" uses dashes; write "use_receiver_type"`,
 		},
 		{
 			name: "unknown",
-			file: `{"package_defaults": {"zzz": true}, "packages": {"example.com/m": {}}}`,
+			file: `{"package_defaults": {"zzz": true}, "packages": {"example.com/m": [{}]}}`,
 			want: `package_defaults: unknown key "zzz"`,
 		},
 	} {
@@ -210,7 +210,7 @@ func TestFindRejectsKeysOfPackageDefaults(t *testing.T) {
 // names.
 func TestFindRejectsAFileWithoutAModule(t *testing.T) {
 	dir := t.TempDir()
-	writeIn(t, dir, composite.FileName, `{"packages": {"example.com/m": {}}}`)
+	writeIn(t, dir, composite.FileName, `{"packages": {"example.com/m": [{}]}}`)
 
 	_, _, err := composite.Find(dir, testKeys())
 
@@ -298,7 +298,7 @@ func TestKeyForAndDirOfAreInverse(t *testing.T) {
 // TestFileKeysAreSorted states that Keys returns the packages keys in sorted
 // order, however the file listed them.
 func TestFileKeysAreSorted(t *testing.T) {
-	dir := writeFile(t, `{"packages": {"example.com/m/b": {}, "example.com/m": {}, "example.com/m/a": {}}}`)
+	dir := writeFile(t, `{"packages": {"example.com/m/b": [{}], "example.com/m": [{}], "example.com/m/a": [{}]}}`)
 
 	f, _, err := composite.Find(dir, testKeys())
 
@@ -313,8 +313,8 @@ func TestResolveAppliesPackageDefaults(t *testing.T) {
 	dir := writeFile(t, `{
 		"package_defaults": {"use_receiver_type": "T", "output_htmx": true},
 		"packages": {
-			"example.com/m": {},
-			"example.com/m/own": {"use_receiver_type": "Server", "output_htmx": false}
+			"example.com/m": [{}],
+			"example.com/m/own": [{"use_receiver_type": "Server", "output_htmx": false}]
 		}
 	}`)
 	f, _, err := composite.Find(dir, testKeys())
