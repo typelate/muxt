@@ -327,6 +327,32 @@ func TestRoutesListsEveryMuxtJSONEntryFromOneLoad(t *testing.T) {
 	}
 }
 
+// TestRoutesListsEachSetOfAKeyItsOwnRoutes states that bare muxt over a key
+// with two sets lists, under each set's name, the routes of that set's
+// templates and not the other's, in both places a run can start.
+func TestRoutesListsEachSetOfAKeyItsOwnRoutes(t *testing.T) {
+	if testing.Short() {
+		t.Skip("loads packages with the go command")
+	}
+	for _, tt := range twoSetRuns() {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := filepath.Join(twoSetModuleIn(t, tt.place), tt.run)
+
+			stdout, loads, err := listWithLoader(t, dir)
+
+			require.NoError(t, err, "muxt")
+			assert.Equal(t, 1, loads, "package loads")
+			public := tt.place.Key() + " (routes_public.go)"
+			admin := tt.place.Key() + " (routes_admin.go)"
+			sections := setSections(stdout, public, admin)
+			assert.Contains(t, sections[public], "Template Routes:\n  - GET /public\n", "public set in\n%s", stdout)
+			assert.NotContains(t, sections[public], "GET /admin", "public set in\n%s", stdout)
+			assert.Contains(t, sections[admin], "Template Routes:\n  - GET /admin\n", "admin set in\n%s", stdout)
+			assert.NotContains(t, sections[admin], "GET /public", "admin set in\n%s", stdout)
+		})
+	}
+}
+
 // TestRoutesNamesMuxtJSONEntryWithoutTemplatesVariable states that bare muxt
 // over a muxt.json entry whose package does not declare the templates variable
 // fails the way generate does: the file by absolute path, the entry and the two

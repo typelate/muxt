@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 
@@ -303,15 +304,15 @@ func TestCheckChecksEachSetOfAKeyAgainstItsOwnTemplates(t *testing.T) {
 	}
 }
 
-// setSections splits the text a listing over twoSetModule wrote at the lines
-// that name a set, and returns each set's lines by that name.
-func setSections(stdout string) map[string]string {
+// setSections splits the text a listing over two sets wrote at the lines that
+// are one of names, the sets' text names, and returns each set's lines by that
+// name.
+func setSections(stdout string, names ...string) map[string]string {
 	sections := make(map[string]string)
 	var name string
 	for _, line := range strings.SplitAfter(stdout, "\n") {
-		switch strings.TrimSuffix(line, "\n") {
-		case testModule + " (routes_public.go)", adminSet:
-			name = strings.TrimSuffix(line, "\n")
+		if text := strings.TrimSuffix(line, "\n"); slices.Contains(names, text) {
+			name = text
 			continue
 		}
 		sections[name] += line
@@ -334,7 +335,7 @@ func TestCallsListsEachSetOfAKeyItsOwnCalls(t *testing.T) {
 	stdout, _, _, err := analyzeWithLoader(t, root, "list-template-calls")
 
 	require.NoError(t, err, "muxt list-template-calls")
-	sections := setSections(stdout)
+	sections := setSections(stdout, testModule+" (routes_public.go)", adminSet)
 	assert.Contains(t, sections[testModule+" (routes_public.go)"], `template "GET /public" calls:`, "public set in\n%s", stdout)
 	assert.Contains(t, sections[testModule+" (routes_public.go)"], `template "fragment"`, "public set in\n%s", stdout)
 	assert.NotContains(t, sections[adminSet], `fragment`, "admin set in\n%s", stdout)
@@ -355,7 +356,7 @@ func TestCallersListsEachSetOfAKeyItsOwnCallers(t *testing.T) {
 	stdout, _, _, err := analyzeWithLoader(t, root, "list-template-callers")
 
 	require.NoError(t, err, "muxt list-template-callers")
-	sections := setSections(stdout)
+	sections := setSections(stdout, testModule+" (routes_public.go)", adminSet)
 	public, admin := sections[testModule+" (routes_public.go)"], sections[adminSet]
 	assert.Contains(t, public, `template "GET /public" called by:`, "public set in\n%s", stdout)
 	assert.Contains(t, public, filepath.Join(root, "routes_public.go"), "public set in\n%s", stdout)
