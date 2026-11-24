@@ -22,12 +22,16 @@ go 1.22
 		"output_htmx": true
 	},
 	"packages": {
-		"example.com/m": {
-			"use_receiver_type": "Server"
-		},
-		"example.com/m/workspace": {
-			"use_receiver_type": "T"
-		}
+		"example.com/m": [
+			{
+				"use_receiver_type": "Server"
+			}
+		],
+		"example.com/m/workspace": [
+			{
+				"use_receiver_type": "T"
+			}
+		]
 	}
 }
 -- want-stdout.txt --

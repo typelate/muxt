@@ -18,8 +18,8 @@ go 1.22
 		"use_receiver_type": "Server"
 	},
 	"packages": {
-		"example.com/m/_1": {},
-		"example.com/m/blog": {}
+		"example.com/m/_1": [{}],
+		"example.com/m/blog": [{}]
 	}
 }
 -- _1/one.go --

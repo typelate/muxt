@@ -19,8 +19,8 @@ go 1.22
 		"output_routes_func_with_path_prefix_param": true
 	},
 	"packages": {
-		"example.com/m/admin": {},
-		"example.com/m/blog": {}
+		"example.com/m/admin": [{}],
+		"example.com/m/blog": [{}]
 	}
 }
 -- admin/admin.go --

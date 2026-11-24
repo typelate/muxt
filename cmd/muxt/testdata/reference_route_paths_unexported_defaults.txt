@@ -19,8 +19,8 @@ go 1.22
 		"output_exported_default_identifiers": false
 	},
 	"packages": {
-		"example.com/m/admin": {},
-		"example.com/m/blog": {}
+		"example.com/m/admin": [{}],
+		"example.com/m/blog": [{}]
 	}
 }
 -- admin/admin.go --

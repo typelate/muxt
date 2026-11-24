@@ -23,10 +23,10 @@ go 1.22
 		"use_receiver_type": "Server"
 	},
 	"packages": {
-		"example.com/m/a": {},
-		"example.com/m/b": {},
-		"example.com/m/c": {"output_routes_func_with_path_prefix_param": true},
-		"example.com/m/d": {"output_routes_func_with_path_prefix_param": true}
+		"example.com/m/a": [{}],
+		"example.com/m/b": [{}],
+		"example.com/m/c": [{"output_routes_func_with_path_prefix_param": true}],
+		"example.com/m/d": [{"output_routes_func_with_path_prefix_param": true}]
 	}
 }
 -- fragments/fragments.go --

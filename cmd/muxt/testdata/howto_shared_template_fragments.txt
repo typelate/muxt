@@ -23,12 +23,16 @@ go 1.22
 -- muxt.json --
 {
 	"packages": {
-		"example.com/m/workspace": {
-			"use_receiver_type": "Server"
-		},
-		"example.com/m/billing": {
-			"use_receiver_type": "Server"
-		}
+		"example.com/m/workspace": [
+			{
+				"use_receiver_type": "Server"
+			}
+		],
+		"example.com/m/billing": [
+			{
+				"use_receiver_type": "Server"
+			}
+		]
 	}
 }
 -- want-check.txt --

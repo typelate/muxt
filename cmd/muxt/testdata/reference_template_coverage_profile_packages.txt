@@ -16,8 +16,8 @@ go 1.24
 -- muxt.json --
 {
 	"packages": {
-		"example.com/m/a": {},
-		"example.com/m/b": {}
+		"example.com/m/a": [{}],
+		"example.com/m/b": [{}]
 	}
 }
 -- a/index.gohtml --

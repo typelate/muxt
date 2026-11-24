@@ -32,8 +32,8 @@ go 1.24
 		"use_receiver_type": "Server"
 	},
 	"packages": {
-		"example.com/m/admin": {},
-		"example.com/m/blog": {}
+		"example.com/m/admin": [{}],
+		"example.com/m/blog": [{}]
 	}
 }
 -- admin/admin.go --
