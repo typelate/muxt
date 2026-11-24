@@ -16,6 +16,7 @@ import (
 
 	"github.com/typelate/muxt/internal/analysis"
 	"github.com/typelate/muxt/internal/composite"
+	"github.com/typelate/muxt/internal/generate"
 	"github.com/typelate/muxt/internal/load"
 	"github.com/typelate/muxt/internal/mutation"
 )
@@ -613,4 +614,55 @@ func TestTestRunsGoTestOnceForTwoSetsOfOneDirectory(t *testing.T) {
 			assert.Equal(t, tt.place.Key()+"\n", stdout.String(), "stdout names the package once, by its key")
 		})
 	}
+}
+
+// TestTestProfilesTheTemplateFilesOfEverySetOfOneDirectory states that the
+// cover profile of a directory with two sets holds blocks of the template
+// files of both: the one go test reached them through either routes function,
+// and each set reads its own files.
+func TestTestProfilesTheTemplateFilesOfEverySetOfOneDirectory(t *testing.T) {
+	if testing.Short() {
+		t.Skip("loads packages with the go command")
+	}
+	for _, tt := range twoSetRuns() {
+		t.Run(tt.name, func(t *testing.T) {
+			root := twoSetModuleIn(t, tt.place)
+			dir := filepath.Join(root, tt.place.Sub)
+			run := newTestRun(t)
+			run.Wrote = writesProfile("public.gohtml:1.1,1.9 1 1\n", "admin.gohtml:1.1,1.9 1 1\n")
+			profile := filepath.Join(t.TempDir(), "cover.out")
+
+			err := commands(dir, []string{testCommandName, "--" + outputCoverProfile, profile}, func(string) string { return "" }, func() (string, bool) { return "v1.2.3", true }, strings.NewReader(""), new(bytes.Buffer), new(bytes.Buffer), runners{
+				test: testRunner(run.goTest, run.prepare, loadSources),
+			})
+			require.NoError(t, err, "muxt test")
+
+			got, err := os.ReadFile(profile)
+			require.NoError(t, err, "reading the profile")
+			assert.Contains(t, string(got), filepath.Join(dir, "public.gohtml")+":", "profile")
+			assert.Contains(t, string(got), filepath.Join(dir, "admin.gohtml")+":", "profile")
+		})
+	}
+}
+
+// TestOnePerDirectoryUnionsTemplatesVariablesWithoutChangingItsInput states
+// that the job kept for a directory reads every set's templates variables,
+// once each and in the order the sets list them, and that the sets the caller
+// holds still read their own.
+func TestOnePerDirectoryUnionsTemplatesVariablesWithoutChangingItsInput(t *testing.T) {
+	backing := make([]string, 1, 4)
+	backing[0] = "publicTmpl"
+	jobs := []packageJob{
+		{Dir: "/m/web", Key: "m/web", Config: generate.RoutesFileConfiguration{TemplatesVariables: backing}},
+		{Dir: "/m/api", Key: "m/api", Config: generate.RoutesFileConfiguration{TemplatesVariables: []string{"apiTmpl"}}},
+		{Dir: "/m/web", Key: "m/web", Config: generate.RoutesFileConfiguration{TemplatesVariables: []string{"adminTmpl", "publicTmpl"}}},
+	}
+
+	got := onePerDirectory(jobs)
+
+	require.Len(t, got, 2, "jobs")
+	assert.Equal(t, []string{"publicTmpl", "adminTmpl"}, got[0].Config.TemplatesVariables, "templates variables of /m/web")
+	assert.Equal(t, []string{"apiTmpl"}, got[1].Config.TemplatesVariables, "templates variables of /m/api")
+	assert.Equal(t, []string{"publicTmpl"}, jobs[0].Config.TemplatesVariables, "the first job the caller holds")
+	assert.Equal(t, []string{"publicTmpl", "", "", ""}, backing[:4], "the slice behind it")
 }

@@ -31,7 +31,7 @@ When `go test` fails, `muxt test` exits `1` and adds nothing to what `go test` p
 
 ## Selection
 
-With a [muxt.json](../muxt-json.md) in the working directory, every entry runs, in key order, one `go test` each. Anywhere else the package directory runs alone, as `muxt check` selects it.
+With a [muxt.json](../muxt-json.md) in the working directory, every entry runs, in key order, one `go test` each; a key with several entries is one package and runs once, and its `--output-cover-profile` attributes blocks to the template files of every entry. Anywhere else the package directory runs alone, as `muxt check` selects it.
 
 A run over every entry writes the entry's key on its own line before that package's output. With `-json` after `--` it writes no key, so the output stays a stream of JSON events.
 
