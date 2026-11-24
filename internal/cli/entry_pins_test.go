@@ -69,7 +69,7 @@ func TestGeneratePackageRecordsDeprecatedTemplatesVariableUnderCurrentKey(t *tes
 		{
 			name:        "the deprecated templates variable is recorded under the current key",
 			commandLine: "generate package a --templates-variable x",
-			want:        "{\n\t\"packages\": {\n\t\t\"example.com/m/a\": {\n\t\t\t\"use_receiver_type\": \"T\",\n\t\t\t\"use_templates_variable\": [\n\t\t\t\t\"x\"\n\t\t\t]\n\t\t}\n\t}\n}\n",
+			want:        "{\n\t\"packages\": {\n\t\t\"example.com/m/a\": [\n\t\t\t{\n\t\t\t\t\"use_receiver_type\": \"T\",\n\t\t\t\t\"use_templates_variable\": [\n\t\t\t\t\t\"x\"\n\t\t\t\t]\n\t\t\t}\n\t\t]\n\t}\n}\n",
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -93,7 +93,7 @@ func TestGeneratePackageRewritesOtherEntries(t *testing.T) {
 	require.NoError(t, err)
 	got, err := os.ReadFile(filepath.Join(root, composite.FileName))
 	require.NoError(t, err)
-	const want = "{\n\t\"packages\": {\n\t\t\"example.com/m/a\": {\n\t\t\t\"output_routes_func\": \"Root\",\n\t\t\t\"use_templates_variable\": []\n\t\t},\n\t\t\"example.com/m/b\": {\n\t\t\t\"use_receiver_type\": \"T\"\n\t\t}\n\t}\n}\n"
+	const want = "{\n\t\"packages\": {\n\t\t\"example.com/m/a\": [\n\t\t\t{\n\t\t\t\t\"output_routes_func\": \"Root\",\n\t\t\t\t\"use_templates_variable\": []\n\t\t\t}\n\t\t],\n\t\t\"example.com/m/b\": [\n\t\t\t{\n\t\t\t\t\"use_receiver_type\": \"T\"\n\t\t\t}\n\t\t]\n\t}\n}\n"
 	assert.Equal(t, want, string(got), "muxt.json")
 }
 
@@ -102,6 +102,6 @@ func TestGeneratePackageRewritesOtherEntries(t *testing.T) {
 func TestGeneratePackageKeepsDefaultsThatHeldOnlyAnEmptyList(t *testing.T) {
 	got := muxtJSONAfter(t, `{"package_defaults": {"use_templates_variable": []}, "packages": {}}`, "generate package a")
 
-	const want = "{\n\t\"package_defaults\": {\n\t\t\"use_templates_variable\": []\n\t},\n\t\"packages\": {\n\t\t\"example.com/m/a\": {\n\t\t\t\"use_receiver_type\": \"T\"\n\t\t}\n\t}\n}\n"
+	const want = "{\n\t\"package_defaults\": {\n\t\t\"use_templates_variable\": []\n\t},\n\t\"packages\": {\n\t\t\"example.com/m/a\": [\n\t\t\t{\n\t\t\t\t\"use_receiver_type\": \"T\"\n\t\t\t}\n\t\t]\n\t}\n}\n"
 	assert.Equal(t, want, got, "muxt.json")
 }

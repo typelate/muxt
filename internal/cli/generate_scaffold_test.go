@@ -70,12 +70,16 @@ func TestGeneratePackageAddsEntryToMuxtJSON(t *testing.T) {
 		"\t\t]\n" +
 		"\t},\n" +
 		"\t\"packages\": {\n" +
-		"\t\t\"example.com/m/admin\": {\n" +
-		"\t\t\t\"output_htmx\": true\n" +
-		"\t\t},\n" +
-		"\t\t\"example.com/m/workspace\": {\n" +
-		"\t\t\t\"use_receiver_type\": \"T\"\n" +
-		"\t\t}\n" +
+		"\t\t\"example.com/m/admin\": [\n" +
+		"\t\t\t{\n" +
+		"\t\t\t\t\"output_htmx\": true\n" +
+		"\t\t\t}\n" +
+		"\t\t],\n" +
+		"\t\t\"example.com/m/workspace\": [\n" +
+		"\t\t\t{\n" +
+		"\t\t\t\t\"use_receiver_type\": \"T\"\n" +
+		"\t\t\t}\n" +
+		"\t\t]\n" +
 		"\t}\n" +
 		"}\n"
 
@@ -103,7 +107,7 @@ func TestGeneratePackageAddsEntryToMuxtJSON(t *testing.T) {
 		require.NoError(t, err)
 		got, err := os.ReadFile(filepath.Join(root, "muxt.json"))
 		require.NoError(t, err)
-		assert.Equal(t, "{\n\t\"packages\": {\n\t\t\"example.com/m/admin/workspace\": {\n\t\t\t\"use_receiver_type\": \"T\"\n\t\t}\n\t}\n}\n", string(got), "muxt.json")
+		assert.Equal(t, "{\n\t\"packages\": {\n\t\t\"example.com/m/admin/workspace\": [\n\t\t\t{\n\t\t\t\t\"use_receiver_type\": \"T\"\n\t\t\t}\n\t\t]\n\t}\n}\n", string(got), "muxt.json")
 	})
 }
 

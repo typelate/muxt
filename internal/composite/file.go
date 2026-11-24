@@ -174,10 +174,10 @@ func writeNew(path string, data []byte) error {
 func (f *File) Save() error {
 	// Encode a copy: an entry that is nil would be written as null, which
 	// reads back as {}, and the caller's file is not ours to change.
-	out := savedFile{Defaults: f.Defaults, RoutePaths: f.RoutePaths}
-	out.Packages = make(map[string]savedSets, len(f.Packages))
+	out := *f
+	out.Packages = make(map[string][]Entry, len(f.Packages))
 	for key, sets := range f.Packages {
-		cloned := make(savedSets, len(sets))
+		cloned := make([]Entry, len(sets))
 		for i, e := range sets {
 			if e == nil {
 				e = Entry{}
@@ -213,36 +213,6 @@ func (f *File) Save() error {
 		return fmt.Errorf("writing %s: %w", f.Name, err)
 	}
 	return nil
-}
-
-// savedFile is a File as Save encodes it.
-type savedFile struct {
-	Defaults   Entry                `json:"package_defaults,omitempty"`
-	Packages   map[string]savedSets `json:"packages"`
-	RoutePaths *RoutePaths          `json:"route_paths,omitempty"`
-}
-
-// savedSets is the transitional counterpart of entrySets: a key with one entry
-// is written as the bare object, the form every reader of an older muxt.json
-// knows. Delete it, and write every key as a list, with the list form.
-type savedSets []Entry
-
-// MarshalJSON writes one entry as an object and any other count as a list.
-func (s savedSets) MarshalJSON() ([]byte, error) {
-	// The markup characters stay as written, as Save's own encoder leaves them.
-	var buf bytes.Buffer
-	enc := json.NewEncoder(&buf)
-	enc.SetEscapeHTML(false)
-	var err error
-	if len(s) == 1 {
-		err = enc.Encode(s[0])
-	} else {
-		err = enc.Encode([]Entry(s))
-	}
-	if err != nil {
-		return nil, fmt.Errorf("encoding entries: %w", err)
-	}
-	return bytes.TrimSpace(buf.Bytes()), nil
 }
 
 // isNull reports whether value is the JSON null.
