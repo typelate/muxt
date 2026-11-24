@@ -322,8 +322,8 @@ func TestGenerateChecksEveryPackageLoadedBeforeWriting(t *testing.T) {
 	var invalid *composite.InvalidEntryError
 	require.ErrorAs(t, err, &invalid, "error %v", err)
 	assert.Equal(t, filepath.Join(dir, composite.FileName), invalid.Path, "path")
-	assert.Equal(t, `packages["example.com/m/empty"]`, invalid.Where, "entry")
-	want := filepath.Join(dir, composite.FileName) + `: packages["example.com/m/empty"]: package example.com/m/empty at ` + filepath.Join(dir, "empty") + ` has no Go files for this build`
+	assert.Equal(t, `packages["example.com/m/empty"][0]`, invalid.Where, "entry")
+	want := filepath.Join(dir, composite.FileName) + `: packages["example.com/m/empty"][0]: package example.com/m/empty at ` + filepath.Join(dir, "empty") + ` has no Go files for this build`
 	assert.Equal(t, want, err.Error(), "message")
 	assert.NoFileExists(t, filepath.Join(dir, "a", "template_routes.go"), "an earlier entry's routes file")
 }

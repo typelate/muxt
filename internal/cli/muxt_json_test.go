@@ -302,9 +302,9 @@ func TestGenerateRejectsMuxtJSONEntryFlagConflict(t *testing.T) {
 	require.ErrorAs(t, err, &invalid, "error %v", err)
 	path := filepath.Join(dir, composite.FileName)
 	assert.Equal(t, path, invalid.Path, "path")
-	assert.Equal(t, `packages["example.com/m"]`, invalid.Where, "where")
+	assert.Equal(t, `packages["example.com/m"][0]`, invalid.Where, "where")
 	assert.EqualError(t, invalid.Err, keyMessage, "rule error")
-	assert.Equal(t, path+`: packages["example.com/m"]: `+keyMessage, err.Error(), "message")
+	assert.Equal(t, path+`: packages["example.com/m"][0]: `+keyMessage, err.Error(), "message")
 	assert.False(t, called, "generate runner called")
 }
 
@@ -326,8 +326,8 @@ func TestGenerateRejectsMuxtJSONMultipartMaxMemoryValue(t *testing.T) {
 	require.ErrorAs(t, err, &invalid, "error %v", err)
 	path := filepath.Join(dir, composite.FileName)
 	assert.Equal(t, path, invalid.Path, "path")
-	assert.Equal(t, `packages["example.com/m"]`, invalid.Where, "where")
-	assert.Equal(t, path+`: packages["example.com/m"]: output_multipart_max_memory: `+flagErr.Error(), err.Error(), "message")
+	assert.Equal(t, `packages["example.com/m"][0]`, invalid.Where, "where")
+	assert.Equal(t, path+`: packages["example.com/m"][0]: output_multipart_max_memory: `+flagErr.Error(), err.Error(), "message")
 	assert.False(t, called, "generate runner called")
 }
 
@@ -549,8 +549,8 @@ func TestGenerateEveryMuxtJSONEntryValidatesEachEntry(t *testing.T) {
 	require.ErrorAs(t, err, &invalid, "error %v", err)
 	path := filepath.Join(dir, composite.FileName)
 	assert.Equal(t, path, invalid.Path, "path")
-	assert.Equal(t, `packages["example.com/m/workspace"]`, invalid.Where, "where")
-	assert.Equal(t, path+`: packages["example.com/m/workspace"]: `+keyMessage, err.Error(), "message")
+	assert.Equal(t, `packages["example.com/m/workspace"][0]`, invalid.Where, "where")
+	assert.Equal(t, path+`: packages["example.com/m/workspace"][0]: `+keyMessage, err.Error(), "message")
 	assert.False(t, called, "generate runner called")
 }
 

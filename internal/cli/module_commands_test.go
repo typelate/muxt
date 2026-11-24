@@ -226,8 +226,8 @@ func requireInvalidEntry(t *testing.T, err error) {
 	require.Error(t, err, "the command read an entry that breaks a rule")
 	invalid, ok := errors.AsType[*composite.InvalidEntryError](err)
 	require.True(t, ok, "error = %v, want *composite.InvalidEntryError", err)
-	assert.Equal(t, `packages["example.com/a"]`, invalid.Where, "the entry named")
-	assert.True(t, strings.HasPrefix(err.Error(), invalid.Path+": packages[\"example.com/a\"]: "), "error = %q, want the file and the entry first", err.Error())
+	assert.Equal(t, `packages["example.com/a"][0]`, invalid.Where, "the entry named")
+	assert.True(t, strings.HasPrefix(err.Error(), invalid.Path+": packages[\"example.com/a\"][0]: "), "error = %q, want the file and the entry first", err.Error())
 }
 
 // TestExploreModuleRejectsInvalidEntry states that a package whose muxt.json

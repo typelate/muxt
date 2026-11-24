@@ -191,6 +191,23 @@ func TestSelectJobsTakesEverySetUnderAKey(t *testing.T) {
 	assert.Equal(t, want, got, "jobs")
 }
 
+// TestSelectJobsNamesTheEntryAFlagRejects states that an entry whose values a
+// flag rejects is named by its position under the key, so the second of two
+// is not mistaken for the first.
+func TestSelectJobsNamesTheEntryAFlagRejects(t *testing.T) {
+	base := newFieldkit(t, `{"packages": {"example.com/fieldkit/contacts": [
+		{"output_file": "routes_public.go", "output_routes_func": "PublicRoutes"},
+		{"output_file": "routes_admin.go", "output_routes_func": "AdminRoutes", "output_htmx": true, "output_datastar": true}
+	]}}`)
+	spec := jobSpec{Name: "generate", Scope: eachEntry}
+
+	_, err := selectJobs(spec, base, nil, func(string) string { return "" })
+
+	var invalid *composite.InvalidEntryError
+	require.ErrorAs(t, err, &invalid, "error %v", err)
+	assert.Equal(t, `packages["example.com/fieldkit/contacts"][1]`, invalid.Where, "where")
+}
+
 // asError reports whether err is, or wraps, an E.
 func asError[E error](err error) bool {
 	_, ok := errors.AsType[E](err)

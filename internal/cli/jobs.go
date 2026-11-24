@@ -98,6 +98,10 @@ type packageJob struct {
 	ReadOnly bool
 }
 
+// Where is the job's entry as a muxt.json spells its position, for an error to
+// name. It is meaningless for a job the command line configured.
+func (j packageJob) Where() string { return composite.SetWhere(j.Key, j.Set) }
+
 // Named is whether a failure of the job says which package it is, since the
 // run has more than one.
 func (j packageJob) Named() bool { return j.Keyed || j.ReadOnly }
@@ -246,7 +250,7 @@ func selectJobs(spec jobSpec, dir string, flags *pflag.FlagSet, getEnv func(stri
 		for i, set := range sets {
 			config, err := entryConfiguration(set, fromMuxtJSON, generateEnv{Dir: entryDir, GetEnv: getEnv, Version: version})
 			if err != nil {
-				return selection{}, &composite.InvalidEntryError{Path: f.Name, Where: fmt.Sprintf("packages[%q]", key), Err: err}
+				return selection{}, &composite.InvalidEntryError{Path: f.Name, Where: composite.SetWhere(key, i), Err: err}
 			}
 			config.Verbose = spec.Verbose
 			jobs = append(jobs, packageJob{File: f.Name, Key: key, Set: i, Sets: len(sets), Dir: entryDir, Config: config, Keyed: keyed, RoutePaths: routePaths, ReadOnly: hubFromChild && key != lookup.Key})

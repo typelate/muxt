@@ -106,7 +106,7 @@ func generateRunner(loadPackages packageLoader) func(*cobra.Command, []packageJo
 				if job.File == "" {
 					return err
 				}
-				return &composite.InvalidEntryError{Path: job.File, Where: fmt.Sprintf("packages[%q]", job.Key), Err: err}
+				return &composite.InvalidEntryError{Path: job.File, Where: job.Where(), Err: err}
 			},
 			Begin: func(_ int, job packageJob) {
 				if keyed && verbose {
