@@ -10,8 +10,10 @@ module example.com/m
 go 1.22
 -- muxt.json --
 {
-	"route_paths": {"output_fil": "x.go"},
-	"packages": {}
+  "route_paths": {
+    "output_fil": "x.go"
+  },
+  "packages": {}
 }
 -- want-err.txt --
 Error: $WORK/muxt.json: route_paths: unknown key "output_fil"; did you mean "output_file"?

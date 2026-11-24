@@ -15,20 +15,22 @@ module example.com/m
 go 1.22
 -- muxt.json --
 {
-	"route_paths": {},
-	"package_defaults": {
-		"use_receiver_type": "Server"
-	},
-	"packages": {
-		"example.com/m/admin": [
-			{
-				"output_template_route_paths_type": "AdminPaths",
-				"output_template_route_builder_type": "AdminBuilder",
-				"output_template_route_type": "AdminRoute"
-			}
-		],
-		"example.com/m/blog": [{}]
-	}
+  "route_paths": {},
+  "package_defaults": {
+    "use_receiver_type": "Server"
+  },
+  "packages": {
+    "example.com/m/admin": [
+      {
+        "output_template_route_paths_type": "AdminPaths",
+        "output_template_route_builder_type": "AdminBuilder",
+        "output_template_route_type": "AdminRoute"
+      }
+    ],
+    "example.com/m/blog": [
+      {}
+    ]
+  }
 }
 -- admin/admin.go --
 package admin

@@ -18,21 +18,21 @@ module example.com/m
 go 1.22
 -- muxt.json --
 {
-	"package_defaults": {
-		"output_htmx": true
-	},
-	"packages": {
-		"example.com/m": [
-			{
-				"use_receiver_type": "Server"
-			}
-		],
-		"example.com/m/workspace": [
-			{
-				"use_receiver_type": "T"
-			}
-		]
-	}
+  "package_defaults": {
+    "output_htmx": true
+  },
+  "packages": {
+    "example.com/m": [
+      {
+        "use_receiver_type": "Server"
+      }
+    ],
+    "example.com/m/workspace": [
+      {
+        "use_receiver_type": "T"
+      }
+    ]
+  }
 }
 -- want-stdout.txt --
 example.com/m/workspace

@@ -19,28 +19,32 @@ module example.com/m
 go 1.22
 -- muxt.json --
 {
-	"packages": {
-		"example.com/m": [
-			{
-				"use_templates_variable": ["publicTmpl"],
-				"use_receiver_type": "public",
-				"output_file": "routes_public.go",
-				"output_routes_func": "PublicRoutes",
-				"output_receiver_interface": "PublicHandler",
-				"output_template_data_type": "PublicData",
-				"output_template_route_paths_type": "PublicPaths"
-			},
-			{
-				"use_templates_variable": ["adminTmpl"],
-				"use_receiver_type": "admin",
-				"output_file": "routes_admin.go",
-				"output_routes_func": "AdminRoutes",
-				"output_receiver_interface": "AdminHandler",
-				"output_template_data_type": "AdminData",
-				"output_template_route_paths_type": "AdminPaths"
-			}
-		]
-	}
+  "packages": {
+    "example.com/m": [
+      {
+        "use_templates_variable": [
+          "publicTmpl"
+        ],
+        "use_receiver_type": "public",
+        "output_file": "routes_public.go",
+        "output_routes_func": "PublicRoutes",
+        "output_receiver_interface": "PublicHandler",
+        "output_template_data_type": "PublicData",
+        "output_template_route_paths_type": "PublicPaths"
+      },
+      {
+        "use_templates_variable": [
+          "adminTmpl"
+        ],
+        "use_receiver_type": "admin",
+        "output_file": "routes_admin.go",
+        "output_routes_func": "AdminRoutes",
+        "output_receiver_interface": "AdminHandler",
+        "output_template_data_type": "AdminData",
+        "output_template_route_paths_type": "AdminPaths"
+      }
+    ]
+  }
 }
 -- web.go --
 package main

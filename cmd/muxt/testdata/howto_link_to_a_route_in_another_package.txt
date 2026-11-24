@@ -21,20 +21,22 @@ module example.com/site
 go 1.22
 -- internal/hypertext/muxt.json --
 {
-	"route_paths": {},
-	"package_defaults": {
-		"use_receiver_type": "Server",
-		"output_routes_func_with_path_prefix_param": true
-	},
-	"packages": {
-		"example.com/site/internal/hypertext/admin": [{}],
-		"example.com/site/internal/hypertext/blog": [
-			{
-				"input_static_assets_directory": "assets",
-				"output_static_assets_path": "/static"
-			}
-		]
-	}
+  "route_paths": {},
+  "package_defaults": {
+    "use_receiver_type": "Server",
+    "output_routes_func_with_path_prefix_param": true
+  },
+  "packages": {
+    "example.com/site/internal/hypertext/admin": [
+      {}
+    ],
+    "example.com/site/internal/hypertext/blog": [
+      {
+        "input_static_assets_directory": "assets",
+        "output_static_assets_path": "/static"
+      }
+    ]
+  }
 }
 -- internal/hypertext/hypertext.go --
 package hypertext

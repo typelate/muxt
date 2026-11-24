@@ -36,40 +36,52 @@ package m
 var notes = 1
 -- muxt.json --
 {
-	"route_paths": {},
-	"package_defaults": {
-		"use_receiver_type": "Server"
-	},
-	"packages": {
-		"example.com/m/admin": [{}],
-		"example.com/m/blog": [{}]
-	}
+  "route_paths": {},
+  "package_defaults": {
+    "use_receiver_type": "Server"
+  },
+  "packages": {
+    "example.com/m/admin": [
+      {}
+    ],
+    "example.com/m/blog": [
+      {}
+    ]
+  }
 }
 -- muxt.renamed.json --
 {
-	"route_paths": {
-		"output_file": "paths_gen.go"
-	},
-	"package_defaults": {
-		"use_receiver_type": "Server"
-	},
-	"packages": {
-		"example.com/m/admin": [{}],
-		"example.com/m/blog": [{}]
-	}
+  "route_paths": {
+    "output_file": "paths_gen.go"
+  },
+  "package_defaults": {
+    "use_receiver_type": "Server"
+  },
+  "packages": {
+    "example.com/m/admin": [
+      {}
+    ],
+    "example.com/m/blog": [
+      {}
+    ]
+  }
 }
 -- muxt.renamed-again.json --
 {
-	"route_paths": {
-		"output_file": "hub_gen.go"
-	},
-	"package_defaults": {
-		"use_receiver_type": "Server"
-	},
-	"packages": {
-		"example.com/m/admin": [{}],
-		"example.com/m/blog": [{}]
-	}
+  "route_paths": {
+    "output_file": "hub_gen.go"
+  },
+  "package_defaults": {
+    "use_receiver_type": "Server"
+  },
+  "packages": {
+    "example.com/m/admin": [
+      {}
+    ],
+    "example.com/m/blog": [
+      {}
+    ]
+  }
 }
 -- admin/admin.go --
 package admin

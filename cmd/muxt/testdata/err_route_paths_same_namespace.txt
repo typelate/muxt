@@ -13,14 +13,18 @@ module example.com/m
 go 1.22
 -- muxt.json --
 {
-	"route_paths": {},
-	"package_defaults": {
-		"use_receiver_type": "Server"
-	},
-	"packages": {
-		"example.com/m/admin_users": [{}],
-		"example.com/m/admin/users": [{}]
-	}
+  "route_paths": {},
+  "package_defaults": {
+    "use_receiver_type": "Server"
+  },
+  "packages": {
+    "example.com/m/admin_users": [
+      {}
+    ],
+    "example.com/m/admin/users": [
+      {}
+    ]
+  }
 }
 -- admin_users/users.go --
 package admin_users

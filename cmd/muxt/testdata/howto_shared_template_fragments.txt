@@ -22,18 +22,18 @@ module example.com/m
 go 1.22
 -- muxt.json --
 {
-	"packages": {
-		"example.com/m/workspace": [
-			{
-				"use_receiver_type": "Server"
-			}
-		],
-		"example.com/m/billing": [
-			{
-				"use_receiver_type": "Server"
-			}
-		]
-	}
+  "packages": {
+    "example.com/m/workspace": [
+      {
+        "use_receiver_type": "Server"
+      }
+    ],
+    "example.com/m/billing": [
+      {
+        "use_receiver_type": "Server"
+      }
+    ]
+  }
 }
 -- want-check.txt --
 example.com/m/billing
@@ -105,8 +105,8 @@ func TestShow(t *testing.T) {
 	body := rec.Body.String()
 	for _, want := range []string{
 		`<main data-layout="shared">`, // only the shared layout writes this
-		"<h1>WORKSPACE</h1>", // the shared layout calls the shared Upper
-		"workspace-only text", // only this package's receiver writes this
+		"<h1>WORKSPACE</h1>",          // the shared layout calls the shared Upper
+		"workspace-only text",         // only this package's receiver writes this
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("GET / body = %q, want it to contain %q", body, want)
@@ -164,8 +164,8 @@ func TestShow(t *testing.T) {
 	body := rec.Body.String()
 	for _, want := range []string{
 		`<main data-layout="shared">`, // only the shared layout writes this
-		"<h1>BILLING</h1>", // the shared layout calls the shared Upper
-		"billing-only text", // only this package's receiver writes this
+		"<h1>BILLING</h1>",            // the shared layout calls the shared Upper
+		"billing-only text",           // only this package's receiver writes this
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("GET / body = %q, want it to contain %q", body, want)
