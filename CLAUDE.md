@@ -373,6 +373,11 @@ Lessons from the project's history. Read them before a change.
 - CI runs `build` (`go test -race`) and `gosec` over `docs/examples`. gosec is
   built against this module's `golang.org/x/tools`, because the version gosec
   pins cannot read the export data newer Go toolchains write.
+- Release binaries come from GoReleaser, run in a clean checkout of the tag
+  once the release exists: `GITHUB_TOKEN=$(gh auth token) goreleaser release
+  --clean`. It keeps the release's notes. Afterwards check the release's title
+  and run one downloaded binary's `muxt version`: `+dirty` means a file
+  changed before the build.
 - Pre-releases are tagged `vX.Y.0-dev.N` with `gh release create --prerelease`.
   `go install github.com/typelate/muxt@latest` resolves to the newest tag that
   is not a pre-release.
