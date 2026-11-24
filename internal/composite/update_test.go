@@ -39,7 +39,7 @@ func TestUpdateLetsOneRunAddAKey(t *testing.T) {
 
 	var exists *composite.ExistsError
 	require.ErrorAs(t, err, &exists, "second Update error %v", err)
-	assert.Equal(t, composite.ExistsError{Path: path, Where: `packages["example.com/m/same"]`}, *exists, "error")
+	assert.Equal(t, composite.ExistsError{Path: path, Where: `packages["example.com/m/same"][0]`}, *exists, "error")
 	afterSecond, err := os.ReadFile(path)
 	require.NoError(t, err, "reading muxt.json")
 	assert.Equal(t, string(afterFirst), string(afterSecond), "muxt.json after the refused run")

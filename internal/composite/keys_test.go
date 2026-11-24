@@ -30,7 +30,7 @@ func TestFindRejectsUnknownKeys(t *testing.T) {
 		{
 			name: "entry typo",
 			file: `{"packages": {"example.com/m": {"use_reciever_type": "T"}}}`,
-			want: `packages["example.com/m"]: unknown key "use_reciever_type"; did you mean "use_receiver_type"?`,
+			want: `packages["example.com/m"][0]: unknown key "use_reciever_type"; did you mean "use_receiver_type"?`,
 		},
 		{
 			name: "defaults typo",
@@ -40,7 +40,7 @@ func TestFindRejectsUnknownKeys(t *testing.T) {
 		{
 			name: "entry nothing close",
 			file: `{"packages": {"example.com/m": {"zzz": true}}}`,
-			want: `packages["example.com/m"]: unknown key "zzz"`,
+			want: `packages["example.com/m"][0]: unknown key "zzz"`,
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -69,7 +69,7 @@ func TestFindRejectsDeprecatedKeys(t *testing.T) {
 
 	var deprecated *composite.DeprecatedKeyError
 	require.ErrorAs(t, err, &deprecated, "Find error %v", err)
-	assert.Equal(t, filepath.Join(dir, composite.FileName)+`: packages["example.com/m"]: key "output_htmx_helpers" is deprecated; write "output_htmx"`, err.Error(), "message")
+	assert.Equal(t, filepath.Join(dir, composite.FileName)+`: packages["example.com/m"][0]: key "output_htmx_helpers" is deprecated; write "output_htmx"`, err.Error(), "message")
 }
 
 // TestFindRejectsKeyWithOtherLetterCase states that a packages key that names a

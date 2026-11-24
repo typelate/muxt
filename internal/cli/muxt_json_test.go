@@ -208,9 +208,9 @@ func TestGenerateRejectsUnknownMuxtJSONKey(t *testing.T) {
 	var unknown *composite.UnknownKeyError
 	require.ErrorAs(t, err, &unknown, "error %v", err)
 	assert.Equal(t, path, unknown.Path, "path")
-	assert.Equal(t, `packages["example.com/m"]`, unknown.Where, "where")
+	assert.Equal(t, `packages["example.com/m"][0]`, unknown.Where, "where")
 	assert.Equal(t, "nope", unknown.Key, "key")
-	assert.Equal(t, path+`: packages["example.com/m"]: unknown key "nope"`, err.Error(), "message")
+	assert.Equal(t, path+`: packages["example.com/m"][0]: unknown key "nope"`, err.Error(), "message")
 	assert.False(t, called, "generate runner called")
 }
 
@@ -244,10 +244,10 @@ func TestGenerateRejectsDeprecatedMuxtJSONKey(t *testing.T) {
 			var deprecated *composite.DeprecatedKeyError
 			require.ErrorAs(t, err, &deprecated, "error %v", err)
 			assert.Equal(t, path, deprecated.Path, "path")
-			assert.Equal(t, `packages["example.com/m"]`, deprecated.Where, "where")
+			assert.Equal(t, `packages["example.com/m"][0]`, deprecated.Where, "where")
 			assert.Equal(t, tt.key, deprecated.Key, "key")
 			assert.Equal(t, tt.replacement, deprecated.Replacement, "replacement")
-			assert.Equal(t, path+`: packages["example.com/m"]: key "`+tt.key+`" is deprecated; write "`+tt.replacement+`"`, err.Error(), "message")
+			assert.Equal(t, path+`: packages["example.com/m"][0]: key "`+tt.key+`" is deprecated; write "`+tt.replacement+`"`, err.Error(), "message")
 			assert.False(t, called, "generate runner called")
 		})
 	}
@@ -279,10 +279,10 @@ func TestGenerateMuxtJSONKeysUseUnderscores(t *testing.T) {
 		var dashed *composite.DashedKeyError
 		require.ErrorAs(t, err, &dashed, "error %v", err)
 		assert.Equal(t, filepath.Join(dir, composite.FileName), dashed.Path, "path")
-		assert.Equal(t, `packages["example.com/m"]`, dashed.Where, "where")
+		assert.Equal(t, `packages["example.com/m"][0]`, dashed.Where, "where")
 		assert.Equal(t, "use-receiver-type", dashed.Key, "key")
 		assert.Equal(t, "use_receiver_type", dashed.Underscored, "underscored")
-		assert.Equal(t, filepath.Join(dir, composite.FileName)+`: packages["example.com/m"]: key "use-receiver-type" uses dashes; write "use_receiver_type"`, err.Error(), "message")
+		assert.Equal(t, filepath.Join(dir, composite.FileName)+`: packages["example.com/m"][0]: key "use-receiver-type" uses dashes; write "use_receiver_type"`, err.Error(), "message")
 		assert.False(t, called, "generate runner called")
 	})
 }

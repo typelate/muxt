@@ -53,7 +53,10 @@ func (w *shapeWalker) file() error {
 // object form is refused, a bare object, or null, is walked as one entry.
 func (w *shapeWalker) sets(key string) error {
 	where := fmt.Sprintf("packages[%q]", key)
-	if w.dec.PeekKind() != '[' {
+	if kind := w.dec.PeekKind(); kind != '[' {
+		if kind == '{' {
+			where = SetWhere(key, 0)
+		}
 		return w.object(where, "a JSON object", w.skipMember)
 	}
 	start := w.valueStart()

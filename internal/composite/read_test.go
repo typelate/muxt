@@ -48,22 +48,27 @@ func TestFindRejectsWrongJSONType(t *testing.T) {
 		{
 			name: "string where a boolean goes",
 			file: `{"packages": {"example.com/m": {"output_htmx": "yes"}}}`,
-			want: `packages["example.com/m"]: key "output_htmx" takes a JSON boolean`,
+			want: `packages["example.com/m"][0]: key "output_htmx" takes a JSON boolean`,
+		},
+		{
+			name: "string where a boolean goes in the second entry",
+			file: `{"packages": {"example.com/m": [{}, {"output_htmx": "yes"}]}}`,
+			want: `packages["example.com/m"][1]: key "output_htmx" takes a JSON boolean`,
 		},
 		{
 			name: "boolean where a string goes",
 			file: `{"packages": {"example.com/m": {"use_receiver_type": true}}}`,
-			want: `packages["example.com/m"]: key "use_receiver_type" takes a JSON string`,
+			want: `packages["example.com/m"][0]: key "use_receiver_type" takes a JSON string`,
 		},
 		{
 			name: "string where a list goes",
 			file: `{"packages": {"example.com/m": {"use_templates": "views"}}}`,
-			want: `packages["example.com/m"]: key "use_templates" takes a JSON array of strings`,
+			want: `packages["example.com/m"][0]: key "use_templates" takes a JSON array of strings`,
 		},
 		{
 			name: "list of numbers",
 			file: `{"packages": {"example.com/m": {"use_templates": [1]}}}`,
-			want: `packages["example.com/m"]: key "use_templates" takes a JSON array of strings`,
+			want: `packages["example.com/m"][0]: key "use_templates" takes a JSON array of strings`,
 		},
 		{
 			name: "package defaults",
@@ -73,7 +78,7 @@ func TestFindRejectsWrongJSONType(t *testing.T) {
 		{
 			name: "first key in sorted order",
 			file: `{"packages": {"example.com/m": {"use_receiver_type": 1, "output_htmx": 1}}}`,
-			want: `packages["example.com/m"]: key "output_htmx" takes a JSON boolean`,
+			want: `packages["example.com/m"][0]: key "output_htmx" takes a JSON boolean`,
 		},
 		{
 			name: "defaults before packages",
@@ -83,12 +88,12 @@ func TestFindRejectsWrongJSONType(t *testing.T) {
 		{
 			name: "wrong kind before the module check",
 			file: `{"packages": {"example.org/other": {"output_htmx": 1}}}`,
-			want: `packages["example.org/other"]: key "output_htmx" takes a JSON boolean`,
+			want: `packages["example.org/other"][0]: key "output_htmx" takes a JSON boolean`,
 		},
 		{
 			name: "unknown key is not a kind error",
 			file: `{"packages": {"example.com/m": {"zzzzzzzz": 1}}}`,
-			want: `packages["example.com/m"]: unknown key "zzzzzzzz"`,
+			want: `packages["example.com/m"][0]: unknown key "zzzzzzzz"`,
 		},
 		{
 			name: "null is absent",
@@ -218,7 +223,13 @@ func TestFindRejectsARepeatedKey(t *testing.T) {
 			name: "entry key",
 			file: "{\"packages\": {\"example.com/m\": {\n\t\"output_htmx\": true,\n\t\"output_htmx\": false}}}",
 			at:   `"output_htmx": false`,
-			want: `packages["example.com/m"]: key "output_htmx" is repeated`,
+			want: `packages["example.com/m"][0]: key "output_htmx" is repeated`,
+		},
+		{
+			name: "key of the second entry",
+			file: `{"packages": {"example.com/m": [{}, {"output_htmx": true, "output_htmx": false}]}}`,
+			at:   `"output_htmx": false`,
+			want: `packages["example.com/m"][1]: key "output_htmx" is repeated`,
 		},
 		{
 			name: "package defaults key",
@@ -296,7 +307,12 @@ func TestFindRejectsANullKeyItDoesNotAccept(t *testing.T) {
 		{
 			name: "unknown",
 			file: `{"packages": {"example.com/m": {"no_such_key": null}}}`,
-			want: `packages["example.com/m"]: unknown key "no_such_key"`,
+			want: `packages["example.com/m"][0]: unknown key "no_such_key"`,
+		},
+		{
+			name: "unknown in the second entry",
+			file: `{"packages": {"example.com/m": [{}, {"no_such_key": null}]}}`,
+			want: `packages["example.com/m"][1]: unknown key "no_such_key"`,
 		},
 		{
 			name: "dashed",
@@ -304,9 +320,19 @@ func TestFindRejectsANullKeyItDoesNotAccept(t *testing.T) {
 			want: `package_defaults: key "output-htmx" uses dashes; write "output_htmx"`,
 		},
 		{
+			name: "dashed in the second entry",
+			file: `{"packages": {"example.com/m": [{}, {"output-htmx": null}]}}`,
+			want: `packages["example.com/m"][1]: key "output-htmx" uses dashes; write "output_htmx"`,
+		},
+		{
+			name: "deprecated in the second entry",
+			file: `{"packages": {"example.com/m": [{}, {"receiver_type": null}]}}`,
+			want: `packages["example.com/m"][1]: key "receiver_type" is deprecated; write "use_receiver_type"`,
+		},
+		{
 			name: "deprecated",
 			file: `{"packages": {"example.com/m": {"receiver_type": null}}}`,
-			want: `packages["example.com/m"]: key "receiver_type" is deprecated; write "use_receiver_type"`,
+			want: `packages["example.com/m"][0]: key "receiver_type" is deprecated; write "use_receiver_type"`,
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {

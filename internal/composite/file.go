@@ -280,7 +280,7 @@ func (f *File) Keys() []string {
 // Update's lock only the first writes.
 func (f *File) Add(key string, entry Entry) error {
 	if _, exists := f.Packages[key]; exists {
-		return &ExistsError{Path: f.Name, Where: fmt.Sprintf("packages[%q]", key)}
+		return &ExistsError{Path: f.Name, Where: SetWhere(key, 0)}
 	}
 	if f.Packages == nil {
 		f.Packages = map[string][]Entry{}
@@ -405,8 +405,8 @@ func (f *File) checkKeys(data []byte, raw rawFile, keys Keys) error {
 		if err := f.checkPackageKey(key); err != nil {
 			return err
 		}
-		for _, entry := range raw.Packages[key] {
-			if err := checkEntryKeys(f.Name, fmt.Sprintf("packages[%q]", key), entry, keys.Deprecated, known); err != nil {
+		for i, entry := range raw.Packages[key] {
+			if err := checkEntryKeys(f.Name, SetWhere(key, i), entry, keys.Deprecated, known); err != nil {
 				return err
 			}
 		}
@@ -732,8 +732,8 @@ func checkKinds(path string, raw rawFile, keys Keys) error {
 		return err
 	}
 	for _, key := range slices.Sorted(maps.Keys(raw.Packages)) {
-		for _, entry := range raw.Packages[key] {
-			if err := checkEntryKinds(path, fmt.Sprintf("packages[%q]", key), entry, keys); err != nil {
+		for i, entry := range raw.Packages[key] {
+			if err := checkEntryKinds(path, SetWhere(key, i), entry, keys); err != nil {
 				return err
 			}
 		}
