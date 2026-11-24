@@ -303,6 +303,44 @@ func TestCheckChecksEachSetOfAKeyAgainstItsOwnTemplates(t *testing.T) {
 	}
 }
 
+// setSections splits the text a listing over twoSetModule wrote at the lines
+// that name a set, and returns each set's lines by that name.
+func setSections(stdout string) map[string]string {
+	sections := make(map[string]string)
+	var name string
+	for _, line := range strings.SplitAfter(stdout, "\n") {
+		switch strings.TrimSuffix(line, "\n") {
+		case testModule + " (routes_public.go)", adminSet:
+			name = strings.TrimSuffix(line, "\n")
+			continue
+		}
+		sections[name] += line
+	}
+	return sections
+}
+
+// TestCallsListsEachSetOfAKeyItsOwnCalls states that muxt list-template-calls
+// over a key with two sets lists, under each set's name, the calls of that
+// set's templates and not the other's.
+func TestCallsListsEachSetOfAKeyItsOwnCalls(t *testing.T) {
+	if testing.Short() {
+		t.Skip("loads packages with the go command")
+	}
+	root := twoSetModule(t)
+	writeTestFile(t, root, "public.gohtml", `{{define "GET /public"}}{{template "fragment"}}{{end}}{{define "fragment"}}<p>public</p>{{end}}`)
+	_, _, err := generateWithLoader(t, root)
+	require.NoError(t, err, "muxt generate")
+
+	stdout, _, _, err := analyzeWithLoader(t, root, "list-template-calls")
+
+	require.NoError(t, err, "muxt list-template-calls")
+	sections := setSections(stdout)
+	assert.Contains(t, sections[testModule+" (routes_public.go)"], `template "GET /public" calls:`, "public set in\n%s", stdout)
+	assert.Contains(t, sections[testModule+" (routes_public.go)"], `template "fragment"`, "public set in\n%s", stdout)
+	assert.NotContains(t, sections[adminSet], `fragment`, "admin set in\n%s", stdout)
+	assert.NotContains(t, sections[adminSet], `GET /public`, "admin set in\n%s", stdout)
+}
+
 // TestCheckNamesEachSetOfAKeyByItsFile states that muxt check over a key with
 // two sets heads each summary with the key and the set's output file, so the
 // two summaries can be told apart.
