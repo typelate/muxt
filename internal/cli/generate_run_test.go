@@ -204,7 +204,30 @@ func TestGenerateNamesMuxtJSONEntryWithoutTemplatesVariable(t *testing.T) {
 
 			_, _, err := generateWithLoader(t, dir)
 
-			want := filepath.Join(dir, composite.FileName) + `: packages["example.com/m/workspace"]: package example.com/m/workspace declares no variable "missing"; declare it, or remove the entry`
+			want := filepath.Join(dir, composite.FileName) + `: packages["example.com/m/workspace"][0]: package example.com/m/workspace declares no variable "missing"; declare it, or remove the entry`
+			require.EqualError(t, err, want, "generate")
+		})
+	}
+}
+
+// TestGenerateNamesTheSetWithoutTemplatesVariable states that when the second
+// of two sets of one key names a templates variable its package lacks, the
+// error names that set by its position, in both places a run can start.
+func TestGenerateNamesTheSetWithoutTemplatesVariable(t *testing.T) {
+	if testing.Short() {
+		t.Skip("loads packages with the go command")
+	}
+	for _, tt := range twoSetRuns() {
+		t.Run(tt.name, func(t *testing.T) {
+			root := twoSetModuleIn(t, tt.place)
+			writeMuxtJSON(t, root, `{"packages": {"`+tt.place.Key()+`": [
+				{"use_templates_variable": ["publicTmpl"], "output_file": "routes_public.go", "output_routes_func": "PublicRoutes"},
+				{"use_templates_variable": ["missingTmpl"], "output_file": "routes_admin.go", "output_routes_func": "AdminRoutes"}
+			]}}`)
+
+			_, _, err := generateWithLoader(t, filepath.Join(root, tt.run))
+
+			want := filepath.Join(root, composite.FileName) + `: packages["` + tt.place.Key() + `"][1]: package ` + tt.place.Key() + ` declares no variable "missingTmpl"; declare it, or remove the entry`
 			require.EqualError(t, err, want, "generate")
 		})
 	}

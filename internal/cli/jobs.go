@@ -323,7 +323,7 @@ func entryVariableError(job packageJob, err error) (entryErr error, ok bool) {
 	if !ok || job.File == "" {
 		return nil, false
 	}
-	return &composite.NoVariableError{Path: job.File, Key: job.Key, Package: missing.Package, Variable: missing.Variable}, true
+	return &composite.NoVariableError{Path: job.File, Key: job.Key, Set: job.Set, Package: missing.Package, Variable: missing.Variable}, true
 }
 
 // entryHook is analysis.NewModule's answer to what the muxt.json holds for a

@@ -348,7 +348,7 @@ func TestRoutesNamesMuxtJSONEntryWithoutTemplatesVariable(t *testing.T) {
 
 			_, _, err := listWithLoader(t, dir)
 
-			want := filepath.Join(dir, composite.FileName) + `: packages["example.com/m/workspace"]: package example.com/m/workspace declares no variable "missing"; declare it, or remove the entry`
+			want := filepath.Join(dir, composite.FileName) + `: packages["example.com/m/workspace"][0]: package example.com/m/workspace declares no variable "missing"; declare it, or remove the entry`
 			require.EqualError(t, err, want, "muxt")
 		})
 	}
