@@ -73,7 +73,9 @@ The stub is a placeholder to rewrite: it returns any and its body returns nil. I
 			if err := requireAgreeingSets(sel.Jobs); err != nil {
 				return err
 			}
-			job := sel.Jobs[0]
+			// A define added to a file one set reads is in the package, so
+			// the checks that read templates variables read all the sets'.
+			job := onePerDirectory(sel.Jobs)[0]
 			config := job.Config
 			if job.File != "" && cmd.Flags().Changed(useReceiverType) {
 				// The flag is a second source for what an entry already says, so

@@ -24,7 +24,7 @@
 | `muxt test`, no flags | only the entries' directories: every entry in the file's directory, the directory's entry elsewhere |
 | `muxt test-template-mutations`, no flags | `use_templates_variable` of the directory's entry; in the file's directory with no entry for it, an error naming the package directories |
 | `muxt` | all of it, shown by source under `Configuration:` |
-| `muxt generate def` | the directory's entry; in the file's directory with no entry and no templates variable, an error naming the package directories |
+| `muxt generate def` | the directory's entry, or its entries when they agree on the receiver type, and `--output-file` may be a file any of them reads; in the file's directory with no entry and no templates variable, an error naming the package directories |
 | `muxt explore-module`, `generate-fake-server` | only whether each package has an entry; settings come from the generated files' headers; with `route_paths` they show the hub's paths type for a listed package |
 
 `muxt fmt` does not read the file.

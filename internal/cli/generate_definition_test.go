@@ -544,3 +544,33 @@ func TestGenerateDefRefusesSetsThatNameDifferentReceivers(t *testing.T) {
 		})
 	}
 }
+
+// TestGenerateDefAddsToAFileOneSetReads states that --output-file in a
+// directory with two sets is checked against the templates variables of both:
+// a file the second set reads is written though the first never parses it,
+// and one no set reads is refused as it is for one set.
+func TestGenerateDefAddsToAFileOneSetReads(t *testing.T) {
+	if testing.Short() {
+		t.Skip("loads packages with the go command")
+	}
+	for _, tt := range twoSetRuns() {
+		t.Run(tt.name, func(t *testing.T) {
+			root := twoSetModuleIn(t, tt.place)
+			dir := filepath.Join(root, tt.place.Sub)
+			writeTestFile(t, dir, "other.gohtml", `{{define "GET /other"}}{{end}}`)
+
+			_, _, err := runCommandArgs(dir, []string{"generate", "def", "GET /x X()", "--output-file=other.gohtml"}, runners{load: load.InDirectories})
+
+			var unread *load.UnreadFileError
+			require.ErrorAs(t, err, &unread, "a file no set reads")
+			assert.Equal(t, filepath.Join(dir, "other.gohtml"), unread.File, "unread file")
+
+			_, _, err = runCommandArgs(dir, []string{"generate", "def", "GET /x X()", "--output-file=admin.gohtml"}, runners{load: load.InDirectories})
+
+			require.NoError(t, err, "a file the second set reads")
+			got, err := os.ReadFile(filepath.Join(dir, "admin.gohtml"))
+			require.NoError(t, err, "reading admin.gohtml")
+			assert.Contains(t, string(got), `{{define "GET /x X()"}}`, "admin.gohtml")
+		})
+	}
+}
