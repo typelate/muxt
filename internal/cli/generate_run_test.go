@@ -213,6 +213,36 @@ func TestGenerateWritesEverySetFromThePackageDirectory(t *testing.T) {
 	requireTwoSetFilesWritten(t, pkg)
 }
 
+// TestGenerateOfOneSetKeepsTheFileOfTheOther states that when a muxt generate
+// writes one set of a key, the file of another set with a different routes
+// function stays as it was, though this run no longer writes it: a run deletes
+// only the generated files that carry its own routes function.
+func TestGenerateOfOneSetKeepsTheFileOfTheOther(t *testing.T) {
+	if testing.Short() {
+		t.Skip("loads packages with the go command")
+	}
+	place := twoSetPlace{Sub: "web"}
+	root := twoSetModuleIn(t, place)
+	pkg := filepath.Join(root, place.Sub)
+	_, _, err := generateWithLoader(t, pkg)
+	require.NoError(t, err, "generate both sets")
+	admin := filepath.Join(pkg, "routes_admin.go")
+	before, err := os.ReadFile(admin)
+	require.NoError(t, err, "admin file")
+
+	writeMuxtJSON(t, root, `{"packages": {"`+place.Key()+`": [
+		{"use_templates_variable": ["publicTmpl"], "output_file": "routes_public.go", "output_routes_func": "PublicRoutes"}
+	]}}`)
+
+	_, _, err = generateWithLoader(t, pkg)
+
+	require.NoError(t, err, "generate the public set")
+	after, err := os.ReadFile(admin)
+	require.NoError(t, err, "admin file after generating the public set")
+	assert.Equal(t, string(before), string(after), "admin file")
+	requireTwoSetFilesWritten(t, pkg)
+}
+
 // withMissingVariableEntry rewrites the muxt.json of dir, a module entryModule
 // wrote with an entry for each of keys, so the entry for "workspace" names a
 // templates variable its package does not declare.
