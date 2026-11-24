@@ -74,11 +74,15 @@ type onePackageWording struct {
 // Given is the settings that did, by the spelling typed, so a report can name
 // them.
 type packageJob struct {
-	File   string
-	Key    string
-	Dir    string
-	Config generate.RoutesFileConfiguration
-	Given  givenSettings
+	File string
+	Key  string
+	// Set is the zero-based position of the job's entry under Key and Sets how
+	// many entries Key holds. Both are zero for a job the command line
+	// configured.
+	Set, Sets int
+	Dir       string
+	Config    generate.RoutesFileConfiguration
+	Given     givenSettings
 	// Keyed is set on every job of a run that read every entry of the muxt.json
 	// in its own directory, however many entries it holds. Such a run names each
 	// package by its key; a run in one package directory, or one that flags
@@ -239,12 +243,14 @@ func selectJobs(spec jobSpec, dir string, flags *pflag.FlagSet, getEnv func(stri
 		}
 		keyOf[realDir] = key
 		sets, _ := f.Resolve(key)
-		config, err := entryConfiguration(sets[0], fromMuxtJSON, generateEnv{Dir: entryDir, GetEnv: getEnv, Version: version})
-		if err != nil {
-			return selection{}, &composite.InvalidEntryError{Path: f.Name, Where: fmt.Sprintf("packages[%q]", key), Err: err}
+		for i, set := range sets {
+			config, err := entryConfiguration(set, fromMuxtJSON, generateEnv{Dir: entryDir, GetEnv: getEnv, Version: version})
+			if err != nil {
+				return selection{}, &composite.InvalidEntryError{Path: f.Name, Where: fmt.Sprintf("packages[%q]", key), Err: err}
+			}
+			config.Verbose = spec.Verbose
+			jobs = append(jobs, packageJob{File: f.Name, Key: key, Set: i, Sets: len(sets), Dir: entryDir, Config: config, Keyed: keyed, RoutePaths: routePaths, ReadOnly: hubFromChild && key != lookup.Key})
 		}
-		config.Verbose = spec.Verbose
-		jobs = append(jobs, packageJob{File: f.Name, Key: key, Dir: entryDir, Config: config, Keyed: keyed, RoutePaths: routePaths, ReadOnly: hubFromChild && key != lookup.Key})
 	}
 	return selection{File: f, Jobs: jobs}, nil
 }

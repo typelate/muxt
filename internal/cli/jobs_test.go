@@ -2,6 +2,7 @@ package cli
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -160,6 +161,34 @@ func TestSelectJobsRejectsTwoKeysForOneDirectory(t *testing.T) {
 	assert.Equal(t, filepath.Join(realBase, "contacts"), same.Dir, "directory")
 	want := filepath.Join(base, composite.FileName) + `: packages["example.com/fieldkit/people"] is the same directory as packages["example.com/fieldkit/contacts"], ` + filepath.Join(realBase, "contacts") + `; keep one`
 	assert.Equal(t, want, err.Error(), "message")
+}
+
+// twoSetsOfContacts is a package with a public and an admin route set, each
+// with its own output file and routes function.
+const twoSetsOfContacts = `{"packages": {"example.com/fieldkit/contacts": [
+	{"output_file": "routes_public.go", "output_routes_func": "PublicRoutes"},
+	{"output_file": "routes_admin.go", "output_routes_func": "AdminRoutes"}
+]}}`
+
+// TestSelectJobsTakesEverySetUnderAKey states that a key holding two entries
+// gives one job per entry in the file's order, each knowing its position and
+// how many its key holds.
+func TestSelectJobsTakesEverySetUnderAKey(t *testing.T) {
+	base := newFieldkit(t, twoSetsOfContacts)
+	spec := jobSpec{Name: "generate", Scope: eachEntry}
+
+	sel, err := selectJobs(spec, base, nil, func(string) string { return "" })
+
+	require.NoError(t, err)
+	var got []string
+	for _, job := range sel.Jobs {
+		got = append(got, fmt.Sprintf("%s %d/%d %s", job.Key, job.Set, job.Sets, job.Config.RoutesFunction))
+	}
+	want := []string{
+		"example.com/fieldkit/contacts 0/2 PublicRoutes",
+		"example.com/fieldkit/contacts 1/2 AdminRoutes",
+	}
+	assert.Equal(t, want, got, "jobs")
 }
 
 // asError reports whether err is, or wraps, an E.
