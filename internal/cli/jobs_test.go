@@ -85,6 +85,9 @@ func TestSelectJobs(t *testing.T) {
 		{name: "row 7 check", spec: reads, muxtJSON: fieldkitEntries, dir: "inventory", wantKeys: []string{inventory}, wantFile: true},
 		{name: "row 7 generate ignores another entry that is stale", spec: writes, muxtJSON: fieldkitStale, dir: "contacts", wantKeys: []string{contacts}, wantFile: true},
 
+		{name: "row 7 check in the directory of a key with two sets is keyed", spec: reads, muxtJSON: twoSetsOfContacts, dir: "contacts", wantKeys: []string{contacts, contacts}, wantFile: true, wantKeyed: true},
+		{name: "row 7 generate in the directory of a key with two sets is keyed", spec: writes, muxtJSON: twoSetsOfContacts, dir: "contacts", wantKeys: []string{contacts, contacts}, wantFile: true, wantKeyed: true},
+
 		{name: "row 8 generate", spec: writes, muxtJSON: fieldkitEntries, dir: "extra", wantErr: asError[*composite.MissingEntryError]},
 		{name: "row 8 listing", spec: lists, muxtJSON: fieldkitEntries, dir: "extra", wantKeys: []string{""}, wantFile: true},
 		{name: "row 8 check", spec: reads, muxtJSON: fieldkitEntries, dir: "extra", wantKeys: []string{""}, wantFile: true},

@@ -278,13 +278,9 @@ func selectJobs(spec jobSpec, dir string, flags *pflag.FlagSet, getEnv func(stri
 			}
 			funcOf[config.RoutesFunction] = i
 			config.Verbose = spec.Verbose
-			jobs = append(jobs, packageJob{File: f.Name, Key: key, Set: i, Sets: len(sets), Dir: entryDir, Config: config, Keyed: keyed, RoutePaths: routePaths, ReadOnly: hubFromChild && key != lookup.Key})
-		}
-	}
-	if !keyed && !hubFromChild && len(jobs) > 1 {
-		// One key with several sets: nothing but a name tells them apart.
-		for i := range jobs {
-			jobs[i].Keyed = true
+			// One key with several sets: nothing but a name tells them apart.
+			setsNeedNames := !hubFromChild && len(sets) > 1
+			jobs = append(jobs, packageJob{File: f.Name, Key: key, Set: i, Sets: len(sets), Dir: entryDir, Config: config, Keyed: keyed || setsNeedNames, RoutePaths: routePaths, ReadOnly: hubFromChild && key != lookup.Key})
 		}
 	}
 	return selection{File: f, Jobs: jobs}, nil
