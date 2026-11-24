@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"encoding/json"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -536,4 +537,29 @@ func TestGenerateConfigNeedsModule(t *testing.T) {
 	require.EqualError(t, err, dir+": no go.mod found at or above this directory; run go mod init MODULE here first")
 	_, statErr := os.Stat(filepath.Join(dir, "muxt.json"))
 	assert.ErrorIs(t, statErr, os.ErrNotExist, "muxt.json is not written")
+}
+
+// TestGeneratePackageWritesItsEntryAsAOneElementArray states that the entry
+// muxt generate package adds is the only element of an array, the shape a
+// second route set is added to by hand, and that the entries already in the
+// file keep their elements.
+func TestGeneratePackageWritesItsEntryAsAOneElementArray(t *testing.T) {
+	root := moduleDir(t)
+	existing := `{"packages": {"` + importPath("widgets") + `": [
+		{"use_templates_variable": ["a"], "output_file": "a.go", "output_routes_func": "A"},
+		{"use_templates_variable": ["b"], "output_file": "b.go", "output_routes_func": "B"}
+	]}}`
+	require.NoError(t, os.WriteFile(filepath.Join(root, "muxt.json"), []byte(existing), 0o644))
+
+	_, err := runCommand(t, root, "generate package workspace")
+
+	require.NoError(t, err)
+	raw, err := os.ReadFile(filepath.Join(root, "muxt.json"))
+	require.NoError(t, err)
+	var got struct {
+		Packages map[string][]map[string]any
+	}
+	require.NoError(t, json.Unmarshal(raw, &got), "muxt.json holds arrays:\n%s", raw)
+	assert.Len(t, got.Packages[importPath("workspace")], 1, "elements of the new package")
+	assert.Len(t, got.Packages[importPath("widgets")], 2, "elements of the package already there")
 }
