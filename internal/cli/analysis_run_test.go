@@ -206,8 +206,30 @@ func TestCheckNamesTheMuxtJSONEntryAheadOfItsDiagnostics(t *testing.T) {
 // function, so a run over it names two sets of one key.
 func twoSetModule(t *testing.T) string {
 	t.Helper()
-	dir := t.TempDir()
-	writeTestFile(t, dir, "go.mod", "module "+testModule+"\n\ngo 1.24\n")
+	return twoSetModuleIn(t, twoSetPlace{})
+}
+
+// twoSetPlace is where twoSetModuleIn puts the two sets: in the package at
+// Sub below the module root, which holds the muxt.json, and the root when Sub
+// is empty.
+type twoSetPlace struct{ Sub string }
+
+// Key is the packages key of the package holding the sets.
+func (p twoSetPlace) Key() string {
+	if p.Sub == "" {
+		return testModule
+	}
+	return testModule + "/" + p.Sub
+}
+
+// twoSetModuleIn is twoSetModule with the sets in the package at place. It
+// returns the module root.
+func twoSetModuleIn(t *testing.T, place twoSetPlace) string {
+	t.Helper()
+	root := t.TempDir()
+	writeTestFile(t, root, "go.mod", "module "+testModule+"\n\ngo 1.24\n")
+	dir := filepath.Join(root, filepath.FromSlash(place.Sub))
+	require.NoError(t, os.MkdirAll(dir, 0o755))
 	writeTestFile(t, dir, "package.go", `package root
 
 import (
@@ -224,11 +246,29 @@ var adminTmpl = template.Must(template.ParseFS(source, "admin.gohtml"))
 `)
 	writeTestFile(t, dir, "public.gohtml", `{{define "GET /public"}}<p>public</p>{{end}}`)
 	writeTestFile(t, dir, "admin.gohtml", `{{define "GET /admin"}}<p>admin</p>{{end}}`)
-	writeMuxtJSON(t, dir, `{"packages": {"`+testModule+`": [
+	writeMuxtJSON(t, root, `{"packages": {"`+place.Key()+`": [
 		{"use_templates_variable": ["publicTmpl"], "output_file": "routes_public.go", "output_routes_func": "PublicRoutes"},
 		{"use_templates_variable": ["adminTmpl"], "output_file": "routes_admin.go", "output_routes_func": "AdminRoutes"}
 	]}}`)
-	return dir
+	return root
+}
+
+// twoSetRuns are the directories a run over two sets of one key can start
+// in: the muxt.json's own, and the directory of a package below it, which
+// acts on that package's sets alone and must name them all the same.
+func twoSetRuns() []struct {
+	name  string
+	place twoSetPlace
+	run   string
+} {
+	return []struct {
+		name  string
+		place twoSetPlace
+		run   string
+	}{
+		{name: "in the muxt.json directory", place: twoSetPlace{}, run: "."},
+		{name: "in the package directory", place: twoSetPlace{Sub: "web"}, run: "web"},
+	}
 }
 
 // TestCheckNamesEachSetOfAKeyByItsFile states that muxt check over a key with
@@ -238,14 +278,18 @@ func TestCheckNamesEachSetOfAKeyByItsFile(t *testing.T) {
 	if testing.Short() {
 		t.Skip("loads packages with the go command")
 	}
-	dir := twoSetModule(t)
-	_, _, err := generateWithLoader(t, dir)
-	require.NoError(t, err, "muxt generate")
+	for _, tt := range twoSetRuns() {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := filepath.Join(twoSetModuleIn(t, tt.place), tt.run)
+			_, _, err := generateWithLoader(t, dir)
+			require.NoError(t, err, "muxt generate")
 
-	stdout, _, _, err := analyzeWithLoader(t, dir, "check")
+			stdout, _, _, err := analyzeWithLoader(t, dir, "check")
 
-	require.NoError(t, err, "muxt check")
-	want := `\A` + regexp.QuoteMeta(testModule+" (routes_public.go)") + `\nok: \d+ templates?\n` +
-		regexp.QuoteMeta(testModule+" (routes_admin.go)") + `\nok: \d+ templates?\n\z`
-	assert.Regexp(t, want, stdout, "stdout")
+			require.NoError(t, err, "muxt check")
+			want := `\A` + regexp.QuoteMeta(tt.place.Key()+" (routes_public.go)") + `\nok: \d+ templates?\n` +
+				regexp.QuoteMeta(tt.place.Key()+" (routes_admin.go)") + `\nok: \d+ templates?\n\z`
+			assert.Regexp(t, want, stdout, "stdout")
+		})
+	}
 }

@@ -153,14 +153,18 @@ func TestGenerateNamesEachSetOfAKeyByItsFile(t *testing.T) {
 	if testing.Short() {
 		t.Skip("loads packages with the go command")
 	}
-	dir := twoSetModule(t)
+	for _, tt := range twoSetRuns() {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := filepath.Join(twoSetModuleIn(t, tt.place), tt.run)
 
-	stdout, _, err := generateWithLoader(t, dir, "-v")
+			stdout, _, err := generateWithLoader(t, dir, "-v")
 
-	require.NoError(t, err, "generate -v")
-	const want = "example.com/m (routes_public.go)\ngenerating handler for pattern GET /public\nwrote routes_public.go: 1 route\n" +
-		"example.com/m (routes_admin.go)\ngenerating handler for pattern GET /admin\nwrote routes_admin.go: 1 route\n"
-	assert.Equal(t, want, stdout, "stdout")
+			require.NoError(t, err, "generate -v")
+			want := tt.place.Key() + " (routes_public.go)\ngenerating handler for pattern GET /public\nwrote routes_public.go: 1 route\n" +
+				tt.place.Key() + " (routes_admin.go)\ngenerating handler for pattern GET /admin\nwrote routes_admin.go: 1 route\n"
+			assert.Equal(t, want, stdout, "stdout")
+		})
+	}
 }
 
 // withMissingVariableEntry rewrites the muxt.json of dir, a module entryModule

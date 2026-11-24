@@ -426,18 +426,22 @@ func TestRoutesJSONTellsSetsOfOneKeyApart(t *testing.T) {
 	if testing.Short() {
 		t.Skip("loads packages with the go command")
 	}
-	dir := twoSetModule(t)
+	for _, tt := range twoSetRuns() {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := filepath.Join(twoSetModuleIn(t, tt.place), tt.run)
 
-	stdout, _, err := listWithLoader(t, dir, "--format", "json")
+			stdout, _, err := listWithLoader(t, dir, "--format", "json")
 
-	require.NoError(t, err, "muxt --format json")
-	var listings []struct{ Key string }
-	require.NoError(t, json.Unmarshal([]byte(stdout), &listings), "output:\n%s", stdout)
-	var keys []string
-	for _, listing := range listings {
-		keys = append(keys, listing.Key)
+			require.NoError(t, err, "muxt --format json")
+			var listings []struct{ Key string }
+			require.NoError(t, json.Unmarshal([]byte(stdout), &listings), "output:\n%s", stdout)
+			var keys []string
+			for _, listing := range listings {
+				keys = append(keys, listing.Key)
+			}
+			assert.Equal(t, []string{tt.place.Key() + " (routes_public.go)", tt.place.Key() + " (routes_admin.go)"}, keys, "keys")
+		})
 	}
-	assert.Equal(t, []string{testModule + " (routes_public.go)", testModule + " (routes_admin.go)"}, keys, "keys")
 }
 
 // TestRoutesJSONOverSeveralEntriesIsOneDocument states that with --format json
