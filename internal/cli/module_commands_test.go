@@ -254,6 +254,26 @@ func TestExploreModuleRejectsInvalidEntry(t *testing.T) {
 	requireInvalidEntry(t, err)
 }
 
+// TestExploreModuleRejectsTwoEntriesWithOneOutputFile states that explore-module
+// fails on two entries of a key that write one file, with the error every
+// command gives, since it reads the entries through the same selection.
+func TestExploreModuleRejectsTwoEntriesWithOneOutputFile(t *testing.T) {
+	wd := newTwoPackageModule(t)
+	_, _, err := execute(t, wd, "-C", "a", "generate")
+	require.NoError(t, err, "generate")
+	writeTestFile(t, wd, "muxt.json", `{"packages": {"example.com/a": [
+		{"output_file": "routes.go", "output_routes_func": "PublicRoutes"},
+		{"output_file": "routes.go", "output_routes_func": "AdminRoutes"}
+	]}}`)
+
+	_, _, err = execute(t, wd, "explore-module", "--format=json")
+
+	clash, ok := errors.AsType[*composite.SetClashError](err)
+	require.True(t, ok, "error = %v, want *composite.SetClashError", err)
+	want := composite.SetClashError{Path: filepath.Join(wd, composite.FileName), Key: "example.com/a", Member: "output_file", Value: "routes.go", First: 0, Second: 1}
+	assert.Equal(t, want, *clash, "error")
+}
+
 // TestGenerateFakeServerRejectsInvalidEntry is the same for generate-fake-server.
 func TestGenerateFakeServerRejectsInvalidEntry(t *testing.T) {
 	wd := brokenEntryModule(t)
