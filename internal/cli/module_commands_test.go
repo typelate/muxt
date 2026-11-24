@@ -246,3 +246,32 @@ func TestGenerateFakeServerRejectsInvalidEntry(t *testing.T) {
 	requireInvalidEntry(t, err)
 	assert.NoDirExists(t, filepath.Join(wd, "cmd", "explore-goland"), "generate-fake-server wrote output")
 }
+
+// TestExploreModuleListsEachSetOfADirectory states that explore-module lists
+// a package with two generated route sets once per set, each with its own
+// routes function, since the one directory holds two generated files that
+// call different functions; a set that was never generated has no row.
+func TestExploreModuleListsEachSetOfADirectory(t *testing.T) {
+	if testing.Short() {
+		t.Skip("loads packages with the go command")
+	}
+	root := twoSetModule(t)
+	_, _, err := execute(t, root, "generate")
+	require.NoError(t, err, "generate")
+
+	stdout, _, err := execute(t, root, "explore-module", "--format=json")
+	require.NoError(t, err, "explore-module")
+
+	var got struct {
+		Packages []struct {
+			Path   string
+			Config struct{ RoutesFunction string }
+		}
+	}
+	require.NoError(t, json.Unmarshal([]byte(stdout), &got), "explore-module output")
+	var rows []string
+	for _, pkg := range got.Packages {
+		rows = append(rows, pkg.Path+" "+pkg.Config.RoutesFunction)
+	}
+	assert.Equal(t, []string{testModule + " AdminRoutes", testModule + " PublicRoutes"}, rows, "explore-module rows")
+}
