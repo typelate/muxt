@@ -18,7 +18,7 @@ func namedFailure(job packageJob, keyed bool, err error) error {
 	if !keyed {
 		return err
 	}
-	return fmt.Errorf("%s: %w", job.Key, err)
+	return fmt.Errorf("%s: %w", job.Name(), err)
 }
 
 // keyedWriter writes key and a newline ahead of the first thing written to w,
@@ -49,7 +49,7 @@ func checkRunner(loadPackages packageLoader) func(*cobra.Command, []packageJob, 
 				// In a keyed run the diagnostics of a job say which it is.
 				var diagnostics io.Writer = cmd.ErrOrStderr()
 				if keyed {
-					diagnostics = &keyedWriter{w: diagnostics, key: job.Key}
+					diagnostics = &keyedWriter{w: diagnostics, key: job.Name()}
 				}
 				logger := log.New(diagnostics, "", 0)
 				pkg, err := l.Package(job.Dir, job.Config.TemplatesVariables)
@@ -73,7 +73,7 @@ func checkRunner(loadPackages packageLoader) func(*cobra.Command, []packageJob, 
 					summary += ", " + plural(result.NonLiteral, "call site") + " skipped"
 				}
 				if keyed {
-					_, _ = fmt.Fprintln(cmd.OutOrStdout(), job.Key)
+					_, _ = fmt.Fprintln(cmd.OutOrStdout(), job.Name())
 				}
 				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "ok: %s\n", summary)
 				return false, nil
@@ -135,7 +135,7 @@ func runListing(cmd *cobra.Command, loadPackages packageLoader, jobs []packageJo
 			}
 			var key string
 			if keyed {
-				key = job.Key
+				key = job.Name()
 			}
 			result, err := list(pkg, key)
 			if err != nil {

@@ -191,6 +191,40 @@ func TestSelectJobsTakesEverySetUnderAKey(t *testing.T) {
 	assert.Equal(t, want, got, "jobs")
 }
 
+// TestJobNameTellsSetsOfOneKeyApart states that a job is named by its key when
+// the key holds one entry, so a one-entry module prints what it always did, and
+// by its key and output file when the key holds several.
+func TestJobNameTellsSetsOfOneKeyApart(t *testing.T) {
+	spec := jobSpec{Name: "generate", Scope: eachEntry}
+	for _, tt := range []struct {
+		name     string
+		muxtJSON string
+		want     []string
+	}{
+		{
+			name:     "several sets",
+			muxtJSON: twoSetsOfContacts,
+			want: []string{
+				"example.com/fieldkit/contacts (routes_public.go)",
+				"example.com/fieldkit/contacts (routes_admin.go)",
+			},
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			base := newFieldkit(t, tt.muxtJSON)
+
+			sel, err := selectJobs(spec, base, nil, func(string) string { return "" })
+
+			require.NoError(t, err)
+			var got []string
+			for _, job := range sel.Jobs {
+				got = append(got, job.Name())
+			}
+			assert.Equal(t, tt.want, got, "job names")
+		})
+	}
+}
+
 // TestSelectJobsNamesTheEntryAFlagRejects states that an entry whose values a
 // flag rejects is named by its position under the key, so the second of two
 // is not mistaken for the first.

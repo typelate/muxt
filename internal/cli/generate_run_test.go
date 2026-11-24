@@ -146,6 +146,23 @@ func TestGenerateOneMuxtJSONEntryNamesItsDirectory(t *testing.T) {
 	assert.Equal(t, "example.com/m\ngenerating handler for pattern GET /Root\nwrote template_routes.go: 1 route\n", stdout, "stdout")
 }
 
+// TestGenerateNamesEachSetOfAKeyByItsFile states that with -v a run over a key
+// with two sets prints the key and the set's output file before each set's
+// output, so the two can be told apart.
+func TestGenerateNamesEachSetOfAKeyByItsFile(t *testing.T) {
+	if testing.Short() {
+		t.Skip("loads packages with the go command")
+	}
+	dir := twoSetModule(t)
+
+	stdout, _, err := generateWithLoader(t, dir, "-v")
+
+	require.NoError(t, err, "generate -v")
+	const want = "example.com/m (routes_public.go)\ngenerating handler for pattern GET /public\nwrote routes_public.go: 1 route\n" +
+		"example.com/m (routes_admin.go)\ngenerating handler for pattern GET /admin\nwrote routes_admin.go: 1 route\n"
+	assert.Equal(t, want, stdout, "stdout")
+}
+
 // withMissingVariableEntry rewrites the muxt.json of dir, a module entryModule
 // wrote with an entry for each of keys, so the entry for "workspace" names a
 // templates variable its package does not declare.

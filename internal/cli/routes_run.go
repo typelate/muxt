@@ -101,7 +101,7 @@ func routesRunner(loadPackages packageLoader) func(*cobra.Command, []routesJob) 
 				for n, result := range results {
 					listing := routesListing{Routes: result, Configuration: jobs[i].Report, printConfiguration: n == 0}
 					if keyed {
-						listing.Key = job.Key
+						listing.Key = job.Name()
 					}
 					if asJSON && keyed {
 						collected = append(collected, listing)

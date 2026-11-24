@@ -98,6 +98,17 @@ type packageJob struct {
 	ReadOnly bool
 }
 
+// Name is what a run's output calls the job: its key, followed by its output
+// file in parentheses when the key holds several entries, since the key alone
+// would not tell them apart. Choosing by the entry count keeps a one-entry
+// module's output as it was.
+func (j packageJob) Name() string {
+	if j.Sets > 1 {
+		return fmt.Sprintf("%s (%s)", j.Key, j.Config.OutputFileName)
+	}
+	return j.Key
+}
+
 // Where is the job's entry as a muxt.json spells its position, for an error to
 // name. It is meaningless for a job the command line configured.
 func (j packageJob) Where() string { return composite.SetWhere(j.Key, j.Set) }

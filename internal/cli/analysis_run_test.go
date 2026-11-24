@@ -200,3 +200,52 @@ func TestCheckNamesTheMuxtJSONEntryAheadOfItsDiagnostics(t *testing.T) {
 		"\n"+
 		"Error: "+testModule+": 1 error\n", strings.ReplaceAll(stderr, dir, "$DIR"), "stderr")
 }
+
+// twoSetModule is a module whose root package holds a public and an admin
+// route set, each with its own templates variable, output file and routes
+// function, so a run over it names two sets of one key.
+func twoSetModule(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	writeTestFile(t, dir, "go.mod", "module "+testModule+"\n\ngo 1.24\n")
+	writeTestFile(t, dir, "package.go", `package root
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var source embed.FS
+
+var publicTmpl = template.Must(template.ParseFS(source, "public.gohtml"))
+
+var adminTmpl = template.Must(template.ParseFS(source, "admin.gohtml"))
+`)
+	writeTestFile(t, dir, "public.gohtml", `{{define "GET /public"}}<p>public</p>{{end}}`)
+	writeTestFile(t, dir, "admin.gohtml", `{{define "GET /admin"}}<p>admin</p>{{end}}`)
+	writeMuxtJSON(t, dir, `{"packages": {"`+testModule+`": [
+		{"use_templates_variable": ["publicTmpl"], "output_file": "routes_public.go", "output_routes_func": "PublicRoutes"},
+		{"use_templates_variable": ["adminTmpl"], "output_file": "routes_admin.go", "output_routes_func": "AdminRoutes"}
+	]}}`)
+	return dir
+}
+
+// TestCheckNamesEachSetOfAKeyByItsFile states that muxt check over a key with
+// two sets heads each summary with the key and the set's output file, so the
+// two summaries can be told apart.
+func TestCheckNamesEachSetOfAKeyByItsFile(t *testing.T) {
+	if testing.Short() {
+		t.Skip("loads packages with the go command")
+	}
+	dir := twoSetModule(t)
+	_, _, err := generateWithLoader(t, dir)
+	require.NoError(t, err, "muxt generate")
+
+	stdout, _, _, err := analyzeWithLoader(t, dir, "check")
+
+	require.NoError(t, err, "muxt check")
+	want := `\A` + regexp.QuoteMeta(testModule+" (routes_public.go)") + `\nok: \d+ templates?\n` +
+		regexp.QuoteMeta(testModule+" (routes_admin.go)") + `\nok: \d+ templates?\n\z`
+	assert.Regexp(t, want, stdout, "stdout")
+}

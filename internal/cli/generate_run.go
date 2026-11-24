@@ -75,7 +75,7 @@ func generateRunner(loadPackages packageLoader) func(*cobra.Command, []packageJo
 				return entryErr
 			}
 			if job.Named() {
-				return fmt.Errorf("%s: %w", job.Key, err)
+				return fmt.Errorf("%s: %w", job.Name(), err)
 			}
 			return err
 		}
@@ -112,7 +112,7 @@ func generateRunner(loadPackages packageLoader) func(*cobra.Command, []packageJo
 				if keyed && verbose {
 					// Several directories write to one stream, so each
 					// says whose lines follow.
-					_, _ = fmt.Fprintln(stdout, job.Key)
+					_, _ = fmt.Fprintln(stdout, job.Name())
 				}
 			},
 			Visit: func(_ int, job packageJob, l *load.Loaded, keyed bool) (bool, error) {
@@ -129,7 +129,7 @@ func generateRunner(loadPackages packageLoader) func(*cobra.Command, []packageJo
 				}
 				jobStderr := stderr
 				if keyed {
-					jobStderr = log.New(cmd.ErrOrStderr(), job.Key+": ", 0)
+					jobStderr = log.New(cmd.ErrOrStderr(), job.Name()+": ", 0)
 				}
 				wrote, err := writeJob(wroteTo, jobStderr, job, files)
 				if err != nil {
@@ -188,7 +188,7 @@ type jobResult struct {
 func resolveJob(cmd *cobra.Command, l *load.Loaded, job packageJob, keyed bool, namespace string) (jobResult, error) {
 	report := func(err error) {
 		if _, ok := errors.AsType[muxt.MultiLineError](err); ok && keyed {
-			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "%s:\n", job.Key)
+			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "%s:\n", job.Name())
 		}
 		printMultiLineError(cmd, err)
 	}
@@ -206,7 +206,7 @@ func resolveJob(cmd *cobra.Command, l *load.Loaded, job packageJob, keyed bool, 
 	// Several jobs share one stream, so each note says whose it is.
 	logs := generate.Loggers{Progress: log.New(cmd.OutOrStdout(), "", 0), Notes: log.New(cmd.OutOrStdout(), "", 0)}
 	if keyed {
-		logs.Notes.SetPrefix(job.Key + ": ")
+		logs.Notes.SetPrefix(job.Name() + ": ")
 	}
 	if job.ReadOnly {
 		// Nothing of this package is written, so its progress is not news.
