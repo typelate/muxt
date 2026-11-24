@@ -260,6 +260,28 @@ func TestSelectJobsRejectsTwoSetsThatShareOneOutput(t *testing.T) {
 	}
 }
 
+// TestSelectJobsRejectsRoutePathsWithSeveralEntriesUnderAKey states that the
+// route_paths hub names each package once, so a key with two entries is an
+// error of its own and not a namespace clash that tells the user to rename a
+// package.
+func TestSelectJobsRejectsRoutePathsWithSeveralEntriesUnderAKey(t *testing.T) {
+	base := newFieldkit(t, `{"route_paths": {}, "packages": {
+		"example.com/fieldkit": {},
+		"example.com/fieldkit/contacts": [
+			{"output_file": "routes_public.go", "output_routes_func": "PublicRoutes"},
+			{"output_file": "routes_admin.go", "output_routes_func": "AdminRoutes"}
+		]}}`)
+	spec := jobSpec{Name: "generate", Scope: eachEntry}
+
+	_, err := selectJobs(spec, base, nil, func(string) string { return "" })
+
+	var got *composite.RoutePathsSetsError
+	require.ErrorAs(t, err, &got, "error %v", err)
+	path := filepath.Join(base, composite.FileName)
+	assert.Equal(t, composite.RoutePathsSetsError{Path: path, Key: "example.com/fieldkit/contacts", Sets: 2}, *got, "error")
+	assert.Equal(t, path+`: route_paths takes one entry per package, and packages["example.com/fieldkit/contacts"] has 2; keep one entry or remove route_paths`, err.Error(), "message")
+}
+
 // asError reports whether err is, or wraps, an E.
 func asError[E error](err error) bool {
 	_, ok := errors.AsType[E](err)

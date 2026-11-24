@@ -196,6 +196,20 @@ func (e *SetClashError) Error() string {
 	return fmt.Sprintf("%s: %s and %s both set %s %q; give each its own %s", e.Path, SetWhere(e.Key, e.First), SetWhere(e.Key, e.Second), e.Member, e.Value, e.Member)
 }
 
+// RoutePathsSetsError reports a packages key with several entries in a file
+// that has a route_paths key. The hub holds one namespace per package, so a
+// package with two route sets would declare its namespace twice. Sets is how
+// many entries Key holds.
+type RoutePathsSetsError struct {
+	Path, Key string
+	Sets      int
+}
+
+// Error returns the path, the key, its entry count and the fix on one line.
+func (e *RoutePathsSetsError) Error() string {
+	return fmt.Sprintf("%s: route_paths takes one entry per package, and packages[%q] has %d; keep one entry or remove route_paths", e.Path, e.Key, e.Sets)
+}
+
 // InvalidEntryError reports a muxt.json entry whose values a generate flag
 // rejects, such as two frontends set at once. Err is the flag's own error, so
 // the message matches the one the command line gives. Where names the entry.

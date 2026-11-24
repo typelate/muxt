@@ -247,6 +247,9 @@ func selectJobs(spec jobSpec, dir string, flags *pflag.FlagSet, getEnv func(stri
 		}
 		keyOf[realDir] = key
 		sets, _ := f.Resolve(key)
+		if f.RoutePaths != nil && len(sets) > 1 {
+			return selection{}, &composite.RoutePathsSetsError{Path: f.Name, Key: key, Sets: len(sets)}
+		}
 		fileOf := map[string]int{} // an output file to the first entry that writes it
 		funcOf := map[string]int{} // a routes function to the first entry that names it
 		for i, set := range sets {
