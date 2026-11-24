@@ -331,7 +331,7 @@ func TestGeneratePackageWritesFilesAndReportsThem(t *testing.T) {
 	stdout, err := runCommand(t, root, "generate package workspace")
 
 	require.NoError(t, err)
-	assert.Equal(t, "wrote workspace/workspace.go\nwrote workspace/workspace.gohtml\nwrote muxt.json: packages[\"example.com/m/workspace\"]\n", stdout, "stdout")
+	assert.Equal(t, "wrote workspace/workspace.go\nwrote workspace/workspace.gohtml\nwrote muxt.json: packages[\"example.com/m/workspace\"][0]\n", stdout, "stdout")
 	html, err := os.ReadFile(filepath.Join(root, "workspace", "workspace.gohtml"))
 	require.NoError(t, err)
 	assert.Empty(t, html, "workspace.gohtml")
@@ -479,7 +479,7 @@ func TestGeneratePackageRefusesExistingEntry(t *testing.T) {
 
 	var exists *composite.ExistsError
 	require.ErrorAs(t, err, &exists)
-	require.EqualError(t, err, filepath.Join(root, "muxt.json")+`: packages["`+importPath("widgets")+`"] already exists; nothing was written`)
+	require.EqualError(t, err, filepath.Join(root, "muxt.json")+`: packages["`+importPath("widgets")+`"][0] already exists; nothing was written`)
 	_, statErr := os.Stat(filepath.Join(root, "widgets"))
 	assert.ErrorIs(t, statErr, os.ErrNotExist, "no directory is created")
 	got, err := os.ReadFile(filepath.Join(root, "muxt.json"))
@@ -562,4 +562,40 @@ func TestGeneratePackageWritesItsEntryAsAOneElementArray(t *testing.T) {
 	require.NoError(t, json.Unmarshal(raw, &got), "muxt.json holds arrays:\n%s", raw)
 	assert.Len(t, got.Packages[importPath("workspace")], 1, "elements of the new package")
 	assert.Len(t, got.Packages[importPath("widgets")], 2, "elements of the package already there")
+}
+
+// TestGeneratePackageNamesTheEntryByPosition states that every message of
+// muxt generate package that points into muxt.json spells the position of the
+// new entry with its index, packages["KEY"][0], as the messages of the other
+// commands do, and not the bare key.
+func TestGeneratePackageNamesTheEntryByPosition(t *testing.T) {
+	const key = "example.com/m/workspace"
+	t.Run("the entry is written", func(t *testing.T) {
+		root := moduleDir(t)
+		require.NoError(t, os.WriteFile(filepath.Join(root, "muxt.json"), []byte(`{"packages": {}}`), 0o644))
+
+		stdout, err := runCommand(t, root, "generate package workspace")
+
+		require.NoError(t, err)
+		assert.Contains(t, stdout, "wrote muxt.json: packages[\""+key+"\"][0]\n", "stdout")
+	})
+	t.Run("the key exists", func(t *testing.T) {
+		root := moduleDir(t)
+		existing := `{"packages": {"` + key + `": [{"use_templates_variable": ["x"]}]}}`
+		require.NoError(t, os.WriteFile(filepath.Join(root, "muxt.json"), []byte(existing), 0o644))
+
+		_, err := runCommand(t, root, "generate package workspace")
+
+		require.EqualError(t, err, filepath.Join(root, "muxt.json")+`: packages["`+key+`"][0] already exists; nothing was written`)
+	})
+	t.Run("the entry is invalid", func(t *testing.T) {
+		root := moduleDir(t)
+		require.NoError(t, os.WriteFile(filepath.Join(root, "muxt.json"), []byte(`{"packages": {}}`), 0o644))
+
+		_, err := runCommand(t, root, "generate package workspace --output-htmx --output-datastar")
+
+		var invalid *composite.InvalidEntryError
+		require.ErrorAs(t, err, &invalid, "error %v", err)
+		assert.Equal(t, `packages["`+key+`"][0]`, invalid.Where, "position")
+	})
 }

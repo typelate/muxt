@@ -80,7 +80,7 @@ func scaffoldPackage(out io.Writer, wd, name string, flags *pflag.FlagSet, confi
 		return err
 	}
 	if _, exists := f.Packages[key]; exists {
-		return &composite.ExistsError{Path: f.Name, Where: fmt.Sprintf("packages[%q]", key)}
+		return &composite.ExistsError{Path: f.Name, Where: composite.SetWhere(key, 0)}
 	}
 	if err := fixTemplateVariables(&config.TemplatesVariables, deprecatedTemplatesVar, fromCommandLine); err != nil {
 		return err
@@ -124,7 +124,7 @@ func scaffoldPackage(out io.Writer, wd, name string, flags *pflag.FlagSet, confi
 	resolved, _ := candidate.Resolve(key)
 	resolvedConfig, err := entryConfiguration(resolved[0], fromCommandLine, generateEnv{Dir: dir, GetEnv: getEnv, Version: version})
 	if err != nil {
-		return &composite.InvalidEntryError{Path: f.Name, Where: fmt.Sprintf("packages[%q]", key), Err: err}
+		return &composite.InvalidEntryError{Path: f.Name, Where: composite.SetWhere(key, 0), Err: err}
 	}
 	// The entry names the variable the next generate looks for, so the file
 	// declares the first one the resolved entry names.
@@ -175,7 +175,7 @@ func scaffoldPackage(out io.Writer, wd, name string, flags *pflag.FlagSet, confi
 	if err != nil {
 		return fmt.Errorf("path of %s from %s: %w", f.Name, absWD, err)
 	}
-	_, err = fmt.Fprintf(out, "wrote %s: packages[%q]\n", shown, key)
+	_, err = fmt.Fprintf(out, "wrote %s: %s\n", shown, composite.SetWhere(key, 0))
 	return err
 }
 
