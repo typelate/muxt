@@ -60,6 +60,21 @@ func TestPackageInDirectory(t *testing.T) {
 		_, err := packageInDirectory(mod, "/work/c")
 		require.EqualError(t, err, "no muxt-generated package found at /work/c", "packageInDirectory(/work/c)")
 	})
+
+	t.Run("several route sets", func(t *testing.T) {
+		sets := &analysis.Module{Packages: []analysis.PackageInfo{
+			{Path: "example.com/a", Dir: "/work/a", Config: analysis.PackageConfig{RoutesFunction: "PublicRoutes"}},
+			{Path: "example.com/a", Dir: "/work/a", Config: analysis.PackageConfig{RoutesFunction: "AdminRoutes"}},
+			{Path: "example.com/b", Dir: "/work/b"},
+		}}
+
+		_, err := packageInDirectory(sets, "/work/a")
+
+		require.EqualError(t, err, "/work/a has 2 route sets (PublicRoutes, AdminRoutes); generate-fake-server serves one routes function and has no way to choose", "packageInDirectory(/work/a)")
+		var several *SeveralRouteSetsError
+		require.ErrorAs(t, err, &several, "error type")
+		assert.Equal(t, []string{"PublicRoutes", "AdminRoutes"}, several.RoutesFunctions, "routes functions")
+	})
 }
 
 func TestNewFakeServerConfig(t *testing.T) {
@@ -274,4 +289,26 @@ func TestExploreModuleListsEachSetOfADirectory(t *testing.T) {
 		rows = append(rows, pkg.Path+" "+pkg.Config.RoutesFunction)
 	}
 	assert.Equal(t, []string{testModule + " AdminRoutes", testModule + " PublicRoutes"}, rows, "explore-module rows")
+}
+
+// TestGenerateFakeServerRefusesADirectoryWithSeveralRouteSets states that
+// generate-fake-server in a package with two generated route sets fails
+// naming each routes function and writes nothing: its server calls one, and
+// no flag says which.
+func TestGenerateFakeServerRefusesADirectoryWithSeveralRouteSets(t *testing.T) {
+	if testing.Short() {
+		t.Skip("loads packages with the go command")
+	}
+	root := twoSetModule(t)
+	_, _, err := execute(t, root, "generate")
+	require.NoError(t, err, "generate")
+
+	_, _, err = execute(t, root, "generate-fake-server", "-o", "out")
+
+	require.Error(t, err, "generate-fake-server")
+	var several *SeveralRouteSetsError
+	require.ErrorAs(t, err, &several, "error %v", err)
+	assert.Equal(t, []string{"AdminRoutes", "PublicRoutes"}, several.RoutesFunctions, "routes functions")
+	assert.True(t, strings.HasSuffix(several.Dir, filepath.Base(root)), "directory %q is the module's %q", several.Dir, root)
+	assert.NoDirExists(t, filepath.Join(root, "out"), "generate-fake-server wrote output")
 }

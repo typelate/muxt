@@ -6,7 +6,7 @@ Writes a `main.go` that serves a package's routes from a counterfeiter fake of i
 muxt generate-fake-server ./hypertext
 ```
 
-The argument is one package directory; none means the working directory. It must be a library package with a generated routes file ([err_generate_fake_server_main_package.txt](../../../cmd/muxt/testdata/err_generate_fake_server_main_package.txt)). `-o` sets the output directory, inside the module, default `./cmd/explore-goland`.
+The argument is one package directory; none means the working directory. It must be a library package with a generated routes file ([err_generate_fake_server_main_package.txt](../../../cmd/muxt/testdata/err_generate_fake_server_main_package.txt)). A directory with several route sets is refused, naming each routes function; the command serves one and has no flag to choose. `-o` sets the output directory, inside the module, default `./cmd/explore-goland`.
 
 | File | Contents |
 |---|---|

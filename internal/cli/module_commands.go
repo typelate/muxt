@@ -145,13 +145,40 @@ func fakeImportPath(mod *analysis.Module, outDir string) (string, error) {
 	return path.Join(mod.ModulePath, filepath.ToSlash(rel), "internal", "fake"), nil
 }
 
+// SeveralRouteSetsError reports a directory with several generated route sets
+// given to a command that serves one routes function. Dir is the directory and
+// RoutesFunctions the function of each set, in the order explore-module lists
+// them. No fix is offered: the command has no flag to choose a set.
+type SeveralRouteSetsError struct {
+	Dir             string
+	RoutesFunctions []string
+}
+
+// Error returns the directory, the count and the functions on one line.
+func (e *SeveralRouteSetsError) Error() string {
+	return fmt.Sprintf("%s has %d route sets (%s); %s serves one routes function and has no way to choose", e.Dir, len(e.RoutesFunctions), strings.Join(e.RoutesFunctions, ", "), generateFakeServerCommandName)
+}
+
+// packageInDirectory is the one package of mod in dir. A directory with
+// several route sets is several packages of mod, and none is the one.
 func packageInDirectory(mod *analysis.Module, dir string) (analysis.PackageInfo, error) {
+	var found []analysis.PackageInfo
 	for _, pkg := range mod.Packages {
 		if pkg.Dir == dir {
-			return pkg, nil
+			found = append(found, pkg)
 		}
 	}
-	return analysis.PackageInfo{}, fmt.Errorf("no muxt-generated package found at %s", dir)
+	switch len(found) {
+	case 0:
+		return analysis.PackageInfo{}, fmt.Errorf("no muxt-generated package found at %s", dir)
+	case 1:
+		return found[0], nil
+	}
+	several := &SeveralRouteSetsError{Dir: dir}
+	for _, pkg := range found {
+		several.RoutesFunctions = append(several.RoutesFunctions, pkg.Config.RoutesFunction)
+	}
+	return analysis.PackageInfo{}, several
 }
 
 func newFakeServerConfig(pkg analysis.PackageInfo, fakeImportPath string) fakeserver.Config {
