@@ -211,6 +211,22 @@ func (e *RoutePathsSetsError) Error() string {
 	return fmt.Sprintf("%s: route_paths takes one entry per package, and packages[%q] has %d; keep one entry or remove route_paths", e.Path, e.Key, e.Sets)
 }
 
+// GeneratedFileClashError reports two entries under one packages key that
+// would write one generated file under output_multiple_files: both read a
+// template file, and the file's name comes from the template file alone, so the
+// second would overwrite the first. File is the absolute path of the generated
+// file, Path the muxt.json, and First and Second the zero-based positions under
+// Key, First being the earlier.
+type GeneratedFileClashError struct {
+	Path, Key, File string
+	First, Second   int
+}
+
+// Error returns the generated file, both positions and the fixes on one line.
+func (e *GeneratedFileClashError) Error() string {
+	return fmt.Sprintf("%s: %s and %s would both write it under output_multiple_files; give them different template files or turn output_multiple_files off", e.File, SetWhere(e.Key, e.First), SetWhere(e.Key, e.Second))
+}
+
 // InvalidEntryError reports a muxt.json entry whose values a generate flag
 // rejects, such as two frontends set at once. Err is the flag's own error, so
 // the message matches the one the command line gives. Where names the entry.

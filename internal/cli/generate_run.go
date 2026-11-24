@@ -81,6 +81,7 @@ func generateRunner(loadPackages packageLoader) func(*cobra.Command, []packageJo
 		}
 		hub := jobs[0].RoutePaths
 		var namespaces map[string]string // by packages key
+		checked := make(map[string]bool) // directories whose sets were compared
 		var hubPackages []generate.RoutePathsPackage
 		if hub != nil {
 			var err error
@@ -116,6 +117,14 @@ func generateRunner(loadPackages packageLoader) func(*cobra.Command, []packageJo
 				}
 			},
 			Visit: func(_ int, job packageJob, l *load.Loaded, keyed bool) (bool, error) {
+				// The sets of one directory share one load, so the first of them
+				// resolves the others, quietly, before anything is written there.
+				if !checked[job.Dir] {
+					checked[job.Dir] = true
+					if err := checkSetsOfDirectory(cmd, l, jobs, job.Dir, namespaces, failed); err != nil {
+						return false, err
+					}
+				}
 				result, err := resolveJob(cmd, l, job, job.Named(), namespaces[job.Key])
 				if err != nil {
 					return false, failed(job, err)
@@ -143,6 +152,65 @@ func generateRunner(loadPackages packageLoader) func(*cobra.Command, []packageJo
 		}
 		return writeHubFile(wroteTo, hub, jobs[0].Config.MuxtVersion, hubPackages)
 	}
+}
+
+// checkSetsOfDirectory resolves every muxt.json set of dir that writes with
+// output_multiple_files, so two that would write one generated file are refused
+// before the first writes. The files of one directory are named by template
+// file alone, so only resolving knows them. What resolving prints is dropped:
+// each set resolves again, in turn, when it is written. A resolve failure is
+// named by failed, as the set's own run would name it.
+func checkSetsOfDirectory(cmd *cobra.Command, l *load.Loaded, jobs []packageJob, dir string, namespaces map[string]string, failed func(packageJob, error) error) error {
+	var sets []packageJob
+	multiple := false
+	for _, job := range jobs {
+		if job.Dir != dir || job.File == "" || job.ReadOnly {
+			continue
+		}
+		sets = append(sets, job)
+		multiple = multiple || job.Config.OutputMultipleFiles
+	}
+	if len(sets) < 2 || !multiple {
+		return nil
+	}
+	results := make([]jobResult, len(sets))
+	for i, set := range sets {
+		quiet := set
+		quiet.ReadOnly = true
+		result, err := resolveJob(cmd, l, quiet, set.Named(), namespaces[set.Key])
+		if err != nil {
+			return failed(set, err)
+		}
+		results[i] = result
+	}
+	return checkGeneratedFileClash(sets, results)
+}
+
+// checkGeneratedFileClash returns a *composite.GeneratedFileClashError when two
+// of sets, the muxt.json sets of one directory, generate one file. results
+// holds what each set generates, in the same order.
+func checkGeneratedFileClash(sets []packageJob, results []jobResult) error {
+	first := make(map[string]int)
+	for i, result := range results {
+		for _, file := range result.Files {
+			earlier, ok := first[file.Path]
+			if !ok {
+				first[file.Path] = i
+				continue
+			}
+			if earlier == i {
+				continue
+			}
+			return &composite.GeneratedFileClashError{
+				Path:   sets[i].File,
+				Key:    sets[i].Key,
+				File:   file.Path,
+				First:  sets[earlier].Set,
+				Second: sets[i].Set,
+			}
+		}
+	}
+	return nil
 }
 
 // writeHubFile writes the file that holds the path helpers of packages into

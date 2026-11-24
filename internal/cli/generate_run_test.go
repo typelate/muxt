@@ -448,6 +448,50 @@ func TestGenerateChecksEveryPackageLoadedBeforeWriting(t *testing.T) {
 	assert.NoFileExists(t, filepath.Join(dir, "a", "template_routes.go"), "an earlier entry's routes file")
 }
 
+// TestGenerateRefusesTwoSetsThatWriteOneGeneratedFile states that when two
+// sets of a key both read one template file and output_multiple_files is on,
+// a flagless muxt generate fails naming the generated file the two would write,
+// both positions and the fixes, and writes nothing, not even the first set.
+func TestGenerateRefusesTwoSetsThatWriteOneGeneratedFile(t *testing.T) {
+	if testing.Short() {
+		t.Skip("loads packages with the go command")
+	}
+	for _, tt := range twoSetRuns() {
+		t.Run(tt.name, func(t *testing.T) {
+			root := twoSetModuleIn(t, tt.place)
+			pkg := filepath.Join(root, filepath.FromSlash(tt.place.Sub))
+			writeTestFile(t, pkg, "package.go", `package root
+
+import (
+	"embed"
+	"html/template"
+)
+
+//go:embed *.gohtml
+var source embed.FS
+
+var publicTmpl = template.Must(template.ParseFS(source, "public.gohtml", "shared.gohtml"))
+
+var adminTmpl = template.Must(template.ParseFS(source, "admin.gohtml", "shared.gohtml"))
+`)
+			writeTestFile(t, pkg, "shared.gohtml", `{{define "GET /shared"}}<p>shared</p>{{end}}`)
+			writeMuxtJSON(t, root, `{"packages": {"`+tt.place.Key()+`": [
+				{"use_templates_variable": ["publicTmpl"], "output_file": "routes_public.go", "output_routes_func": "PublicRoutes", "output_multiple_files": true},
+				{"use_templates_variable": ["adminTmpl"], "output_file": "routes_admin.go", "output_routes_func": "AdminRoutes", "output_multiple_files": true}
+			]}}`)
+
+			_, _, err := generateWithLoader(t, filepath.Join(root, tt.run))
+
+			var clash *composite.GeneratedFileClashError
+			require.ErrorAs(t, err, &clash, "error %v", err)
+			want := filepath.Join(pkg, "shared_template_routes_gen.go") + `: packages["` + tt.place.Key() + `"][0] and packages["` + tt.place.Key() + `"][1] would both write it under output_multiple_files; give them different template files or turn output_multiple_files off`
+			assert.Equal(t, want, err.Error(), "message")
+			assert.NoFileExists(t, filepath.Join(pkg, "routes_public.go"), "the first set's file")
+			assert.NoFileExists(t, filepath.Join(pkg, "shared_template_routes_gen.go"), "the shared file")
+		})
+	}
+}
+
 // notedModule writes a module with muxt.json entries for packages a and b,
 // each with receiver type S and a route calling Missing, a method S lacks.
 func notedModule(t *testing.T, keys ...string) string {
