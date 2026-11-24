@@ -42,7 +42,7 @@ With a [muxt.json](../reference/muxt-json.md), the two lines become two entries 
 }
 ```
 
-Two entries that share one of those names fail `muxt generate` before it writes anything ([rules](../reference/muxt-json.md#several-entries-in-one-package)).
+Two entries that share one of those names fail `muxt generate` before it writes anything ([rules](../reference/muxt-json.md#several-entries-in-one-package)). One `muxt check` with no flags checks both entries.
 
 Register each set with its own receiver, with your own constructors:
 

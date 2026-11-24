@@ -20,10 +20,10 @@
 
 | Command | Reads |
 |---|---|
-| `muxt generate`, no flags | every entry in the file's directory, dependencies first, and `route_paths` when present; the directory's entry elsewhere |
-| `muxt check`, `list-template-calls`, `list-template-callers`, no flags | `use_templates_variable` of every entry in the file's directory, dependencies first; of the directory's entry elsewhere |
-| `muxt test`, no flags | only the entries' directories: every entry in the file's directory, the directory's entry elsewhere |
-| `muxt test-template-mutations`, no flags | `use_templates_variable` of the directory's entry; in the file's directory with no entry for it, an error naming the package directories |
+| `muxt generate`, no flags | every entry in the file's directory, dependencies first, and `route_paths` when present; the directory's entries elsewhere |
+| `muxt check`, `list-template-calls`, `list-template-callers`, no flags | `use_templates_variable` of every entry in the file's directory, dependencies first; of the directory's entries elsewhere |
+| `muxt test`, no flags | only the entries' directories: every entry in the file's directory, the directory's entries elsewhere |
+| `muxt test-template-mutations`, no flags | `use_templates_variable` of the directory's entries; in the file's directory with no entry for it, an error naming the package directories |
 | `muxt` | all of it, shown by source under `Configuration:` |
 | `muxt generate def` | the directory's entry, or its entries when they agree on the receiver type, and `--output-file` may be a file any of them reads; in the file's directory with no entry and no templates variable, an error naming the package directories |
 | `muxt explore-module`, `generate-fake-server` | only whether each package has an entry; settings come from the generated files' headers; with `route_paths` they show the hub's paths type for a listed package |
@@ -34,7 +34,7 @@ In the file's directory, a package with a templates variable and no entry is nei
 
 Only a flagless `muxt generate` needs an entry. In a directory with none, the other commands use their own flags and defaults.
 
-`muxt generate config` creates the file, `muxt generate package NAME` adds an entry, `muxt generate def NAME` adds a route template.
+`muxt generate config` creates the file, `muxt generate package NAME` adds a package with one entry, `muxt generate def NAME` adds a route template. A second entry for a package is written by hand: `generate package` refuses a key the file has.
 
 ## Several entries in one package
 
@@ -51,13 +51,14 @@ Two generated files share one package, so entries that share a name would write 
 
 A `package_defaults` that sets one of the first five gives every entry the same value, and the check fails.
 
-The first of the first five names that two entries share, in the order above, fails the command and nothing is written. With `output_multiple_files`, two entries that would write one file fail too.
+Muxt compares the first five in that order and reports the first clash; nothing is written. With `output_multiple_files`, two entries that would write one file fail too.
 
 | Rule | Error |
 |---|---|
+| An object under a key | `/home/me/app/muxt.json:4:22: packages["example.com/m"] must be an array of JSON objects; wrap the entry in [ ]` |
 | One value in two entries | `/home/me/app/muxt.json: packages["example.com/m"][0] and packages["example.com/m"][1] both have output_file "template_routes.go"; give each its own output_file` |
 | `route_paths` with several entries | `/home/me/app/muxt.json: route_paths takes one entry per package, and packages["example.com/m"] has 2; keep one entry or remove route_paths` |
-| `output_multiple_files` writes one file twice | `/home/me/app/b.go: packages["example.com/m"][0] and packages["example.com/m"][1] would both write it under output_multiple_files; give them different template files or turn output_multiple_files off` |
+| `output_multiple_files` writes one file twice | `/home/me/app/index_template_routes_gen.go: packages["example.com/m"][0] and packages["example.com/m"][1] would both write it under output_multiple_files; give them different template files or turn output_multiple_files off` |
 
 In a directory with several entries:
 
