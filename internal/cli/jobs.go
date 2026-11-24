@@ -248,6 +248,7 @@ func selectJobs(spec jobSpec, dir string, flags *pflag.FlagSet, getEnv func(stri
 		keyOf[realDir] = key
 		sets, _ := f.Resolve(key)
 		fileOf := map[string]int{} // an output file to the first entry that writes it
+		funcOf := map[string]int{} // a routes function to the first entry that names it
 		for i, set := range sets {
 			config, err := entryConfiguration(set, fromMuxtJSON, generateEnv{Dir: entryDir, GetEnv: getEnv, Version: version})
 			if err != nil {
@@ -257,6 +258,10 @@ func selectJobs(spec jobSpec, dir string, flags *pflag.FlagSet, getEnv func(stri
 				return selection{}, &composite.SetClashError{Path: f.Name, Key: key, Member: "output_file", Value: config.OutputFileName, First: first, Second: i}
 			}
 			fileOf[config.OutputFileName] = i
+			if first, clash := funcOf[config.RoutesFunction]; clash {
+				return selection{}, &composite.SetClashError{Path: f.Name, Key: key, Member: "output_routes_func", Value: config.RoutesFunction, First: first, Second: i}
+			}
+			funcOf[config.RoutesFunction] = i
 			config.Verbose = spec.Verbose
 			jobs = append(jobs, packageJob{File: f.Name, Key: key, Set: i, Sets: len(sets), Dir: entryDir, Config: config, Keyed: keyed, RoutePaths: routePaths, ReadOnly: hubFromChild && key != lookup.Key})
 		}
