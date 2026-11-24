@@ -278,6 +278,13 @@ func TestSelectJobsRejectsTwoSetsThatShareOneOutput(t *testing.T) {
 			wantText: `: packages["example.com/fieldkit/contacts"][0] and packages["example.com/fieldkit/contacts"][2] both have output_routes_func "Routes"; give each its own output_routes_func`,
 		},
 		{
+			name: "output file spelled two ways",
+			entries: `{"output_file": "routes.go", "output_routes_func": "PublicRoutes"},
+				{"output_file": "./routes.go", "output_routes_func": "AdminRoutes"}`,
+			wantErr:  composite.SetClashError{Key: "example.com/fieldkit/contacts", Member: "output_file", Value: "routes.go", First: 0, Second: 1},
+			wantText: `: packages["example.com/fieldkit/contacts"][0] and packages["example.com/fieldkit/contacts"][1] both have output_file "routes.go"; give each its own output_file`,
+		},
+		{
 			name: "routes function by default",
 			entries: `{"output_file": "routes_public.go"},
 				{"output_file": "routes_admin.go"}`,

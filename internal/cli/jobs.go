@@ -269,10 +269,12 @@ func selectJobs(spec jobSpec, dir string, flags *pflag.FlagSet, getEnv func(stri
 			if err != nil {
 				return selection{}, &composite.InvalidEntryError{Path: f.Name, Where: composite.SetWhere(key, i), Err: err}
 			}
-			if first, clash := fileOf[config.OutputFileName]; clash {
-				return selection{}, &composite.SetClashError{Path: f.Name, Key: key, Member: "output_file", Value: config.OutputFileName, First: first, Second: i}
+			// Cleaned, so "routes.go" and "./routes.go" are the one file they are.
+			file := filepath.Clean(config.OutputFileName)
+			if first, clash := fileOf[file]; clash {
+				return selection{}, &composite.SetClashError{Path: f.Name, Key: key, Member: "output_file", Value: file, First: first, Second: i}
 			}
-			fileOf[config.OutputFileName] = i
+			fileOf[file] = i
 			if first, clash := funcOf[config.RoutesFunction]; clash {
 				return selection{}, &composite.SetClashError{Path: f.Name, Key: key, Member: "output_routes_func", Value: config.RoutesFunction, First: first, Second: i}
 			}
