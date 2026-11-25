@@ -148,7 +148,7 @@ func recordSelection(base, wd string, args ...string) (string, error) {
 	// A command line with no arguments is an empty list, not a nil one: cobra
 	// reads the arguments of the test binary, such as -update, for a nil list.
 	err := commands(wd, append([]string{}, args...), func(string) string { return "" }, func() (string, bool) { return "v1.2.3", true }, strings.NewReader(""), new(bytes.Buffer), new(bytes.Buffer), runners{
-		generate: func(_ *cobra.Command, jobs []packageJob) error {
+		generate: func(_ *cobra.Command, jobs []setRun) error {
 			for _, job := range jobs {
 				r.line("generate key=%q file=%q dir=%q receiver=%q receiver-package=%q templates=%v output=%q htmx=%t logger=%t verbose=%t",
 					job.Key, r.rel(job.File), r.rel(job.Dir), job.Config.ReceiverType, job.Config.ReceiverPackage, job.Config.TemplatesVariables,
@@ -168,25 +168,25 @@ func recordSelection(base, wd string, args ...string) (string, error) {
 			}
 			return nil
 		},
-		check: func(_ *cobra.Command, jobs []packageJob, c analysis.CheckConfiguration) error {
+		check: func(_ *cobra.Command, jobs []setRun, c analysis.CheckConfiguration) error {
 			for _, job := range jobs {
 				r.line("check dir=%q templates=%v allow-unused=%t", r.rel(job.Dir), job.Config.TemplatesVariables, c.AllowUnused)
 			}
 			return nil
 		},
-		calls: func(_ *cobra.Command, jobs []packageJob, _ analysis.TemplateCallsConfiguration) error {
+		calls: func(_ *cobra.Command, jobs []setRun, _ analysis.TemplateCallsConfiguration) error {
 			for _, job := range jobs {
 				r.line("calls dir=%q templates=%v", r.rel(job.Dir), job.Config.TemplatesVariables)
 			}
 			return nil
 		},
-		callers: func(_ *cobra.Command, jobs []packageJob, _ analysis.TemplateCallersConfiguration) error {
+		callers: func(_ *cobra.Command, jobs []setRun, _ analysis.TemplateCallersConfiguration) error {
 			for _, job := range jobs {
 				r.line("callers dir=%q templates=%v", r.rel(job.Dir), job.Config.TemplatesVariables)
 			}
 			return nil
 		},
-		test: func(_ *cobra.Command, jobs []packageJob, _ testConfiguration) error {
+		test: func(_ *cobra.Command, jobs []setRun, _ testConfiguration) error {
 			for _, job := range jobs {
 				r.line("test key=%q file=%q dir=%q", job.Key, r.rel(job.File), r.rel(job.Dir))
 			}
@@ -573,9 +573,9 @@ func TestTestSelectsOneDirectoryOutsideTheFilesDirectory(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			base := newFieldkit(t, fieldkitEntries)
-			var got []packageJob
+			var got []setRun
 			err := commands(filepath.Join(base, tt.dir), []string{testCommandName}, func(string) string { return "" }, func() (string, bool) { return "v1.2.3", true }, strings.NewReader(""), new(bytes.Buffer), new(bytes.Buffer), runners{
-				test: func(_ *cobra.Command, jobs []packageJob, _ testConfiguration) error {
+				test: func(_ *cobra.Command, jobs []setRun, _ testConfiguration) error {
 					got = jobs
 					return nil
 				},
@@ -652,10 +652,10 @@ func TestTestProfilesTheTemplateFilesOfEverySetOfOneDirectory(t *testing.T) {
 func TestOnePerDirectoryUnionsTemplatesVariablesWithoutChangingItsInput(t *testing.T) {
 	backing := make([]string, 1, 4)
 	backing[0] = "publicTmpl"
-	jobs := []packageJob{
-		{Dir: "/m/web", Key: "m/web", Config: generate.RoutesFileConfiguration{TemplatesVariables: backing}},
-		{Dir: "/m/api", Key: "m/api", Config: generate.RoutesFileConfiguration{TemplatesVariables: []string{"apiTmpl"}}},
-		{Dir: "/m/web", Key: "m/web", Config: generate.RoutesFileConfiguration{TemplatesVariables: []string{"adminTmpl", "publicTmpl"}}},
+	jobs := []setRun{
+		{packageRun: &packageRun{Dir: "/m/web", Key: "m/web"}, routeSet: routeSet{Config: generate.RoutesFileConfiguration{TemplatesVariables: backing}}},
+		{packageRun: &packageRun{Dir: "/m/api", Key: "m/api"}, routeSet: routeSet{Config: generate.RoutesFileConfiguration{TemplatesVariables: []string{"apiTmpl"}}}},
+		{packageRun: &packageRun{Dir: "/m/web", Key: "m/web"}, routeSet: routeSet{Config: generate.RoutesFileConfiguration{TemplatesVariables: []string{"adminTmpl", "publicTmpl"}}}},
 	}
 
 	got := onePerDirectory(jobs)

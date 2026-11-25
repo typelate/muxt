@@ -69,75 +69,38 @@ type onePackageWording struct {
 	Task, Where string
 }
 
-// packageJob is one package directory and what to run a command with. Key is
-// the packages key the configuration came from, and File the absolute path of
-// the muxt.json holding it; both are empty when flags gave the configuration.
-// Given is the settings that did, by the spelling typed, so a report can name
-// them.
-type packageJob struct {
-	File string
-	Key  string
-	// Index is the zero-based position of the job's entry under Key and
-	// setCount how many entries Key holds; read the count through SetCount.
-	// Both are zero for a job the command line configured.
-	Index, setCount int
-	Dir             string
-	Config          generate.RoutesFileConfiguration
-	Given           givenSettings
-	// Keyed is set on every job of a run that read every entry of the muxt.json
-	// in its own directory, however many entries it holds, and of a run in one
-	// package directory whose key holds several sets. Such a run names each job
-	// by Name; a run over one set of one package, or one that flags configured,
-	// does not. Choosing by the job count in the muxt.json's directory would
-	// change the output shape of a run when an entry is added.
-	Keyed bool
-	// RoutePaths is the hub the muxt.json's route_paths key names, on every job
-	// of a keyed run; nil without the key and in every other run.
-	RoutePaths *routePathsTarget
-	// ReadOnly is set on the jobs of a run in one package's directory that are
-	// not that package: they are loaded and resolved for the hub file, and
-	// their directories are not written.
-	ReadOnly bool
-}
-
-// Name is what a run's output calls the job: its key, followed by its output
-// file in parentheses when the key holds several entries, since the key alone
-// would not tell them apart. Choosing by the entry count keeps a one-entry
-// module's output as it was.
-func (j packageJob) Name() string {
-	if j.SetCount() > 1 {
-		return fmt.Sprintf("%s (%s)", j.Key, j.Config.OutputFileName)
-	}
-	return j.Key
-}
-
-// SetCount is how many entries the job's key holds, so a caller does not
-// depend on how the count is kept.
-func (j packageJob) SetCount() int { return j.setCount }
-
-// Where is the job's entry as a muxt.json spells its position, for an error to
-// name. It is meaningless for a job the command line configured.
-func (j packageJob) Where() string { return composite.SetWhere(j.Key, j.Index) }
-
-// Named is whether a failure of the job says which package it is, since the
-// run has more than one.
-func (j packageJob) Named() bool { return j.Keyed || j.ReadOnly }
-
 // packageRun is one package directory and the sets a command runs there: one
 // per muxt.json entry under Key, in the file's order, or one for a run that
-// flags configured. File, Key and Given are as for packageJob. What is true
-// of the package in this run is kept here, not repeated on each set.
+// flags configured. Key is the packages key the configuration came from, and
+// File the absolute path of the muxt.json holding it; both are empty when
+// flags gave the configuration. Given is the settings that did, by the
+// spelling typed, so a report can name them.
 type packageRun struct {
 	File  string
 	Key   string
 	Dir   string
 	Given givenSettings
-	// Keyed, RoutePaths and ReadOnly are as for packageJob.
-	Keyed      bool
+	// Keyed is set on every package of a run that read every entry of the
+	// muxt.json in its own directory, however many entries it holds, and on a
+	// package whose key holds several sets in a run in one package directory.
+	// Such a run names each set by Name; a run over one set of one package, or
+	// one that flags configured, does not. Choosing by the package count in the
+	// muxt.json's directory would change the output shape of a run when an
+	// entry is added.
+	Keyed bool
+	// RoutePaths is the hub the muxt.json's route_paths key names, on every
+	// package of a keyed run; nil without the key and in every other run.
 	RoutePaths *routePathsTarget
-	ReadOnly   bool
-	Sets       []routeSet
+	// ReadOnly is set on the packages of a run in one package's directory that
+	// are not that package: they are loaded and resolved for the hub file, and
+	// their directories are not written.
+	ReadOnly bool
+	Sets     []routeSet
 }
+
+// Named is whether a failure of the package says which package it is, since
+// the run has more than one.
+func (p packageRun) Named() bool { return p.Keyed || p.ReadOnly }
 
 // routeSet is one muxt generate run: one configuration, which writes one
 // routes file.
@@ -145,14 +108,42 @@ type routeSet struct {
 	Config generate.RoutesFileConfiguration
 }
 
-// jobs is one packageJob per set of p, in the set's order.
-func (p packageRun) jobs() []packageJob {
-	jobs := make([]packageJob, len(p.Sets))
-	for i, set := range p.Sets {
-		jobs[i] = packageJob{File: p.File, Key: p.Key, Index: i, setCount: len(p.Sets), Dir: p.Dir, Config: set.Config, Given: p.Given, Keyed: p.Keyed, RoutePaths: p.RoutePaths, ReadOnly: p.ReadOnly}
-	}
-	return jobs
+// setRun is one set of a package, for a command that visits per set. It is a
+// view of the package and set it names and holds no state of its own beyond
+// the set's position, Index, the zero-based position of the set under the
+// package's Key.
+type setRun struct {
+	*packageRun
+	routeSet
+	Index int
 }
+
+// setsOf is one setRun per set of every run, in run then set order. The
+// setRuns point into runs, so a caller keeps runs unchanged while it uses them.
+func setsOf(runs []packageRun) []setRun {
+	var sets []setRun
+	for i := range runs {
+		for j, set := range runs[i].Sets {
+			sets = append(sets, setRun{packageRun: &runs[i], routeSet: set, Index: j})
+		}
+	}
+	return sets
+}
+
+// Name is what a run's output calls the set: its key, followed by its output
+// file in parentheses when the key holds several entries, since the key alone
+// would not tell them apart. Choosing by the entry count keeps a one-entry
+// module's output as it was.
+func (s setRun) Name() string {
+	if len(s.Sets) > 1 {
+		return fmt.Sprintf("%s (%s)", s.Key, s.Config.OutputFileName)
+	}
+	return s.Key
+}
+
+// Where is the set's entry as a muxt.json spells its position, for an error to
+// name. It is meaningless for a set the command line configured.
+func (s setRun) Where() string { return composite.SetWhere(s.Key, s.Index) }
 
 // routePathsTarget is the package that holds route_paths.go and where the file
 // goes. Hub has no Namespace: each package's own is made from its import path.
@@ -193,19 +184,13 @@ type selection struct {
 	Packages []packageRun
 }
 
-// Jobs is one packageJob per set of every package, in package then set order,
+// Jobs is one setRun per set of every package, in package then set order,
 // for a command that still reads a flat list.
-func (s selection) Jobs() []packageJob {
-	var jobs []packageJob
-	for _, run := range s.Packages {
-		jobs = append(jobs, run.jobs()...)
-	}
-	return jobs
-}
+func (s selection) Jobs() []setRun { return setsOf(s.Packages) }
 
 // EntryFile is the muxt.json job's configuration came from, nil when the
 // command's flags and defaults configured it, so its report names no file.
-func (s selection) EntryFile(job packageJob) *composite.File {
+func (s selection) EntryFile(job setRun) *composite.File {
 	if job.File == "" {
 		return nil
 	}
@@ -368,16 +353,16 @@ func distinctSetMembers() []setMember {
 // its templates variables, which are the union of every set's, so what a run
 // attributes to the package covers all of its sets' template files. No
 // caller's slice is changed.
-func onePerDirectory(jobs []packageJob) []packageJob {
+func onePerDirectory(jobs []setRun) []setRun {
 	var dirs []string // in order of first appearance
-	byDir := map[string][]packageJob{}
+	byDir := map[string][]setRun{}
 	for _, job := range jobs {
 		if _, seen := byDir[job.Dir]; !seen {
 			dirs = append(dirs, job.Dir)
 		}
 		byDir[job.Dir] = append(byDir[job.Dir], job)
 	}
-	folded := make([]packageJob, 0, len(dirs))
+	folded := make([]setRun, 0, len(dirs))
 	for _, dir := range dirs {
 		sets := byDir[dir]
 		job := sets[0]
@@ -391,7 +376,7 @@ func onePerDirectory(jobs []packageJob) []packageJob {
 // directory, each once, in the order they are first named. One set answers its
 // own slice as it is, so a package with one set reads nil or empty as its
 // configuration does; several build a new slice, nil when they name none.
-func templatesVariables(sets []packageJob) []string {
+func templatesVariables(sets []setRun) []string {
 	if len(sets) == 1 {
 		return sets[0].Config.TemplatesVariables
 	}
@@ -435,7 +420,7 @@ func fallbackSelection(spec jobSpec, dir string, f *composite.File, given givenS
 // entryVariableError returns the error naming job's muxt.json entry when err
 // says the package lacks the templates variable, so the fix is in the file.
 // ok is false for any other err, and for a job the command line configured.
-func entryVariableError(job packageJob, err error) (entryErr error, ok bool) {
+func entryVariableError(job setRun, err error) (entryErr error, ok bool) {
 	missing, ok := errors.AsType[*check.VariableNotFoundError](err)
 	if !ok || job.File == "" {
 		return nil, false

@@ -22,15 +22,15 @@ func templatesVariablesOf(t *testing.T, wd, commandLine string) ([]string, error
 	t.Helper()
 	var got []string
 	err := commands(wd, strings.Fields(commandLine), func(string) string { return "" }, func() (string, bool) { return "v1.2.3", true }, strings.NewReader(""), io.Discard, io.Discard, runners{
-		check: func(_ *cobra.Command, jobs []packageJob, _ analysis.CheckConfiguration) error {
+		check: func(_ *cobra.Command, jobs []setRun, _ analysis.CheckConfiguration) error {
 			got = jobs[0].Config.TemplatesVariables
 			return nil
 		},
-		calls: func(_ *cobra.Command, jobs []packageJob, _ analysis.TemplateCallsConfiguration) error {
+		calls: func(_ *cobra.Command, jobs []setRun, _ analysis.TemplateCallsConfiguration) error {
 			got = jobs[0].Config.TemplatesVariables
 			return nil
 		},
-		callers: func(_ *cobra.Command, jobs []packageJob, _ analysis.TemplateCallersConfiguration) error {
+		callers: func(_ *cobra.Command, jobs []setRun, _ analysis.TemplateCallersConfiguration) error {
 			got = jobs[0].Config.TemplatesVariables
 			return nil
 		},
@@ -88,9 +88,9 @@ func TestCheckLeavesAFileArgumentToTheRunner(t *testing.T) {
 	for _, command := range []string{"check", "list-template-calls", "list-template-callers"} {
 		ran := false
 		err := commands(dir, []string{command, "./main.go"}, func(string) string { return "" }, func() (string, bool) { return "v1.2.3", true }, strings.NewReader(""), io.Discard, io.Discard, runners{
-			check: func(*cobra.Command, []packageJob, analysis.CheckConfiguration) error { ran = true; return nil },
-			calls: func(*cobra.Command, []packageJob, analysis.TemplateCallsConfiguration) error { ran = true; return nil },
-			callers: func(*cobra.Command, []packageJob, analysis.TemplateCallersConfiguration) error {
+			check: func(*cobra.Command, []setRun, analysis.CheckConfiguration) error { ran = true; return nil },
+			calls: func(*cobra.Command, []setRun, analysis.TemplateCallsConfiguration) error { ran = true; return nil },
+			callers: func(*cobra.Command, []setRun, analysis.TemplateCallersConfiguration) error {
 				ran = true
 				return nil
 			},
@@ -139,9 +139,9 @@ func TestEntryFlagsRejectedWhereMuxtJSONConfigures(t *testing.T) {
 		t.Run(commandLine, func(t *testing.T) {
 			ran := false
 			err := commands(workspace, strings.Fields(commandLine), func(string) string { return "" }, func() (string, bool) { return "v1.2.3", true }, strings.NewReader(""), io.Discard, io.Discard, runners{
-				check: func(*cobra.Command, []packageJob, analysis.CheckConfiguration) error { ran = true; return nil },
-				calls: func(*cobra.Command, []packageJob, analysis.TemplateCallsConfiguration) error { ran = true; return nil },
-				callers: func(*cobra.Command, []packageJob, analysis.TemplateCallersConfiguration) error {
+				check: func(*cobra.Command, []setRun, analysis.CheckConfiguration) error { ran = true; return nil },
+				calls: func(*cobra.Command, []setRun, analysis.TemplateCallsConfiguration) error { ran = true; return nil },
+				callers: func(*cobra.Command, []setRun, analysis.TemplateCallersConfiguration) error {
 					ran = true
 					return nil
 				},

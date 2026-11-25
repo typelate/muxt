@@ -14,7 +14,7 @@ import (
 // source that gave it. f is the muxt.json the job's entry came from, nil when
 // no entry did; the entry's source is its position, so two sets of one key are
 // reported apart.
-func newConfigurationReport(f *composite.File, job packageJob) analysis.ConfigurationReport {
+func newConfigurationReport(f *composite.File, job setRun) analysis.ConfigurationReport {
 	given, config := job.Given, job.Config
 	// The sources in the order a setting looks for its value: the command
 	// line, the entry itself, then package_defaults. A setting none of them

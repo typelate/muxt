@@ -118,7 +118,7 @@ func (e *ReceiverClashError) Error() string {
 // would put the stub on a type the other sets do not serve. Every job of a
 // run in one directory is a set of one key, so the first is the one the rest
 // are compared with.
-func requireAgreeingSets(jobs []packageJob) error {
+func requireAgreeingSets(jobs []setRun) error {
 	first := jobs[0]
 	for _, job := range jobs[1:] {
 		if job.Config.ReceiverType != first.Config.ReceiverType || job.Config.ReceiverPackage != first.Config.ReceiverPackage {

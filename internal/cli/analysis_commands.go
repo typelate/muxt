@@ -11,7 +11,7 @@ import (
 	"github.com/typelate/muxt/internal/generate"
 )
 
-func checkCommand(workingDirectory *string, getEnv func(string) string, run func(*cobra.Command, []packageJob, analysis.CheckConfiguration) error) *cobra.Command {
+func checkCommand(workingDirectory *string, getEnv func(string) string, run func(*cobra.Command, []setRun, analysis.CheckConfiguration) error) *cobra.Command {
 	var (
 		config                 analysis.CheckConfiguration
 		ignoredReceiverType    string
@@ -109,7 +109,7 @@ func compilePatterns(patterns []string) ([]*regexp.Regexp, error) {
 	return compiled, nil
 }
 
-func listTemplateCallersCommand(wd *string, getEnv func(string) string, run func(*cobra.Command, []packageJob, analysis.TemplateCallersConfiguration) error) *cobra.Command {
+func listTemplateCallersCommand(wd *string, getEnv func(string) string, run func(*cobra.Command, []setRun, analysis.TemplateCallersConfiguration) error) *cobra.Command {
 	var (
 		config                 analysis.TemplateCallersConfiguration
 		deprecatedTemplatesVar string
@@ -156,7 +156,7 @@ func listTemplateCallersCommand(wd *string, getEnv func(string) string, run func
 	return cmd
 }
 
-func listTemplateCallsCommand(wd *string, getEnv func(string) string, run func(*cobra.Command, []packageJob, analysis.TemplateCallsConfiguration) error) *cobra.Command {
+func listTemplateCallsCommand(wd *string, getEnv func(string) string, run func(*cobra.Command, []setRun, analysis.TemplateCallsConfiguration) error) *cobra.Command {
 	var (
 		config                 analysis.TemplateCallsConfiguration
 		patterns               []string

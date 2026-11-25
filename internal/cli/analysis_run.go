@@ -14,7 +14,7 @@ import (
 
 // namedFailure is err for a keyed run, naming the job it came from. A caller that wraps must also turn cobra's own error line back on if a
 // diagnostic silenced it, or the run ends with no word of whose failure it was.
-func namedFailure(job packageJob, keyed bool, err error) error {
+func namedFailure(job setRun, keyed bool, err error) error {
 	if !keyed {
 		return err
 	}
@@ -42,10 +42,10 @@ func (k *keyedWriter) Write(p []byte) (int, error) {
 
 // checkRunner checks jobs from one load, a package after the packages it
 // imports, and stops at the first one that fails.
-func checkRunner(loadPackages packageLoader) func(*cobra.Command, []packageJob, analysis.CheckConfiguration) error {
-	return func(cmd *cobra.Command, jobs []packageJob, config analysis.CheckConfiguration) error {
+func checkRunner(loadPackages packageLoader) func(*cobra.Command, []setRun, analysis.CheckConfiguration) error {
+	return func(cmd *cobra.Command, jobs []setRun, config analysis.CheckConfiguration) error {
 		return runJobs(cmd, loadPackages, jobs, jobVisitor{
-			Visit: func(_ int, job packageJob, l *load.Loaded, keyed bool) (bool, error) {
+			Visit: func(_ int, job setRun, l *load.Loaded, keyed bool) (bool, error) {
 				// In a keyed run the diagnostics of a job say which it is.
 				var diagnostics io.Writer = cmd.ErrOrStderr()
 				if keyed {
@@ -83,8 +83,8 @@ func checkRunner(loadPackages packageLoader) func(*cobra.Command, []packageJob, 
 }
 
 // callersRunner lists the template callers of jobs from one load.
-func callersRunner(loadPackages packageLoader) func(*cobra.Command, []packageJob, analysis.TemplateCallersConfiguration) error {
-	return func(cmd *cobra.Command, jobs []packageJob, config analysis.TemplateCallersConfiguration) error {
+func callersRunner(loadPackages packageLoader) func(*cobra.Command, []setRun, analysis.TemplateCallersConfiguration) error {
+	return func(cmd *cobra.Command, jobs []setRun, config analysis.TemplateCallersConfiguration) error {
 		return runListing(cmd, loadPackages, jobs, func(pkg source.Package, key string) (io.WriterTo, error) {
 			result, err := analysis.NewTemplateCallers(config, pkg)
 			if err != nil {
@@ -96,8 +96,8 @@ func callersRunner(loadPackages packageLoader) func(*cobra.Command, []packageJob
 }
 
 // callsRunner lists the template calls of jobs from one load.
-func callsRunner(loadPackages packageLoader) func(*cobra.Command, []packageJob, analysis.TemplateCallsConfiguration) error {
-	return func(cmd *cobra.Command, jobs []packageJob, config analysis.TemplateCallsConfiguration) error {
+func callsRunner(loadPackages packageLoader) func(*cobra.Command, []setRun, analysis.TemplateCallsConfiguration) error {
+	return func(cmd *cobra.Command, jobs []setRun, config analysis.TemplateCallsConfiguration) error {
 		return runListing(cmd, loadPackages, jobs, func(pkg source.Package, key string) (io.WriterTo, error) {
 			result, err := analysis.NewTemplateCalls(config, pkg)
 			if err != nil {
@@ -112,13 +112,13 @@ func callsRunner(loadPackages packageLoader) func(*cobra.Command, []packageJob, 
 // each listing carries its job's key, and with --format json they are one
 // array, since several top-level values are not a document a JSON parser
 // reads.
-func runListing(cmd *cobra.Command, loadPackages packageLoader, jobs []packageJob, list func(pkg source.Package, key string) (io.WriterTo, error)) error {
+func runListing(cmd *cobra.Command, loadPackages packageLoader, jobs []setRun, list func(pkg source.Package, key string) (io.WriterTo, error)) error {
 	var (
 		asJSON, formatKnown bool
 		collected           []io.WriterTo
 	)
 	err := runJobs(cmd, loadPackages, jobs, jobVisitor{
-		Visit: func(_ int, job packageJob, l *load.Loaded, keyed bool) (bool, error) {
+		Visit: func(_ int, job setRun, l *load.Loaded, keyed bool) (bool, error) {
 			if !formatKnown {
 				var err error
 				if asJSON, err = isJSON(cmd); err != nil {

@@ -11,10 +11,10 @@ import (
 )
 
 // routesJob is one package directory the route listing reads. It is a
-// packageJob because the listing reads what generate reads: the same
+// setRun because the listing reads what generate reads: the same
 // directories, in the same order, resolved the same way.
 type routesJob struct {
-	packageJob
+	setRun
 	// Report is the Configuration section the listing starts with.
 	Report analysis.ConfigurationReport
 }
@@ -25,7 +25,7 @@ func newRoutesJobs(sel selection) []routesJob {
 	jobs := make([]routesJob, len(sel.Jobs()))
 	for i, job := range sel.Jobs() {
 		report := newConfigurationReport(sel.EntryFile(job), job)
-		jobs[i] = routesJob{packageJob: job, Report: report}
+		jobs[i] = routesJob{setRun: job, Report: report}
 	}
 	return jobs
 }
@@ -66,9 +66,9 @@ func rootSpec(flagConfig analysis.DefinitionsConfiguration, settings []setting, 
 // imports.
 func routesRunner(loadPackages packageLoader) func(*cobra.Command, []routesJob) error {
 	return func(cmd *cobra.Command, jobs []routesJob) error {
-		packageJobs := make([]packageJob, len(jobs))
+		packageJobs := make([]setRun, len(jobs))
 		for i, job := range jobs {
-			packageJobs[i] = job.packageJob
+			packageJobs[i] = job.setRun
 		}
 		var (
 			asJSON, formatKnown bool
@@ -76,7 +76,7 @@ func routesRunner(loadPackages packageLoader) func(*cobra.Command, []routesJob) 
 			collected []io.WriterTo
 		)
 		err := runJobs(cmd, loadPackages, packageJobs, jobVisitor{
-			Visit: func(i int, job packageJob, l *load.Loaded, keyed bool) (bool, error) {
+			Visit: func(i int, job setRun, l *load.Loaded, keyed bool) (bool, error) {
 				if !formatKnown {
 					var err error
 					if asJSON, err = isJSON(cmd); err != nil {

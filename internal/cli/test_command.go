@@ -25,7 +25,7 @@ type testConfiguration struct {
 // engine. It takes no setting flags: the templates variable of a package is
 // only read to attribute a profile, and the default is what a package that
 // muxt.json does not configure has.
-func testCommand(workingDirectory *string, getEnv func(string) string, run func(*cobra.Command, []packageJob, testConfiguration) error) *cobra.Command {
+func testCommand(workingDirectory *string, getEnv func(string) string, run func(*cobra.Command, []setRun, testConfiguration) error) *cobra.Command {
 	var config testConfiguration
 
 	cmd := &cobra.Command{

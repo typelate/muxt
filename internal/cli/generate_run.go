@@ -30,7 +30,7 @@ type packageLoader func(root string, dirs, patterns []string) (*load.Loaded, err
 // packages key. It fails when two packages would share a namespace, a
 // namespace is not an identifier, or two of the hub's declarations would share
 // a name.
-func hubNamespaces(hub *routePathsTarget, jobs []packageJob) (map[string]string, error) {
+func hubNamespaces(hub *routePathsTarget, jobs []setRun) (map[string]string, error) {
 	keys := make([]string, len(jobs))
 	for i, job := range jobs {
 		keys[i] = job.Key
@@ -56,8 +56,8 @@ func hubNamespaces(hub *routePathsTarget, jobs []packageJob) (map[string]string,
 // exception is a directory whose muxt.json sets write with output_multiple_files:
 // its sets are resolved together, before the first of them writes, so a clash
 // between their files is refused with nothing of that directory written.
-func generateRunner(loadPackages packageLoader) func(*cobra.Command, []packageJob) error {
-	return func(cmd *cobra.Command, jobs []packageJob) error {
+func generateRunner(loadPackages packageLoader) func(*cobra.Command, []setRun) error {
+	return func(cmd *cobra.Command, jobs []setRun) error {
 		if len(jobs) == 0 {
 			return nil
 		}
@@ -72,7 +72,7 @@ func generateRunner(loadPackages packageLoader) func(*cobra.Command, []packageJo
 		stderr := log.New(cmd.ErrOrStderr(), "", 0)
 		// In a keyed run a failure names its package, since nothing else
 		// says which one it was.
-		failed := func(job packageJob, err error) error {
+		failed := func(job setRun, err error) error {
 			if entryErr, ok := entryVariableError(job, err); ok {
 				// It names the entry already.
 				return entryErr
@@ -96,7 +96,7 @@ func generateRunner(loadPackages packageLoader) func(*cobra.Command, []packageJo
 		err := runJobs(cmd, loadPackages, jobs, jobVisitor{
 			// The first load already holds a package that did not load, so it
 			// is refused before an earlier entry is written.
-			Ready: func(_ int, job packageJob, l *load.Loaded) error {
+			Ready: func(_ int, job setRun, l *load.Loaded) error {
 				err := l.CheckLoaded(job.Config.OutputDirectory(job.Dir))
 				if err == nil {
 					return nil
@@ -112,14 +112,14 @@ func generateRunner(loadPackages packageLoader) func(*cobra.Command, []packageJo
 				}
 				return &composite.InvalidEntryError{Path: job.File, Where: job.Where(), Err: err}
 			},
-			Begin: func(_ int, job packageJob) {
+			Begin: func(_ int, job setRun) {
 				if keyed && verbose {
 					// Several directories write to one stream, so each
 					// says whose lines follow.
 					_, _ = fmt.Fprintln(stdout, job.Name())
 				}
 			},
-			Visit: func(_ int, job packageJob, l *load.Loaded, keyed bool) (bool, error) {
+			Visit: func(_ int, job setRun, l *load.Loaded, keyed bool) (bool, error) {
 				// The sets of one directory share one load, so the first of them
 				// resolves the others, quietly, before anything is written there.
 				if !checked[job.Dir] {
@@ -163,10 +163,10 @@ func generateRunner(loadPackages packageLoader) func(*cobra.Command, []packageJo
 type setsCheck struct {
 	Cmd        *cobra.Command
 	Loaded     *load.Loaded
-	Jobs       []packageJob
+	Jobs       []setRun
 	Dir        string
 	Namespaces map[string]string
-	Failed     func(packageJob, error) error
+	Failed     func(setRun, error) error
 }
 
 // checkSetsOfDirectory resolves every muxt.json set of c.Dir that writes with
@@ -175,7 +175,7 @@ type setsCheck struct {
 // file alone, so only resolving knows them. What resolving prints is dropped:
 // each set resolves again, in turn, when it is written.
 func checkSetsOfDirectory(c setsCheck) error {
-	var sets []packageJob
+	var sets []setRun
 	multiple := false
 	for _, job := range c.Jobs {
 		if job.Dir != c.Dir || job.File == "" || job.ReadOnly {
@@ -189,8 +189,11 @@ func checkSetsOfDirectory(c setsCheck) error {
 	}
 	results := make([]jobResult, len(sets))
 	for i, set := range sets {
+		// The package is shared by every set, so only a copy of it is read only.
+		quietPackage := *set.packageRun
+		quietPackage.ReadOnly = true
 		quiet := set
-		quiet.ReadOnly = true
+		quiet.packageRun = &quietPackage
 		result, err := resolveJob(c.Cmd, c.Loaded, quiet, set.Named(), c.Namespaces[set.Key])
 		if err != nil {
 			return c.Failed(set, err)
@@ -203,7 +206,7 @@ func checkSetsOfDirectory(c setsCheck) error {
 // checkGeneratedFileClash returns a *composite.GeneratedFileClashError when two
 // of sets, the muxt.json sets of one directory, generate one file. results
 // holds what each set generates, in the same order.
-func checkGeneratedFileClash(sets []packageJob, results []jobResult) error {
+func checkGeneratedFileClash(sets []setRun, results []jobResult) error {
 	first := make(map[string]int)
 	for i, result := range results {
 		for _, file := range result.Files {
@@ -267,7 +270,7 @@ type jobResult struct {
 // failure that explains itself over several lines is printed before it is
 // returned, after job's key in a keyed run, since that printed text
 // replaces the returned error.
-func resolveJob(cmd *cobra.Command, l *load.Loaded, job packageJob, keyed bool, namespace string) (jobResult, error) {
+func resolveJob(cmd *cobra.Command, l *load.Loaded, job setRun, keyed bool, namespace string) (jobResult, error) {
 	report := func(err error) {
 		if _, ok := errors.AsType[muxt.MultiLineError](err); ok && keyed {
 			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "%s:\n", job.Name())
@@ -315,7 +318,7 @@ func resolveJob(cmd *cobra.Command, l *load.Loaded, job packageJob, keyed bool, 
 // writeJob writes files to job's directory and removes the generated files of
 // an earlier run that files no longer holds. changed is whether any file it
 // wrote or removed differs from what was on disk before.
-func writeJob(stdout io.Writer, stderr *log.Logger, job packageJob, files []generate.GeneratedFile) (changed bool, err error) {
+func writeJob(stdout io.Writer, stderr *log.Logger, job setRun, files []generate.GeneratedFile) (changed bool, err error) {
 	owned, err := ownedGeneratedFiles(job.Dir, job.Config.RoutesFunction, stderr)
 	if err != nil {
 		return false, err

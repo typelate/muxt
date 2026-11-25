@@ -185,7 +185,7 @@ func TestSelectJobsTakesEverySetUnderAKey(t *testing.T) {
 	require.NoError(t, err)
 	var got []string
 	for _, job := range sel.Jobs() {
-		got = append(got, fmt.Sprintf("%s %d/%d %s", job.Key, job.Index, job.SetCount(), job.Config.RoutesFunction))
+		got = append(got, fmt.Sprintf("%s %d/%d %s", job.Key, job.Index, len(job.Sets), job.Config.RoutesFunction))
 	}
 	want := []string{
 		"example.com/fieldkit/contacts 0/2 PublicRoutes",
@@ -417,19 +417,19 @@ func TestSelectJobsRejectsTwoKeysWithSeveralEntriesForOneDirectory(t *testing.T)
 // set reads the set's templates variables as configured, nil staying nil and
 // empty staying empty, while several sets that name none read nil.
 func TestTemplatesVariablesOfOneSetIsItsOwnSlice(t *testing.T) {
-	set := func(names []string) packageJob {
-		return packageJob{Config: generate.RoutesFileConfiguration{TemplatesVariables: names}}
+	set := func(names []string) setRun {
+		return setRun{routeSet: routeSet{Config: generate.RoutesFileConfiguration{TemplatesVariables: names}}}
 	}
 	for _, tc := range []struct {
 		name string
-		sets []packageJob
+		sets []setRun
 		want []string
 	}{
-		{name: "one set, nil", sets: []packageJob{set(nil)}, want: nil},
-		{name: "one set, empty", sets: []packageJob{set([]string{})}, want: []string{}},
-		{name: "one set, named", sets: []packageJob{set([]string{"a", "b"})}, want: []string{"a", "b"}},
-		{name: "two sets, none named", sets: []packageJob{set([]string{}), set(nil)}, want: nil},
-		{name: "two sets, overlapping", sets: []packageJob{set([]string{"a"}), set([]string{"b", "a"})}, want: []string{"a", "b"}},
+		{name: "one set, nil", sets: []setRun{set(nil)}, want: nil},
+		{name: "one set, empty", sets: []setRun{set([]string{})}, want: []string{}},
+		{name: "one set, named", sets: []setRun{set([]string{"a", "b"})}, want: []string{"a", "b"}},
+		{name: "two sets, none named", sets: []setRun{set([]string{}), set(nil)}, want: nil},
+		{name: "two sets, overlapping", sets: []setRun{set([]string{"a"}), set([]string{"b", "a"})}, want: []string{"a", "b"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			got := templatesVariables(tc.sets)
