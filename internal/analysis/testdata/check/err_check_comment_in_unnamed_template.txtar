@@ -1,0 +1,32 @@
+A finding in a template parsed from a string under no name: there is no
+file to name, so the line starts at the line and column.
+
+Command line: muxt check
+-- config.json --
+{
+	"Verbose": false,
+	"TemplatesVariables": [
+		"templates"
+	]
+}
+-- templates.go --
+package server
+
+import "html/template"
+
+var templates = template.Must(template.New("").Parse(`{{define "index"}}<p><!x></p>{{end}}`))
+-- server.go --
+package server
+
+import "io"
+
+func RenderIndex(w io.Writer) error {
+	return templates.ExecuteTemplate(w, "index", nil)
+}
+-- want/checked.txt --
+1
+-- want/error.txt --
+1 error
+-- want/log.txt --
+1:22: html/template escapes this "<!", so browsers show it as text; comment with {{/* */}} or <!-- -->
+
