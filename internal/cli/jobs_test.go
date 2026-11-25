@@ -413,6 +413,32 @@ func TestSelectJobsRejectsTwoKeysWithSeveralEntriesForOneDirectory(t *testing.T)
 	assert.Equal(t, want, err.Error(), "message")
 }
 
+// TestTemplatesVariablesOfOneSetIsItsOwnSlice states that a package with one
+// set reads the set's templates variables as configured, nil staying nil and
+// empty staying empty, while several sets that name none read nil.
+func TestTemplatesVariablesOfOneSetIsItsOwnSlice(t *testing.T) {
+	set := func(names []string) packageJob {
+		return packageJob{Config: generate.RoutesFileConfiguration{TemplatesVariables: names}}
+	}
+	for _, tc := range []struct {
+		name string
+		sets []packageJob
+		want []string
+	}{
+		{name: "one set, nil", sets: []packageJob{set(nil)}, want: nil},
+		{name: "one set, empty", sets: []packageJob{set([]string{})}, want: []string{}},
+		{name: "one set, named", sets: []packageJob{set([]string{"a", "b"})}, want: []string{"a", "b"}},
+		{name: "two sets, none named", sets: []packageJob{set([]string{}), set(nil)}, want: nil},
+		{name: "two sets, overlapping", sets: []packageJob{set([]string{"a"}), set([]string{"b", "a"})}, want: []string{"a", "b"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := templatesVariables(tc.sets)
+
+			assert.Equal(t, tc.want, got, "templatesVariables(%s)", tc.name)
+		})
+	}
+}
+
 // asError reports whether err is, or wraps, an E.
 func asError[E error](err error) bool {
 	_, ok := errors.AsType[E](err)

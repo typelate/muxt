@@ -338,17 +338,20 @@ func onePerDirectory(jobs []packageJob) []packageJob {
 	for _, dir := range dirs {
 		sets := byDir[dir]
 		job := sets[0]
-		if len(sets) > 1 {
-			job.Config.TemplatesVariables = unionTemplatesVariables(sets)
-		}
+		job.Config.TemplatesVariables = templatesVariables(sets)
 		folded = append(folded, job)
 	}
 	return folded
 }
 
-// unionTemplatesVariables is the templates variables of sets, each once, in the
-// order they are first named. It builds a new slice.
-func unionTemplatesVariables(sets []packageJob) []string {
+// templatesVariables is the templates variables of sets, the sets of one
+// directory, each once, in the order they are first named. One set answers its
+// own slice as it is, so a package with one set reads nil or empty as its
+// configuration does; several build a new slice, nil when they name none.
+func templatesVariables(sets []packageJob) []string {
+	if len(sets) == 1 {
+		return sets[0].Config.TemplatesVariables
+	}
 	var union []string
 	for _, set := range sets {
 		for _, name := range set.Config.TemplatesVariables {
