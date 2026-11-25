@@ -25,6 +25,15 @@ func (e *ExistsError) Error() string {
 	return fmt.Sprintf("%s already exists; nothing was written", e.Path)
 }
 
+// Diagnostic places the problem at the path, within it when Where is set. What
+// is written is a fact, not an instruction, so it stays in the message.
+func (e *ExistsError) Diagnostic() diagnostic.Diagnostic {
+	return diagnostic.Diagnostic{
+		Place:   diagnostic.Place{File: e.Path, Within: e.Where},
+		Message: "already exists; nothing was written",
+	}
+}
+
 // NoFileError reports a generate package run with no muxt.json between Dir and
 // the module root, so there is no file to add the entry to.
 type NoFileError struct {
@@ -34,6 +43,15 @@ type NoFileError struct {
 // Error returns the directory searched from and the fix on one line.
 func (e *NoFileError) Error() string {
 	return fmt.Sprintf("no muxt.json found at or above %s up to the module root; create one with: muxt generate config", e.Dir)
+}
+
+// Diagnostic has no place, since there is no file, and offers the command that
+// creates one as the fix.
+func (e *NoFileError) Diagnostic() diagnostic.Diagnostic {
+	return diagnostic.Diagnostic{
+		Message: fmt.Sprintf("no muxt.json found at or above %s up to the module root", e.Dir),
+		Fix:     "create one with: muxt generate config",
+	}
 }
 
 // ParseError reports a muxt.json that is not valid JSON. Line and Col are the
@@ -166,6 +184,16 @@ func (e *KeyFormError) Error() string {
 	return fmt.Sprintf("%s: packages key %q is not an import path; write %q", e.Path, e.Key, e.ImportPath)
 }
 
+// Diagnostic places the problem at the file, and names the import path as the
+// fix.
+func (e *KeyFormError) Diagnostic() diagnostic.Diagnostic {
+	return diagnostic.Diagnostic{
+		Place:   diagnostic.Place{File: e.Path},
+		Message: fmt.Sprintf("packages key %q is not an import path", e.Key),
+		Fix:     fmt.Sprintf("write %q", e.ImportPath),
+	}
+}
+
 // MissingEntryError reports a directory below a muxt.json that the file has no
 // entry for, so a flagless muxt generate there has nothing to read. Key is the
 // packages key the directory would need.
@@ -176,6 +204,16 @@ type MissingEntryError struct {
 // Error returns the path and the key to add on one line.
 func (e *MissingEntryError) Error() string {
 	return fmt.Sprintf("%s: no packages entry %q; add one to generate this directory", e.Path, e.Key)
+}
+
+// Diagnostic places the problem at the file, and says to add the entry as the
+// fix.
+func (e *MissingEntryError) Diagnostic() diagnostic.Diagnostic {
+	return diagnostic.Diagnostic{
+		Place:   diagnostic.Place{File: e.Path},
+		Message: fmt.Sprintf("no packages entry %q", e.Key),
+		Fix:     "add one to generate this directory",
+	}
 }
 
 // MissingDirectoryError reports a muxt.json entry whose directory does not
@@ -308,6 +346,16 @@ func (e *RoutePathsSetsError) Error() string {
 	return fmt.Sprintf("%s: route_paths takes one entry per package, and packages[%q] has %d; keep one entry or remove route_paths", e.Path, e.Key, e.Sets)
 }
 
+// Diagnostic places the problem at the file, and offers the two ways out as the
+// fix.
+func (e *RoutePathsSetsError) Diagnostic() diagnostic.Diagnostic {
+	return diagnostic.Diagnostic{
+		Place:   diagnostic.Place{File: e.Path},
+		Message: fmt.Sprintf("route_paths takes one entry per package, and packages[%q] has %d", e.Key, e.Sets),
+		Fix:     "keep one entry or remove route_paths",
+	}
+}
+
 // GeneratedFileClashError reports two entries under one packages key that
 // would write one generated file under output_multiple_files: both read a
 // template file, and the file's name comes from the template file alone, so the
@@ -418,6 +466,26 @@ func (e *ConfiguredDirectoryError) Error() string {
 	return msg
 }
 
+// Diagnostic has no place of its own, since the message names the file inline,
+// and offers the file as the related place to configure the directory in.
+func (e *ConfiguredDirectoryError) Diagnostic() diagnostic.Diagnostic {
+	msg := fmt.Sprintf("configure %s with fields in %s instead of flags", e.Command, e.Path)
+	for i, flag := range slices.Sorted(slices.Values(e.Flags)) {
+		sep := ", "
+		if i == 0 {
+			sep = ": "
+		}
+		msg += sep + "--" + flag
+		if key, ok := e.Keys[flag]; ok {
+			msg += " (" + key + ")"
+		}
+	}
+	return diagnostic.Diagnostic{
+		Message: msg,
+		Related: []diagnostic.Related{{Place: diagnostic.Place{File: e.Path}, Message: "the file to configure the directory in"}},
+	}
+}
+
 // DeprecatedKeyError reports a key in a muxt.json entry that is an old flag
 // name. Replacement is the key to write instead. Where names the entry.
 type DeprecatedKeyError struct {
@@ -475,6 +543,14 @@ func (e *OtherModuleError) Error() string {
 	return fmt.Sprintf("%s: packages key %q is not in this module (%s)", e.Path, e.Key, e.Module)
 }
 
+// Diagnostic places the problem at the file.
+func (e *OtherModuleError) Diagnostic() diagnostic.Diagnostic {
+	return diagnostic.Diagnostic{
+		Place:   diagnostic.Place{File: e.Path},
+		Message: fmt.Sprintf("packages key %q is not in this module (%s)", e.Key, e.Module),
+	}
+}
+
 // KeyOutsideError reports a packages key that names a package in the file's
 // module but not at or below the directory holding the muxt.json, or a
 // relative path such as "../other" or "/abs". A file
@@ -487,6 +563,14 @@ type KeyOutsideError struct {
 // Error returns the path and the key on one line.
 func (e *KeyOutsideError) Error() string {
 	return fmt.Sprintf("%s: packages key %q is outside the file's directory", e.Path, e.Key)
+}
+
+// Diagnostic places the problem at the file.
+func (e *KeyOutsideError) Diagnostic() diagnostic.Diagnostic {
+	return diagnostic.Diagnostic{
+		Place:   diagnostic.Place{File: e.Path},
+		Message: fmt.Sprintf("packages key %q is outside the file's directory", e.Key),
+	}
 }
 
 // NoModuleError reports a muxt.json with no go.mod at or above it. Its packages
@@ -508,6 +592,24 @@ func (e *NoModuleError) Error() string {
 	return fmt.Sprintf("%s: no go.mod found at or above the file; package keys are import paths", e.Path)
 }
 
+// Diagnostic places the problem at the file, or at the directory the file was
+// to be created in, whose File is that directory. The reason keys need a module
+// is an explanation, not an instruction, so it stays in the message; what to run
+// when creating is the fix.
+func (e *NoModuleError) Diagnostic() diagnostic.Diagnostic {
+	if e.Creating {
+		return diagnostic.Diagnostic{
+			Place:   diagnostic.Place{File: filepath.Dir(e.Path)},
+			Message: "no go.mod found at or above this directory",
+			Fix:     "run go mod init MODULE here first",
+		}
+	}
+	return diagnostic.Diagnostic{
+		Place:   diagnostic.Place{File: e.Path},
+		Message: "no go.mod found at or above the file; package keys are import paths",
+	}
+}
+
 // PackageNameError reports a NAME that muxt generate package cannot make a
 // route package of. Reason finishes the sentence that starts with the name, and
 // says what NAME is or what to do instead.
@@ -518,6 +620,12 @@ type PackageNameError struct {
 // Error returns the name and the reason on one line.
 func (e *PackageNameError) Error() string {
 	return fmt.Sprintf("package name %q %s", e.Name, e.Reason)
+}
+
+// Diagnostic has no place: the name comes from the command line. The reason may
+// say what to do instead, so the whole sentence stays in the message.
+func (e *PackageNameError) Diagnostic() diagnostic.Diagnostic {
+	return diagnostic.Diagnostic{Message: fmt.Sprintf("package name %q %s", e.Name, e.Reason)}
 }
 
 // NestedError reports two muxt.json files in one module with one below the
@@ -541,6 +649,21 @@ func (e *NestedError) Error() string {
 	return fmt.Sprintf("%s is below %s; a module's muxt.json files do not nest: move its entries into %s and delete it", e.Inner, e.Outer, e.Outer)
 }
 
+// Diagnostic places the problem at the inner file and offers the outer as the
+// related place. What follows the semicolon explains before it instructs, so
+// all of it stays in the message.
+func (e *NestedError) Diagnostic() diagnostic.Diagnostic {
+	message := fmt.Sprintf("is below %s; a module's muxt.json files do not nest: move its entries into %s and delete it", e.Outer, e.Outer)
+	if e.Unwritten {
+		message = fmt.Sprintf("already configures a directory below; a module's muxt.json files do not nest: move it to %s", e.Outer)
+	}
+	return diagnostic.Diagnostic{
+		Place:   diagnostic.Place{File: e.Inner},
+		Message: message,
+		Related: []diagnostic.Related{{Place: diagnostic.Place{File: e.Outer}, Message: "the file it nests below"}},
+	}
+}
+
 // LockedError reports a muxt.json that another muxt run is rewriting: its lock
 // file was still there after the wait. Path and Lock are absolute paths. The
 // lock outlives a run only when the run was killed, so the message says to
@@ -552,6 +675,16 @@ type LockedError struct {
 // Error returns the file, the lock and the fix on one line.
 func (e *LockedError) Error() string {
 	return fmt.Sprintf("%s is locked by %s: another muxt run is writing it; delete the lock file if none is", e.Path, e.Lock)
+}
+
+// Diagnostic places the problem at the file, and offers deleting the lock as
+// the fix.
+func (e *LockedError) Diagnostic() diagnostic.Diagnostic {
+	return diagnostic.Diagnostic{
+		Place:   diagnostic.Place{File: e.Path},
+		Message: fmt.Sprintf("locked by %s: another muxt run is writing it", e.Lock),
+		Fix:     "delete the lock file if none is",
+	}
 }
 
 // AlreadyConfiguredError reports a muxt.json at or above the directory a
@@ -566,6 +699,16 @@ func (e *AlreadyConfiguredError) Error() string {
 	return fmt.Sprintf("%s already configures this directory; add a package with: muxt generate package NAME", e.Path)
 }
 
+// Diagnostic places the problem at the found file, and names the command that
+// adds a package as the fix.
+func (e *AlreadyConfiguredError) Diagnostic() diagnostic.Diagnostic {
+	return diagnostic.Diagnostic{
+		Place:   diagnostic.Place{File: e.Path},
+		Message: "this directory is already configured",
+		Fix:     "add a package with: muxt generate package NAME",
+	}
+}
+
 // EmptyPackagesError reports a flagless muxt generate in the directory of a
 // muxt.json that lists no packages, so there is nothing to generate from the
 // file and defaults must not stand in for it. Path is the file's absolute path.
@@ -576,6 +719,16 @@ type EmptyPackagesError struct {
 // Error returns the file and the command that adds a package, on one line.
 func (e *EmptyPackagesError) Error() string {
 	return fmt.Sprintf("%s: packages is empty; add a package with: muxt generate package NAME", e.Path)
+}
+
+// Diagnostic places the problem at the file, and names the command that adds a
+// package as the fix.
+func (e *EmptyPackagesError) Diagnostic() diagnostic.Diagnostic {
+	return diagnostic.Diagnostic{
+		Place:   diagnostic.Place{File: e.Path},
+		Message: "packages is empty",
+		Fix:     "add a package with: muxt generate package NAME",
+	}
 }
 
 // KeyCaseError reports a packages key that names a directory of the module in
@@ -589,6 +742,15 @@ type KeyCaseError struct {
 // Error returns the path, the key, and the spelling on disk on one line.
 func (e *KeyCaseError) Error() string {
 	return fmt.Sprintf("%s: packages key %q is spelled %q on disk; write that", e.Path, e.Key, e.OnDisk)
+}
+
+// Diagnostic places the problem at the file.
+func (e *KeyCaseError) Diagnostic() diagnostic.Diagnostic {
+	return diagnostic.Diagnostic{
+		Place:   diagnostic.Place{File: e.Path},
+		Message: fmt.Sprintf("packages key %q is spelled %q on disk", e.Key, e.OnDisk),
+		Fix:     "write that",
+	}
 }
 
 // SeveralPackagesError reports a command that acts on one package, run with no
@@ -608,6 +770,16 @@ type SeveralPackagesError struct {
 // choose from, on one line.
 func (e *SeveralPackagesError) Error() string {
 	return fmt.Sprintf("%s: %s %s; %s: %s", e.Path, e.Command, e.Task, e.Where, strings.Join(e.Dirs, " "))
+}
+
+// Diagnostic places the problem at the file, and offers the directories to
+// choose from as the fix.
+func (e *SeveralPackagesError) Diagnostic() diagnostic.Diagnostic {
+	return diagnostic.Diagnostic{
+		Place:   diagnostic.Place{File: e.Path},
+		Message: e.Command + " " + e.Task,
+		Fix:     e.Where + ": " + strings.Join(e.Dirs, " "),
+	}
 }
 
 // ValueTypeError reports a key in a muxt.json entry whose value is not the
