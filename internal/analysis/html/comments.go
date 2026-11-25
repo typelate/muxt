@@ -149,22 +149,33 @@ func CheckComments(templates map[string]*htt.Tree, roots []string) ([]diagnostic
 			o.compare(o.stdlib[name], outer)
 		}
 	}
-	slices.SortFunc(o.diags, func(a, b pending) int {
+	type located struct {
+		diagnostic.Diagnostic
+		offset int
+	}
+	found := make([]located, 0, len(o.diags))
+	for _, d := range o.diags {
+		converted := diagnosticAt(d.Tree, d.Diagnostic)
+		converted.Fix = fixFor(d.Code)
+		found = append(found, located{Diagnostic: converted, offset: int(d.Pos)})
+	}
+	// The order within a file is by byte offset, not by line and column.
+	// Templates parsed from different texts under one name share a file
+	// here, and neither order tells their findings apart; this is the one
+	// muxt check has printed since it reported these findings.
+	slices.SortFunc(found, func(a, b located) int {
 		return cmp.Or(
-			strings.Compare(a.Tree.Filepath, b.Tree.Filepath),
-			strings.Compare(a.Tree.ParseName, b.Tree.ParseName),
-			cmp.Compare(a.Pos, b.Pos),
+			strings.Compare(a.Place.File, b.Place.File),
+			cmp.Compare(a.offset, b.offset),
 			strings.Compare(a.Message, b.Message),
 		)
 	})
-	found := slices.CompactFunc(o.diags, func(a, b pending) bool {
-		return a.Tree == b.Tree && a.Pos == b.Pos && a.Message == b.Message
+	found = slices.CompactFunc(found, func(a, b located) bool {
+		return a.offset == b.offset && a.Place == b.Place && a.Message == b.Message
 	})
 	diags := make([]diagnostic.Diagnostic, 0, len(found))
 	for _, d := range found {
-		converted := diagnosticAt(d.Tree, d.Diagnostic)
-		converted.Fix = fixFor(d.Code)
-		diags = append(diags, converted)
+		diags = append(diags, d.Diagnostic)
 	}
 	return diags, nil
 }

@@ -1,0 +1,41 @@
+Findings in templates parsed from two strings under one name: they share
+no file, so they are listed by byte offset in their own text, which is not
+the order of their lines and columns.
+
+Command line: muxt check
+-- config.json --
+{
+	"Verbose": false,
+	"TemplatesVariables": [
+		"templates"
+	]
+}
+-- templates.go --
+package server
+
+import "html/template"
+
+var templates = template.Must(template.Must(template.New("").Parse(`{{define "index"}}<p>{{.}}..........<!y></p>{{end}}`)).Parse("\n<!x>{{define \"x\"}}<p><!z></p>{{end}}"))
+-- server.go --
+package server
+
+import "io"
+
+func RenderIndex(w io.Writer) error {
+	return templates.ExecuteTemplate(w, "index", nil)
+}
+
+func RenderX(w io.Writer) error {
+	return templates.ExecuteTemplate(w, "x", nil)
+}
+-- want/checked.txt --
+2
+-- want/error.txt --
+4 errors
+-- want/log.txt --
+2:1: html/template escapes this "<!", so browsers show it as text; comment with {{/* */}} or <!-- -->
+2:22: html/template escapes this "<!", so browsers show it as text; comment with {{/* */}} or <!-- -->
+1:37: html/template escapes this "<!", so browsers show it as text; comment with {{/* */}} or <!-- -->
+
+Unused templates:
+  - 1:1: ""

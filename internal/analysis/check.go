@@ -1,7 +1,6 @@
 package analysis
 
 import (
-	"cmp"
 	"errors"
 	"fmt"
 	"go/ast"
@@ -184,17 +183,6 @@ func reportHTMLComments(logger *log.Logger, variable source.Variable) []error {
 		logger.Println()
 		return []error{err}
 	}
-	slices.SortFunc(diags, func(a, b diagnostic.Diagnostic) int {
-		return cmp.Or(
-			strings.Compare(a.Place.File, b.Place.File),
-			cmp.Compare(a.Place.Line, b.Place.Line),
-			cmp.Compare(a.Place.Column, b.Place.Column),
-			strings.Compare(a.Message, b.Message),
-		)
-	})
-	diags = slices.CompactFunc(diags, func(a, b diagnostic.Diagnostic) bool {
-		return a.Place == b.Place && a.Message == b.Message
-	})
 	errs := make([]error, 0, len(diags))
 	for _, d := range diags {
 		logger.Println(d)
