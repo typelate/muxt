@@ -15,6 +15,8 @@ import (
 
 	"github.com/typelate/htt"
 	"github.com/typelate/htt/lex"
+
+	"github.com/typelate/muxt/internal/diagnostic"
 )
 
 // Comment diagnostic codes.
@@ -101,7 +103,7 @@ type TreeDiagnostic struct {
 //
 // templates maps the name of each template in the set to its tree, parsed
 // as HTML. CheckComments fails when html/template cannot parse a source.
-func CheckComments(templates map[string]*htt.Tree, roots []string) ([]TreeDiagnostic, error) {
+func CheckComments(templates map[string]*htt.Tree, roots []string) ([]diagnostic.Diagnostic, error) {
 	o := &escapeOracle{
 		set:      htmltemplate.New(""),
 		original: make(map[*parse.TextNode]string),
@@ -153,9 +155,14 @@ func CheckComments(templates map[string]*htt.Tree, roots []string) ([]TreeDiagno
 			strings.Compare(a.Message, b.Message),
 		)
 	})
-	return slices.CompactFunc(o.diags, func(a, b TreeDiagnostic) bool {
+	found := slices.CompactFunc(o.diags, func(a, b TreeDiagnostic) bool {
 		return a.Tree == b.Tree && a.Pos == b.Pos && a.Message == b.Message
-	}), nil
+	})
+	diags := make([]diagnostic.Diagnostic, 0, len(found))
+	for _, d := range found {
+		diags = append(diags, diagnosticAt(d.Tree, d.Diagnostic))
+	}
+	return diags, nil
 }
 
 // escapeOracle holds a set parsed twice: by the template parser, the

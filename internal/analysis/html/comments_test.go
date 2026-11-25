@@ -11,6 +11,8 @@ import (
 
 	"github.com/typelate/htt"
 	muxthtml "github.com/typelate/htt/template"
+
+	"github.com/typelate/muxt/internal/diagnostic"
 )
 
 // stdlibOutcome is what the standard library's html/template does with a
@@ -202,8 +204,7 @@ func TestCheckComments_refusalInCallee(t *testing.T) {
 	want := []string{"b.gohtml:1:15: html/template refuses this template: " + escapeErr.Description}
 	var got []string
 	for _, d := range diags {
-		p := d.Tree.PositionAt(d.Pos)
-		got = append(got, fmt.Sprintf("%s:%d:%d: %s", d.Tree.ParseName, p.Line, p.Column, d.Message))
+		got = append(got, fmt.Sprintf("%s:%d:%d: %s", d.Place.File, d.Place.Line, d.Place.Column, d.Message))
 	}
 	if !slices.Equal(got, want) {
 		t.Errorf("CheckComments =\n%q\nwant\n%q", got, want)
@@ -230,8 +231,7 @@ func TestCheckComments_files(t *testing.T) {
 	}
 	var got []string
 	for _, d := range diags {
-		p := d.Tree.PositionAt(d.Pos)
-		got = append(got, fmt.Sprintf("%s:%d:%d: %s", d.Tree.ParseName, p.Line, p.Column, d.Message))
+		got = append(got, fmt.Sprintf("%s:%d:%d: %s", d.Place.File, d.Place.Line, d.Place.Column, d.Message))
 	}
 	if !slices.Equal(got, want) {
 		t.Errorf("CheckComments =\n%q\nwant\n%q", got, want)
@@ -251,8 +251,8 @@ func TestCheckComments_severity(t *testing.T) {
 		t.Fatal("CheckComments reported nothing")
 	}
 	for _, d := range diags {
-		if d.Severity != SeverityError {
-			t.Errorf("Severity = %v, want %v", d.Severity, SeverityError)
+		if d.Severity != diagnostic.Error {
+			t.Errorf("Severity = %v, want %v", d.Severity, diagnostic.Error)
 		}
 	}
 }
@@ -304,8 +304,7 @@ func checkComments(t *testing.T, input string, roots []string) []string {
 	}
 	var lines []string
 	for _, d := range diags {
-		p := d.Tree.PositionAt(d.Pos)
-		lines = append(lines, fmt.Sprintf("%d:%d: %s", p.Line, p.Column, d.Message))
+		lines = append(lines, fmt.Sprintf("%d:%d: %s", d.Place.Line, d.Place.Column, d.Message))
 	}
 	return lines
 }

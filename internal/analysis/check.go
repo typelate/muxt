@@ -18,6 +18,7 @@ import (
 	htmlanalysis "github.com/typelate/muxt/internal/analysis/html"
 
 	"github.com/typelate/muxt/internal/check"
+	"github.com/typelate/muxt/internal/diagnostic"
 
 	"github.com/typelate/muxt/internal/astgen"
 	"github.com/typelate/muxt/internal/muxt"
@@ -183,37 +184,23 @@ func reportHTMLComments(logger *log.Logger, variable source.Variable) []error {
 		logger.Println()
 		return []error{err}
 	}
-	type report struct {
-		position token.Position
-		message  string
-	}
-	reports := make([]report, 0, len(diags))
-	for _, d := range diags {
-		at := d.Tree.PositionAt(d.Pos)
-		reports = append(reports, report{
-			position: token.Position{
-				Filename: cmp.Or(d.Tree.Filepath, at.ParseName),
-				Offset:   int(d.Pos),
-				Line:     at.Line,
-				Column:   at.Column,
-			},
-			message: d.Message,
-		})
-	}
-	slices.SortFunc(reports, func(a, b report) int {
+	slices.SortFunc(diags, func(a, b diagnostic.Diagnostic) int {
 		return cmp.Or(
-			strings.Compare(a.position.Filename, b.position.Filename),
-			cmp.Compare(a.position.Offset, b.position.Offset),
-			strings.Compare(a.message, b.message),
+			strings.Compare(a.Place.File, b.Place.File),
+			cmp.Compare(a.Place.Line, b.Place.Line),
+			cmp.Compare(a.Place.Column, b.Place.Column),
+			strings.Compare(a.Message, b.Message),
 		)
 	})
-	reports = slices.CompactFunc(reports, func(a, b report) bool { return a == b })
-	errs := make([]error, 0, len(reports))
-	for _, r := range reports {
-		logger.Printf("%s: %s", r.position, r.message)
-		errs = append(errs, errors.New(r.message))
+	diags = slices.CompactFunc(diags, func(a, b diagnostic.Diagnostic) bool {
+		return a.Place == b.Place && a.Message == b.Message
+	})
+	errs := make([]error, 0, len(diags))
+	for _, d := range diags {
+		logger.Println(d)
+		errs = append(errs, errors.New(d.Message))
 	}
-	if len(reports) > 0 {
+	if len(diags) > 0 {
 		logger.Println()
 	}
 	return errs
