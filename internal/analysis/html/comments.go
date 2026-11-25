@@ -70,8 +70,10 @@ func CommentDelimitedAlike(n *htt.HTMLCommentNode) bool {
 		strings.Index(src[len(commentOpen):], commentClose) == len(src)-len("<!---->")
 }
 
-// TreeDiagnostic is a diagnostic at a position in the text of Tree.
-type TreeDiagnostic struct {
+// pending is a finding at byte offsets of Tree. It is kept until
+// CheckComments has sorted and compacted the findings, which compares trees;
+// then diagnosticAt turns it into what callers receive.
+type pending struct {
 	Tree *htt.Tree
 	Diagnostic
 }
@@ -147,7 +149,7 @@ func CheckComments(templates map[string]*htt.Tree, roots []string) ([]diagnostic
 			o.compare(o.stdlib[name], outer)
 		}
 	}
-	slices.SortFunc(o.diags, func(a, b TreeDiagnostic) int {
+	slices.SortFunc(o.diags, func(a, b pending) int {
 		return cmp.Or(
 			strings.Compare(a.Tree.Filepath, b.Tree.Filepath),
 			strings.Compare(a.Tree.ParseName, b.Tree.ParseName),
@@ -155,7 +157,7 @@ func CheckComments(templates map[string]*htt.Tree, roots []string) ([]diagnostic
 			strings.Compare(a.Message, b.Message),
 		)
 	})
-	found := slices.CompactFunc(o.diags, func(a, b TreeDiagnostic) bool {
+	found := slices.CompactFunc(o.diags, func(a, b pending) bool {
 		return a.Tree == b.Tree && a.Pos == b.Pos && a.Message == b.Message
 	})
 	diags := make([]diagnostic.Diagnostic, 0, len(found))
@@ -182,7 +184,7 @@ type escapeOracle struct {
 	// derived are the templates a call outside text reaches, which the
 	// escaper escaped as copies.
 	derived map[string]bool
-	diags   []TreeDiagnostic
+	diags   []pending
 }
 
 type stdlibTemplate struct {
@@ -725,7 +727,7 @@ func (o *escapeOracle) escapedLT(v *browserView, pos lex.Pos, text, outer string
 }
 
 func (o *escapeOracle) report(v *browserView, pos lex.Pos, code htt.DiagnosticCode, format string, args ...any) {
-	o.diags = append(o.diags, TreeDiagnostic{Tree: v.tree, Diagnostic: Diagnostic{
+	o.diags = append(o.diags, pending{Tree: v.tree, Diagnostic: Diagnostic{
 		Pos:      pos,
 		Severity: SeverityError,
 		Code:     code,
