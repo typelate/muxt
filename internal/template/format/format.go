@@ -17,6 +17,7 @@ import (
 	"github.com/typelate/htt/lex"
 
 	analysis "github.com/typelate/muxt/internal/analysis/html"
+	"github.com/typelate/muxt/internal/muxt"
 )
 
 // Option configures the formatter.
@@ -95,7 +96,7 @@ type formatter struct {
 // format reindents src, the source of list starting at position base.
 // dir holds the file's muxt:fmt regions; it is nil for Node.
 func (f *formatter) format(src string, base lex.Pos, list *htt.ListNode, dir *directives) (string, error) {
-	whole, bodies := ignoredSelfCloses(list)
+	whole, bodies := ignoredSelfCloses(list, f.whitespace.Context)
 	if whole || hasUnparsedMarkup(list.Nodes) {
 		return f.actionsOnly(src, base, list, dir)
 	}
@@ -270,9 +271,73 @@ func normalizeLineEndings(src string) string {
 // defines are independent templates. One outside any define, or in a
 // define or block the file calls with {{template}} or that is a block
 // (rendered in place), leaves the whole file as written (whole).
-func ignoredSelfCloses(root *htt.ListNode) (whole bool, bodies map[*htt.DefineNode]bool) {
-	s := selfCloseScan{bodies: make(map[*htt.DefineNode]bool), names: make(map[string]bool)}
-	s.scan(root.Nodes, false, new(bool), nil)
+//
+// A define's or block's body is the content of the places that render
+// it: the {{template}} calls of root and of context, the package's other
+// templates, and where a block stands. When each of them is SVG or
+// MathML content, so is the body, and the slash closes there: a define
+// of <path/> called only inside <svg> is no obstacle. With no such
+// place, or with one of them HTML, the body is HTML content; so is the
+// body of a route, which Go executes.
+func ignoredSelfCloses(root *htt.ListNode, context []*htt.Tree) (whole bool, bodies map[*htt.DefineNode]bool) {
+	s := selfCloseScan{
+		bodies:   make(map[*htt.DefineNode]bool),
+		names:    make(map[string]bool),
+		defined:  make(map[string]*htt.ListNode),
+		sites:    make(map[string]int),
+		seen:     make(map[string]int),
+		html:     make(map[string]bool),
+		breakout: make(map[string]bool),
+	}
+	define := func(name string, body *htt.ListNode) {
+		if _, ok := s.defined[name]; !ok {
+			s.defined[name] = body
+		}
+		if _, route := muxt.ParseDefinitionName(name); route {
+			s.html[name] = true
+		}
+	}
+	for _, tree := range append([]*htt.Tree{{Root: root}}, context...) {
+		htt.Walk(tree, func(_ *htt.Tree, n htt.Node) {
+			switch n := n.(type) {
+			case *htt.DefineNode:
+				define(n.Name, n.Body)
+			case *htt.BlockNode:
+				define(n.Name, n.Body)
+				s.sites[n.Name]++
+			case *htt.TemplateNode:
+				s.sites[n.Name]++
+			}
+		})
+	}
+	// A body rendered only from other bodies is HTML content when one of
+	// them is, so the scan repeats until it learns of no new HTML place.
+	// It starts from every rendered body being SVG or MathML content, and
+	// each pass starts its findings over.
+	for {
+		s.whole, s.learned = false, false
+		clear(s.bodies)
+		clear(s.names)
+		clear(s.seen)
+		s.scan(root.Nodes, false, new(bool), nil)
+		s.elsewhere = true
+		for _, tree := range context {
+			if tree != nil && tree.Root != nil {
+				s.scan(tree.Root.Nodes, false, new(bool), nil)
+			}
+		}
+		s.elsewhere = false
+		// A place the scan does not reach, such as an attribute value,
+		// is taken for HTML content.
+		for name, sites := range s.sites {
+			if s.seen[name] < sites && !s.html[name] {
+				s.html[name], s.learned = true, true
+			}
+		}
+		if !s.learned {
+			break
+		}
+	}
 	if s.whole {
 		return true, nil
 	}
@@ -291,6 +356,27 @@ type selfCloseScan struct {
 	whole  bool
 	bodies map[*htt.DefineNode]bool
 	names  map[string]bool // defines and blocks holding one
+
+	// defined is the body of each define and block of the file, by name.
+	defined map[string]*htt.ListNode
+	// sites counts the places of the file that render each name: a
+	// {{template}} call, or a block where it stands. seen counts the
+	// ones a pass came to.
+	sites, seen map[string]int
+	// html are the names one of those places renders in HTML content.
+	// learned reports that a pass added to it.
+	html    map[string]bool
+	learned bool
+	// breakout is whether a body, rendered in SVG or MathML content,
+	// holds a start tag that pops the browser out of it (breaksOut).
+	breakout map[string]bool
+	// following reports a pass that only follows the browser out of
+	// foreign content: it records no place and finds no self-close.
+	following bool
+	// elsewhere reports that the scan is in one of the package's other
+	// templates: it records the places and finds no self-close, which
+	// is that template's to find.
+	elsewhere bool
 }
 
 // scan walks nodes, which are SVG or MathML content when foreign. broke
@@ -314,7 +400,7 @@ func (s *selfCloseScan) scan(nodes []htt.Node, foreign bool, broke *bool, enclos
 				inForeign = true
 				childBroke = new(bool)
 			}
-			if n.Void && !voidElements[tag] && !inForeign {
+			if n.Void && !voidElements[tag] && !inForeign && !s.following && !s.elsewhere {
 				s.found(enclosing)
 			}
 			if inForeign && integrationPoints[tag] {
@@ -330,17 +416,77 @@ func (s *selfCloseScan) scan(nodes []htt.Node, foreign bool, broke *bool, enclos
 			if b.ElseList != nil {
 				s.scan(b.ElseList.Nodes, foreign, broke, enclosing)
 			}
-		case *htt.DefineNode:
-			// A body is HTML content: its callers are unknown.
-			if n.Body != nil {
-				s.scan(n.Body.Nodes, false, new(bool), append(enclosing, n))
+		case *htt.TemplateNode:
+			inForeign := foreign && !*broke
+			s.rendered(n.Name, inForeign)
+			if inForeign && s.breaksOut(n.Name) {
+				*broke = true
 			}
+		case *htt.DefineNode:
+			if n.Body == nil || s.following {
+				continue
+			}
+			// With no place in the file that renders it, a body is HTML
+			// content: its callers are unknown.
+			s.scan(n.Body.Nodes, s.onlyForeign(n.Name), new(bool), append(enclosing, n))
 		case *htt.BlockNode:
-			if n.Body != nil {
+			// A block is rendered where it stands.
+			inForeign := foreign && !*broke
+			s.rendered(n.Name, inForeign)
+			switch {
+			case n.Body == nil:
+			case s.following:
+				s.scan(n.Body.Nodes, foreign, broke, nil)
+			case s.onlyForeign(n.Name):
+				s.scan(n.Body.Nodes, true, broke, append(enclosing, n))
+			default:
 				s.scan(n.Body.Nodes, false, new(bool), append(enclosing, n))
+				if inForeign && s.breaksOut(n.Name) {
+					*broke = true
+				}
 			}
 		}
 	}
+}
+
+// rendered records that the file renders the define or block name in
+// SVG or MathML content when inForeign, and in HTML content otherwise.
+func (s *selfCloseScan) rendered(name string, inForeign bool) {
+	if s.following {
+		return
+	}
+	s.seen[name]++
+	if !inForeign && !s.html[name] {
+		s.html[name], s.learned = true, true
+	}
+}
+
+// onlyForeign reports whether the file renders name, and only in SVG or
+// MathML content, as far as the scan has learned.
+func (s *selfCloseScan) onlyForeign(name string) bool {
+	return s.sites[name] > 0 && !s.html[name]
+}
+
+// breaksOut reports whether the body of name, rendered in SVG or MathML
+// content, pops the browser out of it, so that what follows the call is
+// HTML content. A body the file does not define is taken not to, as a
+// call was before bodies were followed; so is a body that calls itself,
+// until its own tags say otherwise.
+func (s *selfCloseScan) breaksOut(name string) bool {
+	if out, ok := s.breakout[name]; ok {
+		return out
+	}
+	s.breakout[name] = false
+	body := s.defined[name]
+	if body == nil {
+		return false
+	}
+	follow := *s
+	follow.following = true
+	broke := new(bool)
+	follow.scan(body.Nodes, true, broke, nil)
+	s.breakout[name] = *broke
+	return *broke
 }
 
 // found records an ignored self-close inside enclosing.
