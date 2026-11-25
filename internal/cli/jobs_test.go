@@ -185,7 +185,7 @@ func TestSelectJobsTakesEverySetUnderAKey(t *testing.T) {
 	require.NoError(t, err)
 	var got []string
 	for _, job := range sel.Jobs {
-		got = append(got, fmt.Sprintf("%s %d/%d %s", job.Key, job.Set, job.Sets, job.Config.RoutesFunction))
+		got = append(got, fmt.Sprintf("%s %d/%d %s", job.Key, job.Index, job.SetCount(), job.Config.RoutesFunction))
 	}
 	want := []string{
 		"example.com/fieldkit/contacts 0/2 PublicRoutes",

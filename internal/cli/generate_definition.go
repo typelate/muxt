@@ -122,7 +122,7 @@ func requireAgreeingSets(jobs []packageJob) error {
 	first := jobs[0]
 	for _, job := range jobs[1:] {
 		if job.Config.ReceiverType != first.Config.ReceiverType || job.Config.ReceiverPackage != first.Config.ReceiverPackage {
-			return &ReceiverClashError{Path: job.File, Key: job.Key, First: first.Set, Second: job.Set}
+			return &ReceiverClashError{Path: job.File, Key: job.Key, First: first.Index, Second: job.Index}
 		}
 	}
 	return nil

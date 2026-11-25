@@ -77,13 +77,13 @@ type onePackageWording struct {
 type packageJob struct {
 	File string
 	Key  string
-	// Set is the zero-based position of the job's entry under Key and Sets how
-	// many entries Key holds. Both are zero for a job the command line
-	// configured.
-	Set, Sets int
-	Dir       string
-	Config    generate.RoutesFileConfiguration
-	Given     givenSettings
+	// Index is the zero-based position of the job's entry under Key and
+	// setCount how many entries Key holds; read the count through SetCount.
+	// Both are zero for a job the command line configured.
+	Index, setCount int
+	Dir             string
+	Config          generate.RoutesFileConfiguration
+	Given           givenSettings
 	// Keyed is set on every job of a run that read every entry of the muxt.json
 	// in its own directory, however many entries it holds, and of a run in one
 	// package directory whose key holds several sets. Such a run names each job
@@ -105,15 +105,19 @@ type packageJob struct {
 // would not tell them apart. Choosing by the entry count keeps a one-entry
 // module's output as it was.
 func (j packageJob) Name() string {
-	if j.Sets > 1 {
+	if j.SetCount() > 1 {
 		return fmt.Sprintf("%s (%s)", j.Key, j.Config.OutputFileName)
 	}
 	return j.Key
 }
 
+// SetCount is how many entries the job's key holds, so a caller does not
+// depend on how the count is kept.
+func (j packageJob) SetCount() int { return j.setCount }
+
 // Where is the job's entry as a muxt.json spells its position, for an error to
 // name. It is meaningless for a job the command line configured.
-func (j packageJob) Where() string { return composite.SetWhere(j.Key, j.Set) }
+func (j packageJob) Where() string { return composite.SetWhere(j.Key, j.Index) }
 
 // Named is whether a failure of the job says which package it is, since the
 // run has more than one.
@@ -283,7 +287,7 @@ func selectJobs(spec jobSpec, dir string, flags *pflag.FlagSet, getEnv func(stri
 			config.Verbose = spec.Verbose
 			// One key with several sets: nothing but a name tells them apart.
 			setsNeedNames := !hubFromChild && len(sets) > 1
-			jobs = append(jobs, packageJob{File: f.Name, Key: key, Set: i, Sets: len(sets), Dir: entryDir, Config: config, Keyed: keyed || setsNeedNames, RoutePaths: routePaths, ReadOnly: hubFromChild && key != lookup.Key})
+			jobs = append(jobs, packageJob{File: f.Name, Key: key, Index: i, setCount: len(sets), Dir: entryDir, Config: config, Keyed: keyed || setsNeedNames, RoutePaths: routePaths, ReadOnly: hubFromChild && key != lookup.Key})
 		}
 	}
 	return selection{File: f, Jobs: jobs}, nil
@@ -389,7 +393,7 @@ func entryVariableError(job packageJob, err error) (entryErr error, ok bool) {
 	if !ok || job.File == "" {
 		return nil, false
 	}
-	return &composite.NoVariableError{Path: job.File, Key: job.Key, Set: job.Set, Package: missing.Package, Variable: missing.Variable}, true
+	return &composite.NoVariableError{Path: job.File, Key: job.Key, Set: job.Index, Package: missing.Package, Variable: missing.Variable}, true
 }
 
 // entryHook is analysis.NewModule's answer to what the muxt.json holds for a

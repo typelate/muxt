@@ -41,7 +41,7 @@ func newConfigurationReport(f *composite.File, job packageJob) analysis.Configur
 	}
 	if f != nil {
 		sources = append(sources,
-			reportSource{group: analysis.SettingGroup{Source: job.Where(), File: f.Name}, gives: holds(f.Packages[job.Key][job.Set])},
+			reportSource{group: analysis.SettingGroup{Source: job.Where(), File: f.Name}, gives: holds(f.Packages[job.Key][job.Index])},
 			reportSource{group: analysis.SettingGroup{Source: "package_defaults", File: f.Name}, gives: holds(f.Defaults)},
 		)
 	}

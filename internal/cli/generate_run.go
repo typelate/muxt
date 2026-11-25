@@ -219,8 +219,8 @@ func checkGeneratedFileClash(sets []packageJob, results []jobResult) error {
 				Path:   sets[i].File,
 				Key:    sets[i].Key,
 				File:   file.Path,
-				First:  sets[earlier].Set,
-				Second: sets[i].Set,
+				First:  sets[earlier].Index,
+				Second: sets[i].Index,
 			}
 		}
 	}
