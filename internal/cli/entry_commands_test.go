@@ -26,12 +26,12 @@ func templatesVariablesOf(t *testing.T, wd, commandLine string) ([]string, error
 			got = jobs[0].Sets[0].Config.TemplatesVariables
 			return nil
 		},
-		calls: func(_ *cobra.Command, jobs []setRun, _ analysis.TemplateCallsConfiguration) error {
-			got = jobs[0].Config.TemplatesVariables
+		calls: func(_ *cobra.Command, jobs []packageRun, _ analysis.TemplateCallsConfiguration) error {
+			got = jobs[0].Sets[0].Config.TemplatesVariables
 			return nil
 		},
-		callers: func(_ *cobra.Command, jobs []setRun, _ analysis.TemplateCallersConfiguration) error {
-			got = jobs[0].Config.TemplatesVariables
+		callers: func(_ *cobra.Command, jobs []packageRun, _ analysis.TemplateCallersConfiguration) error {
+			got = jobs[0].Sets[0].Config.TemplatesVariables
 			return nil
 		},
 	})
@@ -89,8 +89,8 @@ func TestCheckLeavesAFileArgumentToTheRunner(t *testing.T) {
 		ran := false
 		err := commands(dir, []string{command, "./main.go"}, func(string) string { return "" }, func() (string, bool) { return "v1.2.3", true }, strings.NewReader(""), io.Discard, io.Discard, runners{
 			check: func(*cobra.Command, []packageRun, analysis.CheckConfiguration) error { ran = true; return nil },
-			calls: func(*cobra.Command, []setRun, analysis.TemplateCallsConfiguration) error { ran = true; return nil },
-			callers: func(*cobra.Command, []setRun, analysis.TemplateCallersConfiguration) error {
+			calls: func(*cobra.Command, []packageRun, analysis.TemplateCallsConfiguration) error { ran = true; return nil },
+			callers: func(*cobra.Command, []packageRun, analysis.TemplateCallersConfiguration) error {
 				ran = true
 				return nil
 			},
@@ -140,8 +140,8 @@ func TestEntryFlagsRejectedWhereMuxtJSONConfigures(t *testing.T) {
 			ran := false
 			err := commands(workspace, strings.Fields(commandLine), func(string) string { return "" }, func() (string, bool) { return "v1.2.3", true }, strings.NewReader(""), io.Discard, io.Discard, runners{
 				check: func(*cobra.Command, []packageRun, analysis.CheckConfiguration) error { ran = true; return nil },
-				calls: func(*cobra.Command, []setRun, analysis.TemplateCallsConfiguration) error { ran = true; return nil },
-				callers: func(*cobra.Command, []setRun, analysis.TemplateCallersConfiguration) error {
+				calls: func(*cobra.Command, []packageRun, analysis.TemplateCallsConfiguration) error { ran = true; return nil },
+				callers: func(*cobra.Command, []packageRun, analysis.TemplateCallersConfiguration) error {
 					ran = true
 					return nil
 				},

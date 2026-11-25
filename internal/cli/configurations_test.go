@@ -41,10 +41,10 @@ func configurationOf(t *testing.T, commandLine string, env map[string]string) (a
 			}
 			return record(jobs[0].Sets[0].Config)
 		},
-		callers: func(_ *cobra.Command, _ []setRun, c analysis.TemplateCallersConfiguration) error {
+		callers: func(_ *cobra.Command, _ []packageRun, c analysis.TemplateCallersConfiguration) error {
 			return record(c)
 		},
-		calls:     func(_ *cobra.Command, _ []setRun, c analysis.TemplateCallsConfiguration) error { return record(c) },
+		calls:     func(_ *cobra.Command, _ []packageRun, c analysis.TemplateCallsConfiguration) error { return record(c) },
 		mutations: func(_ *cobra.Command, _ string, c mutation.Configuration) error { return record(c) },
 		format:    func(_ *cobra.Command, _ string, c formatConfiguration) error { return record(c) },
 		test: func(_ *cobra.Command, jobs []setRun, c testConfiguration) error {

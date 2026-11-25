@@ -82,10 +82,10 @@ func checkRunner(loadPackages packageLoader) func(*cobra.Command, []packageRun, 
 	}
 }
 
-// callersRunner lists the template callers of jobs from one load.
-func callersRunner(loadPackages packageLoader) func(*cobra.Command, []setRun, analysis.TemplateCallersConfiguration) error {
-	return func(cmd *cobra.Command, jobs []setRun, config analysis.TemplateCallersConfiguration) error {
-		return runListing(cmd, loadPackages, jobs, func(pkg source.Package, key string) (io.WriterTo, error) {
+// callersRunner lists the template callers of runs from one load.
+func callersRunner(loadPackages packageLoader) func(*cobra.Command, []packageRun, analysis.TemplateCallersConfiguration) error {
+	return func(cmd *cobra.Command, runs []packageRun, config analysis.TemplateCallersConfiguration) error {
+		return runListing(cmd, loadPackages, runs, func(pkg source.Package, key string) (io.WriterTo, error) {
 			result, err := analysis.NewTemplateCallers(config, pkg)
 			if err != nil {
 				return nil, err
@@ -95,10 +95,10 @@ func callersRunner(loadPackages packageLoader) func(*cobra.Command, []setRun, an
 	}
 }
 
-// callsRunner lists the template calls of jobs from one load.
-func callsRunner(loadPackages packageLoader) func(*cobra.Command, []setRun, analysis.TemplateCallsConfiguration) error {
-	return func(cmd *cobra.Command, jobs []setRun, config analysis.TemplateCallsConfiguration) error {
-		return runListing(cmd, loadPackages, jobs, func(pkg source.Package, key string) (io.WriterTo, error) {
+// callsRunner lists the template calls of runs from one load.
+func callsRunner(loadPackages packageLoader) func(*cobra.Command, []packageRun, analysis.TemplateCallsConfiguration) error {
+	return func(cmd *cobra.Command, runs []packageRun, config analysis.TemplateCallsConfiguration) error {
+		return runListing(cmd, loadPackages, runs, func(pkg source.Package, key string) (io.WriterTo, error) {
 			result, err := analysis.NewTemplateCalls(config, pkg)
 			if err != nil {
 				return nil, err
@@ -108,16 +108,16 @@ func callsRunner(loadPackages packageLoader) func(*cobra.Command, []setRun, anal
 	}
 }
 
-// runListing writes what list makes of each job's package. In a keyed run
-// each listing carries its job's key, and with --format json they are one
+// runListing writes what list makes of each set's package. In a keyed run
+// each listing carries its set's key, and with --format json they are one
 // array, since several top-level values are not a document a JSON parser
 // reads.
-func runListing(cmd *cobra.Command, loadPackages packageLoader, jobs []setRun, list func(pkg source.Package, key string) (io.WriterTo, error)) error {
+func runListing(cmd *cobra.Command, loadPackages packageLoader, runs []packageRun, list func(pkg source.Package, key string) (io.WriterTo, error)) error {
 	var (
 		asJSON, formatKnown bool
 		collected           []io.WriterTo
 	)
-	err := runSets(cmd, loadPackages, jobs, jobVisitor{
+	err := runJobs(cmd, loadPackages, runs, jobVisitor{
 		Visit: func(_ int, job setRun, l *load.Loaded, keyed bool) (bool, error) {
 			if !formatKnown {
 				var err error

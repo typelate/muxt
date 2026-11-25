@@ -174,14 +174,14 @@ func recordSelection(base, wd string, args ...string) (string, error) {
 			}
 			return nil
 		},
-		calls: func(_ *cobra.Command, jobs []setRun, _ analysis.TemplateCallsConfiguration) error {
-			for _, job := range jobs {
+		calls: func(_ *cobra.Command, runs []packageRun, _ analysis.TemplateCallsConfiguration) error {
+			for _, job := range setsOf(runs) {
 				r.line("calls dir=%q templates=%v", r.rel(job.Dir), job.Config.TemplatesVariables)
 			}
 			return nil
 		},
-		callers: func(_ *cobra.Command, jobs []setRun, _ analysis.TemplateCallersConfiguration) error {
-			for _, job := range jobs {
+		callers: func(_ *cobra.Command, runs []packageRun, _ analysis.TemplateCallersConfiguration) error {
+			for _, job := range setsOf(runs) {
 				r.line("callers dir=%q templates=%v", r.rel(job.Dir), job.Config.TemplatesVariables)
 			}
 			return nil

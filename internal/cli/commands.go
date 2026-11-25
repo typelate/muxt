@@ -57,8 +57,8 @@ type runners struct {
 	routes    func(cmd *cobra.Command, jobs []routesJob) error
 	check     func(cmd *cobra.Command, runs []packageRun, config analysis.CheckConfiguration) error
 	generate  func(cmd *cobra.Command, runs []packageRun) error
-	callers   func(cmd *cobra.Command, jobs []setRun, config analysis.TemplateCallersConfiguration) error
-	calls     func(cmd *cobra.Command, jobs []setRun, config analysis.TemplateCallsConfiguration) error
+	callers   func(cmd *cobra.Command, runs []packageRun, config analysis.TemplateCallersConfiguration) error
+	calls     func(cmd *cobra.Command, runs []packageRun, config analysis.TemplateCallsConfiguration) error
 	mutations func(cmd *cobra.Command, wd string, config mutation.Configuration) error
 	format    func(cmd *cobra.Command, wd string, config formatConfiguration) error
 	test      func(cmd *cobra.Command, jobs []setRun, config testConfiguration) error

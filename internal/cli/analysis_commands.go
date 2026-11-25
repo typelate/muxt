@@ -109,7 +109,7 @@ func compilePatterns(patterns []string) ([]*regexp.Regexp, error) {
 	return compiled, nil
 }
 
-func listTemplateCallersCommand(wd *string, getEnv func(string) string, run func(*cobra.Command, []setRun, analysis.TemplateCallersConfiguration) error) *cobra.Command {
+func listTemplateCallersCommand(wd *string, getEnv func(string) string, run func(*cobra.Command, []packageRun, analysis.TemplateCallersConfiguration) error) *cobra.Command {
 	var (
 		config                 analysis.TemplateCallersConfiguration
 		deprecatedTemplatesVar string
@@ -143,7 +143,7 @@ func listTemplateCallersCommand(wd *string, getEnv func(string) string, run func
 			if err != nil {
 				return err
 			}
-			return run(cmd, sel.Jobs(), config)
+			return run(cmd, sel.Packages, config)
 		},
 	}
 
@@ -156,7 +156,7 @@ func listTemplateCallersCommand(wd *string, getEnv func(string) string, run func
 	return cmd
 }
 
-func listTemplateCallsCommand(wd *string, getEnv func(string) string, run func(*cobra.Command, []setRun, analysis.TemplateCallsConfiguration) error) *cobra.Command {
+func listTemplateCallsCommand(wd *string, getEnv func(string) string, run func(*cobra.Command, []packageRun, analysis.TemplateCallsConfiguration) error) *cobra.Command {
 	var (
 		config                 analysis.TemplateCallsConfiguration
 		patterns               []string
@@ -190,7 +190,7 @@ func listTemplateCallsCommand(wd *string, getEnv func(string) string, run func(*
 			if err != nil {
 				return err
 			}
-			return run(cmd, sel.Jobs(), config)
+			return run(cmd, sel.Packages, config)
 		},
 	}
 
