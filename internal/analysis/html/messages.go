@@ -1,5 +1,7 @@
 package analysis
 
+import "github.com/typelate/htt"
+
 // Diagnostic message formats. Centralized for the message-quality
 // pass (plan Task 10). Keep stdlib template error style: lowercase,
 // no trailing period, evidence in <angle brackets> or %q.
@@ -28,10 +30,21 @@ const (
 // Comment diagnostic message formats.
 const (
 	msgCommentInRCDATA  = `html/template writes this <!-- as text inside <%s>; browsers show it`
-	msgEscapedMarkup    = `html/template escapes this %q, so browsers show it as text; comment with {{/* */}} or <!-- -->`
+	msgEscapedMarkup    = `html/template escapes this %q, so browsers show it as text`
 	msgCommentDelimiter = `browsers end this comment at the %q at %s but html/template strips through the "-->" at %s, hiding the markup between`
 	msgCommentInRawText = `html/template strips this comment, but browsers read <%s> content as raw text and keep it`
 	msgEscapedInRawText = `html/template escapes this %q as "&lt;", but browsers read <%s> content as raw text and show the "&lt;"`
 	msgEscaperRefuses   = `html/template refuses this template: %s`
 	msgUnclosedComment  = `a comment that never closes`
 )
+
+// fixFor returns what to do about a comment finding of kind code, or ""
+// when its message is all there is to say.
+func fixFor(code htt.DiagnosticCode) string {
+	switch code {
+	case DiagEscapedMarkup:
+		return `comment with {{/* */}} or <!-- -->`
+	default:
+		return ""
+	}
+}

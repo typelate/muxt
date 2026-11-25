@@ -198,7 +198,10 @@ func reportHTMLComments(logger *log.Logger, variable source.Variable) []error {
 	errs := make([]error, 0, len(diags))
 	for _, d := range diags {
 		logger.Println(d)
-		errs = append(errs, errors.New(d.Message))
+		// The error is the logged line without its place.
+		withoutPlace := d
+		withoutPlace.Place = diagnostic.Place{}
+		errs = append(errs, errors.New(withoutPlace.String()))
 	}
 	if len(diags) > 0 {
 		logger.Println()

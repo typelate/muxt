@@ -238,6 +238,44 @@ func TestCheckComments_files(t *testing.T) {
 	}
 }
 
+// TestCheckComments_fix checks that a finding whose text ends in what to do
+// carries that apart from what is wrong, and that one without keeps it whole.
+func TestCheckComments_fix(t *testing.T) {
+	for _, test := range []struct {
+		name, input, message, fix string
+	}{
+		{
+			name: "escaped markup", input: `<p><!x></p>`,
+			message: `html/template escapes this "<!", so browsers show it as text`,
+			fix:     `comment with {{/* */}} or <!-- -->`,
+		},
+		{
+			name: "comment in title", input: `<title><!-- c --></title>`,
+			message: `html/template writes this <!-- as text inside <title>; browsers show it`,
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			set, err := muxthtml.New("test.gohtml").Parse(test.input)
+			if err != nil {
+				t.Fatalf("Parse error: %v", err)
+			}
+			diags, err := CheckComments(setTrees(set), nil)
+			if err != nil {
+				t.Fatalf("CheckComments error: %v", err)
+			}
+			if len(diags) != 1 {
+				t.Fatalf("CheckComments(%q) reported %d findings, want 1", test.input, len(diags))
+			}
+			if got := diags[0].Message; got != test.message {
+				t.Errorf("CheckComments(%q) Message = %q, want %q", test.input, got, test.message)
+			}
+			if got := diags[0].Fix; got != test.fix {
+				t.Errorf("CheckComments(%q) Fix = %q, want %q", test.input, got, test.fix)
+			}
+		})
+	}
+}
+
 func TestCheckComments_severity(t *testing.T) {
 	set, err := muxthtml.New("test.gohtml").Parse(`<p><!x></p>`)
 	if err != nil {
@@ -291,7 +329,7 @@ func checkStdlib(t *testing.T, input string, want stdlibOutcome) string {
 }
 
 // checkComments parses input as the set test.gohtml and returns what
-// CheckComments reports, as line:column: message.
+// CheckComments reports, as line:column: message; fix.
 func checkComments(t *testing.T, input string, roots []string) []string {
 	t.Helper()
 	set, err := muxthtml.New("test.gohtml").Parse(input)
@@ -304,7 +342,8 @@ func checkComments(t *testing.T, input string, roots []string) []string {
 	}
 	var lines []string
 	for _, d := range diags {
-		lines = append(lines, fmt.Sprintf("%d:%d: %s", d.Place.Line, d.Place.Column, d.Message))
+		d.Place.File = ""
+		lines = append(lines, d.String())
 	}
 	return lines
 }

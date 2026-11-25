@@ -162,7 +162,9 @@ func CheckComments(templates map[string]*htt.Tree, roots []string) ([]diagnostic
 	})
 	diags := make([]diagnostic.Diagnostic, 0, len(found))
 	for _, d := range found {
-		diags = append(diags, diagnosticAt(d.Tree, d.Diagnostic))
+		converted := diagnosticAt(d.Tree, d.Diagnostic)
+		converted.Fix = fixFor(d.Code)
+		diags = append(diags, converted)
 	}
 	return diags, nil
 }
