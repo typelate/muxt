@@ -105,6 +105,21 @@ func TestDiagnosticText(t *testing.T) {
 			want: `/m/muxt.json: route_paths: output_file "../x.go" must be a Go file name in this directory`,
 		},
 		{
+			name: "SameDirectoryError",
+			err:  &composite.SameDirectoryError{Path: "/m/muxt.json", Key: "example.com/m/b", Other: "example.com/m/a", Dir: "/m/a"},
+			want: `/m/muxt.json: packages["example.com/m/b"] is the same directory as packages["example.com/m/a"], /m/a; keep one`,
+		},
+		{
+			name: "SetClashError",
+			err:  &composite.SetClashError{Path: "/m/muxt.json", Key: "example.com/m", Member: "output_file", Value: "x.go", First: 0, Second: 1},
+			want: `/m/muxt.json: packages["example.com/m"][0] and packages["example.com/m"][1] both have output_file "x.go"; give each its own output_file`,
+		},
+		{
+			name: "GeneratedFileClashError",
+			err:  &composite.GeneratedFileClashError{Path: "/m/muxt.json", Key: "example.com/m", File: "/m/a_routes_gen.go", First: 0, Second: 1},
+			want: `/m/a_routes_gen.go: packages["example.com/m"][0] and packages["example.com/m"][1] would both write it under output_multiple_files; give them different template files or turn output_multiple_files off`,
+		},
+		{
 			name: "ValueError",
 			err:  &composite.ValueError{Key: "output_max_size", Err: errors.New("invalid byte size")},
 			want: "output_max_size: invalid byte size",
@@ -175,6 +190,47 @@ func TestDiagnosticPlaceWithinEntry(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			assert.Equal(t, tt.want, tt.err.Diagnostic().Place, "place")
+		})
+	}
+}
+
+// TestDiagnosticRelatedEntriesOfAClash states that an error naming two entries
+// of the file offers each as a related place, the earlier first, so an editor
+// can show both.
+func TestDiagnosticRelatedEntriesOfAClash(t *testing.T) {
+	const path = "/m/muxt.json"
+	for _, tt := range []struct {
+		name string
+		err  diagnosed
+		want []diagnostic.Related
+	}{
+		{
+			name: "two positions under one key",
+			err:  &composite.SetClashError{Path: path, Key: "example.com/m", Member: "output_file", Value: "x.go", First: 0, Second: 2},
+			want: []diagnostic.Related{
+				{Place: diagnostic.Place{File: path, Within: `packages["example.com/m"][0]`}, Message: "the earlier entry"},
+				{Place: diagnostic.Place{File: path, Within: `packages["example.com/m"][2]`}, Message: "the later entry"},
+			},
+		},
+		{
+			name: "two entries that would write one file",
+			err:  &composite.GeneratedFileClashError{Path: path, Key: "example.com/m", File: "/m/a_routes_gen.go", First: 0, Second: 1},
+			want: []diagnostic.Related{
+				{Place: diagnostic.Place{File: path, Within: `packages["example.com/m"][0]`}, Message: "the earlier entry"},
+				{Place: diagnostic.Place{File: path, Within: `packages["example.com/m"][1]`}, Message: "the later entry"},
+			},
+		},
+		{
+			name: "two keys of one directory",
+			err:  &composite.SameDirectoryError{Path: path, Key: "example.com/m/b", Other: "example.com/m/a", Dir: "/m/a"},
+			want: []diagnostic.Related{
+				{Place: diagnostic.Place{File: path, Within: `packages["example.com/m/a"]`}, Message: "the earlier key"},
+				{Place: diagnostic.Place{File: path, Within: `packages["example.com/m/b"]`}, Message: "the later key"},
+			},
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, tt.err.Diagnostic().Related, "related")
 		})
 	}
 }

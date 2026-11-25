@@ -240,6 +240,32 @@ func (e *SameDirectoryError) Error() string {
 	return fmt.Sprintf("%s: packages[%q] is the same directory as packages[%q], %s; keep one", e.Path, e.Key, e.Other, e.Dir)
 }
 
+// Diagnostic puts both keys in the message, as Error does, and offers each as a
+// related place, the earlier first.
+func (e *SameDirectoryError) Diagnostic() diagnostic.Diagnostic {
+	within := func(key string) diagnostic.Place {
+		return diagnostic.Place{File: e.Path, Within: fmt.Sprintf("packages[%q]", key)}
+	}
+	return diagnostic.Diagnostic{
+		Place:   diagnostic.Place{File: e.Path},
+		Message: fmt.Sprintf("packages[%q] is the same directory as packages[%q], %s", e.Key, e.Other, e.Dir),
+		Fix:     "keep one",
+		Related: []diagnostic.Related{
+			{Place: within(e.Other), Message: "the earlier key"},
+			{Place: within(e.Key), Message: "the later key"},
+		},
+	}
+}
+
+// clashingEntries are the two entries under key of the file at path, the
+// earlier first, as related places.
+func clashingEntries(path, key string, first, second int) []diagnostic.Related {
+	return []diagnostic.Related{
+		{Place: diagnostic.Place{File: path, Within: SetWhere(key, first)}, Message: "the earlier entry"},
+		{Place: diagnostic.Place{File: path, Within: SetWhere(key, second)}, Message: "the later entry"},
+	}
+}
+
 // SetClashError reports two entries under one packages key that have one value
 // for a member that must differ: output_file, since both would write one file,
 // or output_routes_func, since generated files are owned by routes function and
@@ -255,6 +281,17 @@ type SetClashError struct {
 // Error returns the path, both positions, the member and the fix on one line.
 func (e *SetClashError) Error() string {
 	return fmt.Sprintf("%s: %s and %s both have %s %q; give each its own %s", e.Path, SetWhere(e.Key, e.First), SetWhere(e.Key, e.Second), e.Member, e.Value, e.Member)
+}
+
+// Diagnostic names both entries in the message, as Error does, and offers each
+// as a related place.
+func (e *SetClashError) Diagnostic() diagnostic.Diagnostic {
+	return diagnostic.Diagnostic{
+		Place:   diagnostic.Place{File: e.Path},
+		Message: fmt.Sprintf("%s and %s both have %s %q", SetWhere(e.Key, e.First), SetWhere(e.Key, e.Second), e.Member, e.Value),
+		Fix:     "give each its own " + e.Member,
+		Related: clashingEntries(e.Path, e.Key, e.First, e.Second),
+	}
 }
 
 // RoutePathsSetsError reports a packages key with several entries in a file
@@ -285,6 +322,17 @@ type GeneratedFileClashError struct {
 // Error returns the generated file, both positions and the fixes on one line.
 func (e *GeneratedFileClashError) Error() string {
 	return fmt.Sprintf("%s: %s and %s would both write it under output_multiple_files; give them different template files or turn output_multiple_files off", e.File, SetWhere(e.Key, e.First), SetWhere(e.Key, e.Second))
+}
+
+// Diagnostic places the problem at the generated file, as Error does, and
+// offers the muxt.json entries that would both write it as related places.
+func (e *GeneratedFileClashError) Diagnostic() diagnostic.Diagnostic {
+	return diagnostic.Diagnostic{
+		Place:   diagnostic.Place{File: e.File},
+		Message: fmt.Sprintf("%s and %s would both write it under output_multiple_files", SetWhere(e.Key, e.First), SetWhere(e.Key, e.Second)),
+		Fix:     "give them different template files or turn output_multiple_files off",
+		Related: clashingEntries(e.Path, e.Key, e.First, e.Second),
+	}
 }
 
 // InvalidEntryError reports a muxt.json entry whose values a generate flag
