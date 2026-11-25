@@ -26,19 +26,34 @@ import (
 // extra imports.
 type packageLoader func(root string, dirs, patterns []string) (*load.Loaded, error)
 
-// hubNamespaces returns each job's namespace on the hub's paths type, by
+// packagesOf is the packages of sets, each once, in the order they first
+// appear.
+func packagesOf(sets []setRun) []packageRun {
+	var seen []*packageRun
+	var runs []packageRun
+	for _, set := range sets {
+		if slices.Contains(seen, set.packageRun) {
+			continue
+		}
+		seen = append(seen, set.packageRun)
+		runs = append(runs, *set.packageRun)
+	}
+	return runs
+}
+
+// hubNamespaces returns each package's namespace on the hub's paths type, by
 // packages key. It fails when two packages would share a namespace, a
 // namespace is not an identifier, or two of the hub's declarations would share
 // a name.
-func hubNamespaces(hub *routePathsTarget, jobs []setRun) (map[string]string, error) {
-	keys := make([]string, len(jobs))
-	for i, job := range jobs {
-		keys[i] = job.Key
+func hubNamespaces(hub *routePathsTarget, runs []packageRun) (map[string]string, error) {
+	keys := make([]string, len(runs))
+	for i, run := range runs {
+		keys[i] = run.Key
 	}
 	if err := generate.CheckNamespaces(keys, hub.Hub.ImportPath); err != nil {
 		return nil, err
 	}
-	namespaces := make(map[string]string, len(jobs))
+	namespaces := make(map[string]string, len(runs))
 	hubPackageList := make([]generate.HubPackage, len(keys))
 	for i, key := range keys {
 		namespaces[key], _ = generate.Namespace(key, hub.Hub.ImportPath)
@@ -88,7 +103,7 @@ func generateRunner(loadPackages packageLoader) func(*cobra.Command, []setRun) e
 		var hubPackages []generate.RoutePathsPackage
 		if hub != nil {
 			var err error
-			namespaces, err = hubNamespaces(hub, jobs)
+			namespaces, err = hubNamespaces(hub, packagesOf(jobs))
 			if err != nil {
 				return err
 			}
@@ -124,7 +139,7 @@ func generateRunner(loadPackages packageLoader) func(*cobra.Command, []setRun) e
 				// resolves the others, quietly, before anything is written there.
 				if !checked[job.Dir] {
 					checked[job.Dir] = true
-					if err := checkSetsOfDirectory(setsCheck{Cmd: cmd, Loaded: l, Jobs: jobs, Dir: job.Dir, Namespaces: namespaces, Failed: failed}); err != nil {
+					if err := checkSetsOfPackage(setsCheck{Cmd: cmd, Loaded: l, Package: job.packageRun, Namespaces: namespaces, Failed: failed}); err != nil {
 						return false, err
 					}
 				}
@@ -157,56 +172,49 @@ func generateRunner(loadPackages packageLoader) func(*cobra.Command, []setRun) e
 	}
 }
 
-// setsCheck is what checkSetsOfDirectory needs: the run's Jobs and the one
-// load they share, the directory Dir to check, the hub Namespaces by packages
-// key, and Failed, which names a job's failure as the job's own run would.
+// setsCheck is what checkSetsOfPackage needs: the one load the sets share, the
+// Package to check, the hub Namespaces by packages key, and Failed, which names
+// a set's failure as the set's own run would.
 type setsCheck struct {
 	Cmd        *cobra.Command
 	Loaded     *load.Loaded
-	Jobs       []setRun
-	Dir        string
+	Package    *packageRun
 	Namespaces map[string]string
 	Failed     func(setRun, error) error
 }
 
-// checkSetsOfDirectory resolves every muxt.json set of c.Dir that writes with
-// output_multiple_files, so two that would write one generated file are refused
-// before the first writes. The files of one directory are named by template
-// file alone, so only resolving knows them. What resolving prints is dropped:
-// each set resolves again, in turn, when it is written.
-func checkSetsOfDirectory(c setsCheck) error {
-	var sets []setRun
-	multiple := false
-	for _, job := range c.Jobs {
-		if job.Dir != c.Dir || job.File == "" || job.ReadOnly {
-			continue
-		}
-		sets = append(sets, job)
-		multiple = multiple || job.Config.OutputMultipleFiles
-	}
-	if len(sets) < 2 || !multiple {
+// checkSetsOfPackage resolves every muxt.json set of c.Package when one writes
+// with output_multiple_files, so two that would write one generated file are
+// refused before the first writes. The files of one directory are named by
+// template file alone, so only resolving knows them. What resolving prints is
+// dropped: each set resolves again, in turn, when it is written.
+func checkSetsOfPackage(c setsCheck) error {
+	p := c.Package
+	if p.File == "" || p.ReadOnly || len(p.Sets) < 2 {
 		return nil
 	}
-	results := make([]jobResult, len(sets))
-	for i, set := range sets {
-		// The package is shared by every set, so only a copy of it is read only.
-		quietPackage := *set.packageRun
-		quietPackage.ReadOnly = true
-		quiet := set
-		quiet.packageRun = &quietPackage
-		result, err := resolveJob(c.Cmd, c.Loaded, quiet, set.Named(), c.Namespaces[set.Key])
+	if !slices.ContainsFunc(p.Sets, func(s routeSet) bool { return s.Config.OutputMultipleFiles }) {
+		return nil
+	}
+	// Only a copy of the package is read only, so what resolving prints is
+	// dropped here and not when the sets are written.
+	quietPackage := *p
+	quietPackage.ReadOnly = true
+	results := make([]jobResult, len(p.Sets))
+	for i, set := range p.Sets {
+		result, err := resolveJob(c.Cmd, c.Loaded, setRun{packageRun: &quietPackage, routeSet: set, Index: i}, p.Named(), c.Namespaces[p.Key])
 		if err != nil {
-			return c.Failed(set, err)
+			return c.Failed(setRun{packageRun: p, routeSet: set, Index: i}, err)
 		}
 		results[i] = result
 	}
-	return checkGeneratedFileClash(sets, results)
+	return checkGeneratedFileClash(p, results)
 }
 
 // checkGeneratedFileClash returns a *composite.GeneratedFileClashError when two
-// of sets, the muxt.json sets of one directory, generate one file. results
-// holds what each set generates, in the same order.
-func checkGeneratedFileClash(sets []setRun, results []jobResult) error {
+// of the sets of run generate one file. results holds what each set generates,
+// in the order of run.Sets.
+func checkGeneratedFileClash(run *packageRun, results []jobResult) error {
 	first := make(map[string]int)
 	for i, result := range results {
 		for _, file := range result.Files {
@@ -219,11 +227,11 @@ func checkGeneratedFileClash(sets []setRun, results []jobResult) error {
 				continue
 			}
 			return &composite.GeneratedFileClashError{
-				Path:   sets[i].File,
-				Key:    sets[i].Key,
+				Path:   run.File,
+				Key:    run.Key,
 				File:   file.Path,
-				First:  sets[earlier].Index,
-				Second: sets[i].Index,
+				First:  earlier,
+				Second: i,
 			}
 		}
 	}
