@@ -121,8 +121,8 @@ func generateConfigurationOf(t *testing.T, dir, commandLine string) generate.Rou
 	t.Helper()
 	var jobs []setRun
 	err := commands(dir, strings.Fields(commandLine), func(string) string { return "" }, func() (string, bool) { return "v1.2.3", true }, strings.NewReader(""), io.Discard, io.Discard, runners{
-		generate: func(_ *cobra.Command, got []setRun) error {
-			jobs = got
+		generate: func(_ *cobra.Command, got []packageRun) error {
+			jobs = setsOf(got)
 			return nil
 		},
 	})
@@ -150,8 +150,8 @@ func TestGenerateWithMuxtJSONEntry(t *testing.T) {
 
 	var jobs []setRun
 	err = commands(dir, strings.Fields("generate"), func(string) string { return "" }, func() (string, bool) { return "v1.2.3", true }, strings.NewReader(""), io.Discard, io.Discard, runners{
-		generate: func(_ *cobra.Command, got []setRun) error {
-			jobs = got
+		generate: func(_ *cobra.Command, got []packageRun) error {
+			jobs = setsOf(got)
 			return nil
 		},
 	})
@@ -447,8 +447,8 @@ func TestGenerateVerboseGeneratesFromConfiguredDirectory(t *testing.T) {
 
 	var jobs []setRun
 	err := commands(dir, strings.Fields("generate -v"), func(string) string { return "" }, func() (string, bool) { return "v1.2.3", true }, strings.NewReader(""), io.Discard, io.Discard, runners{
-		generate: func(_ *cobra.Command, got []setRun) error {
-			jobs = got
+		generate: func(_ *cobra.Command, got []packageRun) error {
+			jobs = setsOf(got)
 			return nil
 		},
 	})
@@ -500,8 +500,8 @@ func TestGenerateChangeDirectorySelectsMuxtJSONEntry(t *testing.T) {
 
 	var jobs []setRun
 	err := commands(parent, strings.Fields("-C workspace generate"), func(string) string { return "" }, func() (string, bool) { return "v1.2.3", true }, strings.NewReader(""), io.Discard, io.Discard, runners{
-		generate: func(_ *cobra.Command, got []setRun) error {
-			jobs = got
+		generate: func(_ *cobra.Command, got []packageRun) error {
+			jobs = setsOf(got)
 			return nil
 		},
 	})
@@ -651,8 +651,8 @@ func generateJobsOf(t *testing.T, dir, commandLine string) []setRun {
 	t.Helper()
 	var jobs []setRun
 	err := commands(dir, strings.Fields(commandLine), func(string) string { return "" }, func() (string, bool) { return "v1.2.3", true }, strings.NewReader(""), io.Discard, io.Discard, runners{
-		generate: func(_ *cobra.Command, got []setRun) error {
-			jobs = got
+		generate: func(_ *cobra.Command, got []packageRun) error {
+			jobs = setsOf(got)
 			return nil
 		},
 	})
@@ -672,7 +672,7 @@ func generateFailureOf(t *testing.T, dir string) (called bool, err error) {
 func generateFailureOfLine(t *testing.T, dir, commandLine string) (called bool, err error) {
 	t.Helper()
 	err = commands(dir, strings.Fields(commandLine), func(string) string { return "" }, func() (string, bool) { return "v1.2.3", true }, strings.NewReader(""), io.Discard, io.Discard, runners{
-		generate: func(_ *cobra.Command, _ []setRun) error {
+		generate: func(_ *cobra.Command, _ []packageRun) error {
 			called = true
 			return nil
 		},
@@ -694,8 +694,8 @@ func TestGenerateWithMuxtJSONInParentDirectory(t *testing.T) {
 
 	var jobs []setRun
 	err := commands(workspace, strings.Fields("generate"), func(string) string { return "" }, func() (string, bool) { return "v1.2.3", true }, strings.NewReader(""), io.Discard, io.Discard, runners{
-		generate: func(_ *cobra.Command, got []setRun) error {
-			jobs = got
+		generate: func(_ *cobra.Command, got []packageRun) error {
+			jobs = setsOf(got)
 			return nil
 		},
 	})

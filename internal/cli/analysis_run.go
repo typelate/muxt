@@ -44,7 +44,7 @@ func (k *keyedWriter) Write(p []byte) (int, error) {
 // imports, and stops at the first one that fails.
 func checkRunner(loadPackages packageLoader) func(*cobra.Command, []setRun, analysis.CheckConfiguration) error {
 	return func(cmd *cobra.Command, jobs []setRun, config analysis.CheckConfiguration) error {
-		return runJobs(cmd, loadPackages, jobs, jobVisitor{
+		return runSets(cmd, loadPackages, jobs, jobVisitor{
 			Visit: func(_ int, job setRun, l *load.Loaded, keyed bool) (bool, error) {
 				// In a keyed run the diagnostics of a job say which it is.
 				var diagnostics io.Writer = cmd.ErrOrStderr()
@@ -117,7 +117,7 @@ func runListing(cmd *cobra.Command, loadPackages packageLoader, jobs []setRun, l
 		asJSON, formatKnown bool
 		collected           []io.WriterTo
 	)
-	err := runJobs(cmd, loadPackages, jobs, jobVisitor{
+	err := runSets(cmd, loadPackages, jobs, jobVisitor{
 		Visit: func(_ int, job setRun, l *load.Loaded, keyed bool) (bool, error) {
 			if !formatKnown {
 				var err error

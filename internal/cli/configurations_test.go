@@ -35,11 +35,11 @@ func configurationOf(t *testing.T, commandLine string, env map[string]string) (a
 			return record(jobs[0].definitions())
 		},
 		check: func(_ *cobra.Command, _ []setRun, c analysis.CheckConfiguration) error { return record(c) },
-		generate: func(_ *cobra.Command, jobs []setRun) error {
+		generate: func(_ *cobra.Command, jobs []packageRun) error {
 			if len(jobs) != 1 {
 				return fmt.Errorf("got %d generate jobs, want 1", len(jobs))
 			}
-			return record(jobs[0].Config)
+			return record(jobs[0].Sets[0].Config)
 		},
 		callers: func(_ *cobra.Command, _ []setRun, c analysis.TemplateCallersConfiguration) error {
 			return record(c)
@@ -829,7 +829,7 @@ func TestChangeDirectory(t *testing.T) {
 					}
 					return record(jobs[0].Dir)
 				},
-				generate: func(_ *cobra.Command, jobs []setRun) error {
+				generate: func(_ *cobra.Command, jobs []packageRun) error {
 					if len(jobs) != 1 {
 						return fmt.Errorf("got %d generate jobs, want 1", len(jobs))
 					}

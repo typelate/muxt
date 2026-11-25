@@ -26,21 +26,6 @@ import (
 // extra imports.
 type packageLoader func(root string, dirs, patterns []string) (*load.Loaded, error)
 
-// packagesOf is the packages of sets, each once, in the order they first
-// appear.
-func packagesOf(sets []setRun) []packageRun {
-	var seen []*packageRun
-	var runs []packageRun
-	for _, set := range sets {
-		if slices.Contains(seen, set.packageRun) {
-			continue
-		}
-		seen = append(seen, set.packageRun)
-		runs = append(runs, *set.packageRun)
-	}
-	return runs
-}
-
 // hubNamespaces returns each package's namespace on the hub's paths type, by
 // packages key. It fails when two packages would share a namespace, a
 // namespace is not an identifier, or two of the hub's declarations would share
@@ -71,11 +56,12 @@ func hubNamespaces(hub *routePathsTarget, runs []packageRun) (map[string]string,
 // exception is a directory whose muxt.json sets write with output_multiple_files:
 // its sets are resolved together, before the first of them writes, so a clash
 // between their files is refused with nothing of that directory written.
-func generateRunner(loadPackages packageLoader) func(*cobra.Command, []setRun) error {
-	return func(cmd *cobra.Command, jobs []setRun) error {
-		if len(jobs) == 0 {
+func generateRunner(loadPackages packageLoader) func(*cobra.Command, []packageRun) error {
+	return func(cmd *cobra.Command, runs []packageRun) error {
+		if len(runs) == 0 {
 			return nil
 		}
+		jobs := setsOf(runs)
 		keyed := jobs[0].Keyed
 		// What was written is for -v; a run that has nothing to say is silent.
 		stdout := cmd.OutOrStdout()
@@ -103,12 +89,12 @@ func generateRunner(loadPackages packageLoader) func(*cobra.Command, []setRun) e
 		var hubPackages []generate.RoutePathsPackage
 		if hub != nil {
 			var err error
-			namespaces, err = hubNamespaces(hub, packagesOf(jobs))
+			namespaces, err = hubNamespaces(hub, runs)
 			if err != nil {
 				return err
 			}
 		}
-		err := runJobs(cmd, loadPackages, jobs, jobVisitor{
+		err := runSets(cmd, loadPackages, jobs, jobVisitor{
 			// The first load already holds a package that did not load, so it
 			// is refused before an earlier entry is written.
 			Ready: func(_ int, job setRun, l *load.Loaded) error {

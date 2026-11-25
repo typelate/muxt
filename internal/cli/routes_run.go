@@ -75,7 +75,7 @@ func routesRunner(loadPackages packageLoader) func(*cobra.Command, []routesJob) 
 			// In a keyed run JSON is one array, not a value per package.
 			collected []io.WriterTo
 		)
-		err := runJobs(cmd, loadPackages, packageJobs, jobVisitor{
+		err := runSets(cmd, loadPackages, packageJobs, jobVisitor{
 			Visit: func(i int, job setRun, l *load.Loaded, keyed bool) (bool, error) {
 				if !formatKnown {
 					var err error

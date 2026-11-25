@@ -25,7 +25,7 @@ import (
 // the response argument when set to a true value.
 const envSilenceHTTPResponseWarning = "MUXT_SILENCE_WARNING_HTTP_RESPONSE_ARGUMENT"
 
-func generateCommand(workingDirectory *string, getEnv func(string) string, version func() (string, bool), run func(*cobra.Command, []setRun) error, loadPackages packageLoader) *cobra.Command {
+func generateCommand(workingDirectory *string, getEnv func(string) string, version func() (string, bool), run func(*cobra.Command, []packageRun) error, loadPackages packageLoader) *cobra.Command {
 	var (
 		config                 generate.RoutesFileConfiguration
 		deprecatedTemplatesVar string
@@ -47,7 +47,7 @@ func generateCommand(workingDirectory *string, getEnv func(string) string, versi
 			if err != nil {
 				return err
 			}
-			return run(cmd, sel.Jobs())
+			return run(cmd, sel.Packages)
 		},
 	}
 

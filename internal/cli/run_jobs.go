@@ -24,13 +24,13 @@ type jobVisitor struct {
 	Visit func(i int, job setRun, l *load.Loaded, keyed bool) (wrote bool, err error)
 }
 
-// runJobs requires each job's directory, loads every directory and receiver
+// runSets requires each job's directory, loads every directory and receiver
 // package once, warns once about a partial AST, and visits the jobs, a
 // package after the packages it imports. A load that came before a write
 // saw its package without the new files, so a job importing a package
 // written since needs a fresh load; one that imports none keeps the load it
 // has.
-func runJobs(cmd *cobra.Command, loadPackages packageLoader, jobs []setRun, v jobVisitor) error {
+func runSets(cmd *cobra.Command, loadPackages packageLoader, jobs []setRun, v jobVisitor) error {
 	if len(jobs) == 0 {
 		return nil
 	}

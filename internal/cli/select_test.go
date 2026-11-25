@@ -148,8 +148,8 @@ func recordSelection(base, wd string, args ...string) (string, error) {
 	// A command line with no arguments is an empty list, not a nil one: cobra
 	// reads the arguments of the test binary, such as -update, for a nil list.
 	err := commands(wd, append([]string{}, args...), func(string) string { return "" }, func() (string, bool) { return "v1.2.3", true }, strings.NewReader(""), new(bytes.Buffer), new(bytes.Buffer), runners{
-		generate: func(_ *cobra.Command, jobs []setRun) error {
-			for _, job := range jobs {
+		generate: func(_ *cobra.Command, runs []packageRun) error {
+			for _, job := range setsOf(runs) {
 				r.line("generate key=%q file=%q dir=%q receiver=%q receiver-package=%q templates=%v output=%q htmx=%t logger=%t verbose=%t",
 					job.Key, r.rel(job.File), r.rel(job.Dir), job.Config.ReceiverType, job.Config.ReceiverPackage, job.Config.TemplatesVariables,
 					job.Config.OutputFileName, job.Config.OutputHTMX, job.Config.Logger, job.Config.Verbose)
