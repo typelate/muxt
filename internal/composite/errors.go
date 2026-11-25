@@ -141,16 +141,9 @@ type UnknownKeyError struct {
 	Path, Where, Key, Suggestion string
 }
 
-// Error returns the path, the entry, the key, and the suggestion on one line.
+// Error returns the diagnostic as one line of text.
 func (e *UnknownKeyError) Error() string {
-	msg := fmt.Sprintf("%s: unknown key %q", e.Path, e.Key)
-	if e.Where != "" {
-		msg = fmt.Sprintf("%s: %s: unknown key %q", e.Path, e.Where, e.Key)
-	}
-	if e.Suggestion != "" {
-		msg += fmt.Sprintf("; did you mean %q?", e.Suggestion)
-	}
-	return msg
+	return e.Diagnostic().String()
 }
 
 // Diagnostic places the problem at the entry, or the file for a top-level key,
@@ -221,12 +214,9 @@ type MissingDirectoryError struct {
 	IsFile         bool
 }
 
-// Error returns the path, the entry, and the directory on one line.
+// Error returns the diagnostic as one line of text.
 func (e *MissingDirectoryError) Error() string {
-	if e.IsFile {
-		return fmt.Sprintf("%s: packages[%q]: %s is not a directory", e.Path, e.Key, e.Dir)
-	}
-	return fmt.Sprintf("%s: packages[%q]: directory %s does not exist", e.Path, e.Key, e.Dir)
+	return e.Diagnostic().String()
 }
 
 // Diagnostic places the problem at the entry of the key.
@@ -248,9 +238,9 @@ type OutsideDirectoryError struct {
 	Path, Key, Dir string
 }
 
-// Error returns the path, the entry, and the directory on one line.
+// Error returns the diagnostic as one line of text.
 func (e *OutsideDirectoryError) Error() string {
-	return fmt.Sprintf("%s: packages[%q]: directory %s resolves outside the file's directory", e.Path, e.Key, e.Dir)
+	return e.Diagnostic().String()
 }
 
 // Diagnostic places the problem at the entry of the key.
@@ -387,9 +377,9 @@ type InvalidEntryError struct {
 	Err         error
 }
 
-// Error returns the path, the entry, and the flag's error on one line.
+// Error returns the diagnostic as one line of text.
 func (e *InvalidEntryError) Error() string {
-	return fmt.Sprintf("%s: %s: %v", e.Path, e.Where, e.Err)
+	return e.Diagnostic().String()
 }
 
 // Unwrap returns the flag's error, so errors.Is and errors.As reach it.
@@ -415,10 +405,9 @@ type NoVariableError struct {
 	Set                          int
 }
 
-// Error returns the path, the entry, the variable and the two fixes on one
-// line.
+// Error returns the diagnostic as one line of text.
 func (e *NoVariableError) Error() string {
-	return fmt.Sprintf("%s: %s: package %s declares no variable %q; declare it, or remove the entry", e.Path, SetWhere(e.Key, e.Set), e.Package, e.Variable)
+	return e.Diagnostic().String()
 }
 
 // Diagnostic places the problem at the entry, and offers the two fixes apart
@@ -488,9 +477,9 @@ type DeprecatedKeyError struct {
 	Path, Where, Key, Replacement string
 }
 
-// Error returns the path, the entry, the key, and its replacement on one line.
+// Error returns the diagnostic as one line of text.
 func (e *DeprecatedKeyError) Error() string {
-	return fmt.Sprintf("%s: %s: key %q is deprecated; write %q", e.Path, e.Where, e.Key, e.Replacement)
+	return e.Diagnostic().String()
 }
 
 // Diagnostic places the problem at the entry, and names the replacement as the
@@ -511,10 +500,9 @@ type DashedKeyError struct {
 	Path, Where, Key, Underscored string
 }
 
-// Error returns the path, the entry, the key, and its underscore form on one
-// line.
+// Error returns the diagnostic as one line of text.
 func (e *DashedKeyError) Error() string {
-	return fmt.Sprintf("%s: %s: key %q uses dashes; write %q", e.Path, e.Where, e.Key, e.Underscored)
+	return e.Diagnostic().String()
 }
 
 // Diagnostic places the problem at the entry, and names the underscore form as
@@ -785,10 +773,9 @@ type ValueTypeError struct {
 	Want             Kind
 }
 
-// Error returns the path, the entry, the key, and the type it takes on one
-// line.
+// Error returns the diagnostic as one line of text.
 func (e *ValueTypeError) Error() string {
-	return fmt.Sprintf("%s: %s: key %q takes %s", e.Path, e.Where, e.Key, e.Want.description())
+	return e.Diagnostic().String()
 }
 
 // Diagnostic places the problem at the entry.
@@ -819,9 +806,9 @@ type RouteValueError struct {
 	Path, Where, Key, Value, Rule string
 }
 
-// Error returns the path, the member, the value and the rule on one line.
+// Error returns the diagnostic as one line of text.
 func (e *RouteValueError) Error() string {
-	return fmt.Sprintf("%s: %s: %s %q %s", e.Path, e.Where, e.Key, e.Value, e.Rule)
+	return e.Diagnostic().String()
 }
 
 // Diagnostic places the problem at the object that holds the member.
