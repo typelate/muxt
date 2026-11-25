@@ -40,9 +40,9 @@ type NoFileError struct {
 	Dir string
 }
 
-// Error returns the directory searched from and the fix on one line.
+// Error returns the diagnostic as one line of text.
 func (e *NoFileError) Error() string {
-	return fmt.Sprintf("no muxt.json found at or above %s up to the module root; create one with: muxt generate config", e.Dir)
+	return e.Diagnostic().String()
 }
 
 // Diagnostic has no place, since there is no file, and offers the command that
@@ -168,9 +168,9 @@ type KeyFormError struct {
 	Path, Key, ImportPath string
 }
 
-// Error returns the path, the key, and the import path to write on one line.
+// Error returns the diagnostic as one line of text.
 func (e *KeyFormError) Error() string {
-	return fmt.Sprintf("%s: packages key %q is not an import path; write %q", e.Path, e.Key, e.ImportPath)
+	return e.Diagnostic().String()
 }
 
 // Diagnostic places the problem at the file, and names the import path as the
@@ -190,9 +190,9 @@ type MissingEntryError struct {
 	Path, Key string
 }
 
-// Error returns the path and the key to add on one line.
+// Error returns the diagnostic as one line of text.
 func (e *MissingEntryError) Error() string {
-	return fmt.Sprintf("%s: no packages entry %q; add one to generate this directory", e.Path, e.Key)
+	return e.Diagnostic().String()
 }
 
 // Diagnostic places the problem at the file, and says to add the entry as the
@@ -327,9 +327,9 @@ type RoutePathsSetsError struct {
 	Sets      int
 }
 
-// Error returns the path, the key, its entry count and the fix on one line.
+// Error returns the diagnostic as one line of text.
 func (e *RoutePathsSetsError) Error() string {
-	return fmt.Sprintf("%s: route_paths takes one entry per package, and packages[%q] has %d; keep one entry or remove route_paths", e.Path, e.Key, e.Sets)
+	return e.Diagnostic().String()
 }
 
 // Diagnostic places the problem at the file, and offers the two ways out as the
@@ -434,21 +434,9 @@ type ConfiguredDirectoryError struct {
 	Keys    map[string]string
 }
 
-// Error returns the command, the path the person should configure the
-// directory in, and each flag given with its key, on one line.
+// Error returns the diagnostic as one line of text.
 func (e *ConfiguredDirectoryError) Error() string {
-	msg := fmt.Sprintf("configure %s with fields in %s instead of flags", e.Command, e.Path)
-	for i, flag := range slices.Sorted(slices.Values(e.Flags)) {
-		sep := ", "
-		if i == 0 {
-			sep = ": "
-		}
-		msg += sep + "--" + flag
-		if key, ok := e.Keys[flag]; ok {
-			msg += " (" + key + ")"
-		}
-	}
-	return msg
+	return e.Diagnostic().String()
 }
 
 // Diagnostic has no place of its own, since the message names the file inline,
@@ -522,9 +510,9 @@ type OtherModuleError struct {
 	Path, Key, Module string
 }
 
-// Error returns the path, the key, and the module on one line.
+// Error returns the diagnostic as one line of text.
 func (e *OtherModuleError) Error() string {
-	return fmt.Sprintf("%s: packages key %q is not in this module (%s)", e.Path, e.Key, e.Module)
+	return e.Diagnostic().String()
 }
 
 // Diagnostic places the problem at the file.
@@ -544,9 +532,9 @@ type KeyOutsideError struct {
 	Path, Key string
 }
 
-// Error returns the path and the key on one line.
+// Error returns the diagnostic as one line of text.
 func (e *KeyOutsideError) Error() string {
-	return fmt.Sprintf("%s: packages key %q is outside the file's directory", e.Path, e.Key)
+	return e.Diagnostic().String()
 }
 
 // Diagnostic places the problem at the file.
@@ -567,13 +555,9 @@ type NoModuleError struct {
 	Creating bool
 }
 
-// Error returns the path and the fact that keys are import paths on one line,
-// or the directory and what to run when the file was to be created.
+// Error returns the diagnostic as one line of text.
 func (e *NoModuleError) Error() string {
-	if e.Creating {
-		return fmt.Sprintf("%s: no go.mod found at or above this directory; run go mod init MODULE here first", filepath.Dir(e.Path))
-	}
-	return fmt.Sprintf("%s: no go.mod found at or above the file; package keys are import paths", e.Path)
+	return e.Diagnostic().String()
 }
 
 // Diagnostic places the problem at the file, or at the directory the file was
@@ -601,9 +585,9 @@ type PackageNameError struct {
 	Name, Reason string
 }
 
-// Error returns the name and the reason on one line.
+// Error returns the diagnostic as one line of text.
 func (e *PackageNameError) Error() string {
-	return fmt.Sprintf("package name %q %s", e.Name, e.Reason)
+	return e.Diagnostic().String()
 }
 
 // Diagnostic has no place: the name comes from the command line. The reason may
@@ -700,9 +684,9 @@ type EmptyPackagesError struct {
 	Path string
 }
 
-// Error returns the file and the command that adds a package, on one line.
+// Error returns the diagnostic as one line of text.
 func (e *EmptyPackagesError) Error() string {
-	return fmt.Sprintf("%s: packages is empty; add a package with: muxt generate package NAME", e.Path)
+	return e.Diagnostic().String()
 }
 
 // Diagnostic places the problem at the file, and names the command that adds a
@@ -723,9 +707,9 @@ type KeyCaseError struct {
 	Path, Key, OnDisk string
 }
 
-// Error returns the path, the key, and the spelling on disk on one line.
+// Error returns the diagnostic as one line of text.
 func (e *KeyCaseError) Error() string {
-	return fmt.Sprintf("%s: packages key %q is spelled %q on disk; write that", e.Path, e.Key, e.OnDisk)
+	return e.Diagnostic().String()
 }
 
 // Diagnostic places the problem at the file.
@@ -750,10 +734,9 @@ type SeveralPackagesError struct {
 	Dirs                       []string
 }
 
-// Error returns the file, the command, what it does and the directories to
-// choose from, on one line.
+// Error returns the diagnostic as one line of text.
 func (e *SeveralPackagesError) Error() string {
-	return fmt.Sprintf("%s: %s %s; %s: %s", e.Path, e.Command, e.Task, e.Where, strings.Join(e.Dirs, " "))
+	return e.Diagnostic().String()
 }
 
 // Diagnostic places the problem at the file, and offers the directories to
