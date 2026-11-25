@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+
+	"github.com/typelate/muxt/internal/diagnostic"
 )
 
 // ExistsError reports a file or directory a command would create that is
@@ -515,3 +517,11 @@ func (e *ValueError) Error() string { return e.Key + ": " + e.Err.Error() }
 
 // Unwrap returns the parser's error, so a caller can match what it was.
 func (e *ValueError) Unwrap() error { return e.Err }
+
+// Diagnostic places the problem at the key and says what the parser said.
+func (e *ValueError) Diagnostic() diagnostic.Diagnostic {
+	return diagnostic.Diagnostic{
+		Place:   diagnostic.Place{Within: e.Key},
+		Message: e.Err.Error(),
+	}
+}
