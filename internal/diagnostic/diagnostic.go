@@ -12,7 +12,10 @@ import (
 type Severity uint8
 
 const (
+	// Error is a problem that stops the command.
 	Error Severity = iota
+	// Warning is a problem that does not stop the command. String writes it
+	// as it writes an Error; the command's writer adds "warning: ".
 	Warning
 )
 
@@ -48,7 +51,9 @@ type Related struct {
 	Message string
 }
 
-// String writes the diagnostic as one line: FILE:LINE:COLUMN: MESSAGE; FIX.
+// String writes the diagnostic as one line,
+// FILE:LINE:COLUMN: WITHIN: MESSAGE; FIX, each part and its separator left out
+// when empty.
 func (d Diagnostic) String() string {
 	s := d.Message
 	if place := d.Place.String(); place != "" {
@@ -61,7 +66,8 @@ func (d Diagnostic) String() string {
 }
 
 // String writes the place as FILE:LINE:COLUMN, or FILE when the line is
-// unknown, followed by ": WITHIN" when the place is inside the file.
+// unknown, followed by ": WITHIN" when the place is inside the file. Without a
+// file it is WITHIN alone, or empty.
 func (p Place) String() string {
 	var parts []string
 	if p.File != "" {
