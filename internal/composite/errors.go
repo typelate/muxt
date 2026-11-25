@@ -259,9 +259,9 @@ type SameDirectoryError struct {
 	Path, Key, Other, Dir string
 }
 
-// Error returns the path, both keys and the directory on one line.
+// Error returns the diagnostic as one line of text.
 func (e *SameDirectoryError) Error() string {
-	return fmt.Sprintf("%s: packages[%q] is the same directory as packages[%q], %s; keep one", e.Path, e.Key, e.Other, e.Dir)
+	return e.Diagnostic().String()
 }
 
 // Diagnostic puts both keys in the message, as Error does, and offers each as a
@@ -302,9 +302,9 @@ type SetClashError struct {
 	First, Second            int
 }
 
-// Error returns the path, both positions, the member and the fix on one line.
+// Error returns the diagnostic as one line of text.
 func (e *SetClashError) Error() string {
-	return fmt.Sprintf("%s: %s and %s both have %s %q; give each its own %s", e.Path, SetWhere(e.Key, e.First), SetWhere(e.Key, e.Second), e.Member, e.Value, e.Member)
+	return e.Diagnostic().String()
 }
 
 // Diagnostic names both entries in the message, as Error does, and offers each
@@ -353,9 +353,9 @@ type GeneratedFileClashError struct {
 	First, Second   int
 }
 
-// Error returns the generated file, both positions and the fixes on one line.
+// Error returns the diagnostic as one line of text.
 func (e *GeneratedFileClashError) Error() string {
-	return fmt.Sprintf("%s: %s and %s would both write it under output_multiple_files; give them different template files or turn output_multiple_files off", e.File, SetWhere(e.Key, e.First), SetWhere(e.Key, e.Second))
+	return e.Diagnostic().String()
 }
 
 // Diagnostic places the problem at the generated file, as Error does, and
