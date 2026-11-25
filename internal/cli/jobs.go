@@ -123,6 +123,37 @@ func (j packageJob) Where() string { return composite.SetWhere(j.Key, j.Index) }
 // run has more than one.
 func (j packageJob) Named() bool { return j.Keyed || j.ReadOnly }
 
+// packageRun is one package directory and the sets a command runs there: one
+// per muxt.json entry under Key, in the file's order, or one for a run that
+// flags configured. File, Key and Given are as for packageJob. What is true
+// of the package in this run is kept here, not repeated on each set.
+type packageRun struct {
+	File  string
+	Key   string
+	Dir   string
+	Given givenSettings
+	// Keyed, RoutePaths and ReadOnly are as for packageJob.
+	Keyed      bool
+	RoutePaths *routePathsTarget
+	ReadOnly   bool
+	Sets       []routeSet
+}
+
+// routeSet is one muxt generate run: one configuration, which writes one
+// routes file.
+type routeSet struct {
+	Config generate.RoutesFileConfiguration
+}
+
+// jobs is one packageJob per set of p, in the set's order.
+func (p packageRun) jobs() []packageJob {
+	jobs := make([]packageJob, len(p.Sets))
+	for i, set := range p.Sets {
+		jobs[i] = packageJob{File: p.File, Key: p.Key, Index: i, setCount: len(p.Sets), Dir: p.Dir, Config: set.Config, Given: p.Given, Keyed: p.Keyed, RoutePaths: p.RoutePaths, ReadOnly: p.ReadOnly}
+	}
+	return jobs
+}
+
 // routePathsTarget is the package that holds route_paths.go and where the file
 // goes. Hub has no Namespace: each package's own is made from its import path.
 type routePathsTarget struct {
@@ -251,7 +282,7 @@ func selectJobs(spec jobSpec, dir string, flags *pflag.FlagSet, getEnv func(stri
 			return selection{}, err
 		}
 	}
-	var jobs []packageJob
+	var runs []packageRun
 	keyOf := map[string]string{} // a real directory to the first key that reached it
 	for _, key := range keys {
 		entryDir := f.DirOf(key)
@@ -272,6 +303,9 @@ func selectJobs(spec jobSpec, dir string, flags *pflag.FlagSet, getEnv func(stri
 		for m := range firstWith {
 			firstWith[m] = map[string]int{}
 		}
+		// One key with several sets: nothing but a name tells them apart.
+		setsNeedNames := !hubFromChild && len(sets) > 1
+		run := packageRun{File: f.Name, Key: key, Dir: entryDir, Keyed: keyed || setsNeedNames, RoutePaths: routePaths, ReadOnly: hubFromChild && key != lookup.Key}
 		for i, set := range sets {
 			config, err := entryConfiguration(set, fromMuxtJSON, generateEnv{Dir: entryDir, GetEnv: getEnv, Version: version})
 			if err != nil {
@@ -285,10 +319,13 @@ func selectJobs(spec jobSpec, dir string, flags *pflag.FlagSet, getEnv func(stri
 				firstWith[m][value] = i
 			}
 			config.Verbose = spec.Verbose
-			// One key with several sets: nothing but a name tells them apart.
-			setsNeedNames := !hubFromChild && len(sets) > 1
-			jobs = append(jobs, packageJob{File: f.Name, Key: key, Index: i, setCount: len(sets), Dir: entryDir, Config: config, Keyed: keyed || setsNeedNames, RoutePaths: routePaths, ReadOnly: hubFromChild && key != lookup.Key})
+			run.Sets = append(run.Sets, routeSet{Config: config})
 		}
+		runs = append(runs, run)
+	}
+	var jobs []packageJob
+	for _, run := range runs {
+		jobs = append(jobs, run.jobs()...)
 	}
 	return selection{File: f, Jobs: jobs}, nil
 }
@@ -385,7 +422,8 @@ func fallbackSelection(spec jobSpec, dir string, f *composite.File, given givenS
 		return selection{}, err
 	}
 	config.Verbose = spec.Verbose
-	return selection{File: f, Jobs: []packageJob{{Dir: dir, Config: config, Given: given}}}, nil
+	run := packageRun{Dir: dir, Given: given, Sets: []routeSet{{Config: config}}}
+	return selection{File: f, Jobs: run.jobs()}, nil
 }
 
 // entryVariableError returns the error naming job's muxt.json entry when err
