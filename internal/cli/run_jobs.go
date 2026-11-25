@@ -24,6 +24,12 @@ type jobVisitor struct {
 	Visit func(i int, job setRun, l *load.Loaded, keyed bool) (wrote bool, err error)
 }
 
+// runJobs is runSets over every set of runs, for a command that visits per set
+// and is handed packages.
+func runJobs(cmd *cobra.Command, loadPackages packageLoader, runs []packageRun, v jobVisitor) error {
+	return runSets(cmd, loadPackages, setsOf(runs), v)
+}
+
 // runSets requires each job's directory, loads every directory and receiver
 // package once, warns once about a partial AST, and visits the jobs, a
 // package after the packages it imports. A load that came before a write

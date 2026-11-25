@@ -34,7 +34,7 @@ func configurationOf(t *testing.T, commandLine string, env map[string]string) (a
 			}
 			return record(jobs[0].definitions())
 		},
-		check: func(_ *cobra.Command, _ []setRun, c analysis.CheckConfiguration) error { return record(c) },
+		check: func(_ *cobra.Command, _ []packageRun, c analysis.CheckConfiguration) error { return record(c) },
 		generate: func(_ *cobra.Command, jobs []packageRun) error {
 			if len(jobs) != 1 {
 				return fmt.Errorf("got %d generate jobs, want 1", len(jobs))
@@ -823,7 +823,7 @@ func TestChangeDirectory(t *testing.T) {
 				return nil
 			}
 			err := commands("/work", strings.Fields(tt.args), func(string) string { return "" }, func() (string, bool) { return "v1.2.3", true }, strings.NewReader(""), io.Discard, io.Discard, runners{
-				check: func(_ *cobra.Command, jobs []setRun, _ analysis.CheckConfiguration) error {
+				check: func(_ *cobra.Command, jobs []packageRun, _ analysis.CheckConfiguration) error {
 					if len(jobs) != 1 {
 						return fmt.Errorf("got %d check jobs, want 1", len(jobs))
 					}
@@ -943,7 +943,7 @@ func TestCheckIgnoresAReceiverType(t *testing.T) {
 	var stderr strings.Builder
 	var got any
 	err := commands("/work", []string{"check", "--receiver-type=T"}, func(string) string { return "" }, func() (string, bool) { return "v1.2.3", true }, strings.NewReader(""), io.Discard, &stderr, runners{
-		check: func(_ *cobra.Command, _ []setRun, c analysis.CheckConfiguration) error {
+		check: func(_ *cobra.Command, _ []packageRun, c analysis.CheckConfiguration) error {
 			got = c
 			return nil
 		},

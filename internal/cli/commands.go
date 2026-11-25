@@ -55,7 +55,7 @@ func Commands(wd string, args []string, getEnv func(string) string, stdin io.Rea
 // in their own RunE and have no runner yet.
 type runners struct {
 	routes    func(cmd *cobra.Command, jobs []routesJob) error
-	check     func(cmd *cobra.Command, jobs []setRun, config analysis.CheckConfiguration) error
+	check     func(cmd *cobra.Command, runs []packageRun, config analysis.CheckConfiguration) error
 	generate  func(cmd *cobra.Command, runs []packageRun) error
 	callers   func(cmd *cobra.Command, jobs []setRun, config analysis.TemplateCallersConfiguration) error
 	calls     func(cmd *cobra.Command, jobs []setRun, config analysis.TemplateCallsConfiguration) error

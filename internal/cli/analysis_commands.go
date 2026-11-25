@@ -11,7 +11,7 @@ import (
 	"github.com/typelate/muxt/internal/generate"
 )
 
-func checkCommand(workingDirectory *string, getEnv func(string) string, run func(*cobra.Command, []setRun, analysis.CheckConfiguration) error) *cobra.Command {
+func checkCommand(workingDirectory *string, getEnv func(string) string, run func(*cobra.Command, []packageRun, analysis.CheckConfiguration) error) *cobra.Command {
 	var (
 		config                 analysis.CheckConfiguration
 		ignoredReceiverType    string
@@ -40,7 +40,7 @@ func checkCommand(workingDirectory *string, getEnv func(string) string, run func
 			if err != nil {
 				return err
 			}
-			return run(cmd, sel.Jobs(), config)
+			return run(cmd, sel.Packages, config)
 		},
 	}
 

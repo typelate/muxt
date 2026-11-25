@@ -168,8 +168,8 @@ func recordSelection(base, wd string, args ...string) (string, error) {
 			}
 			return nil
 		},
-		check: func(_ *cobra.Command, jobs []setRun, c analysis.CheckConfiguration) error {
-			for _, job := range jobs {
+		check: func(_ *cobra.Command, runs []packageRun, c analysis.CheckConfiguration) error {
+			for _, job := range setsOf(runs) {
 				r.line("check dir=%q templates=%v allow-unused=%t", r.rel(job.Dir), job.Config.TemplatesVariables, c.AllowUnused)
 			}
 			return nil
