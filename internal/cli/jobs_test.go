@@ -112,18 +112,18 @@ func TestSelectJobs(t *testing.T) {
 			}
 			require.NoError(t, err)
 			var keys []string
-			for _, job := range sel.Jobs() {
+			for _, job := range setsOf(sel.Packages) {
 				keys = append(keys, job.Key)
 				assert.Equal(t, job.Key == "", sel.EntryFile(job) == nil, "EntryFile(%q) is nil only for a fallback job", job.Key)
 			}
 			assert.Equal(t, tc.wantKeys, keys, "job keys")
-			for _, job := range sel.Jobs() {
+			for _, job := range setsOf(sel.Packages) {
 				assert.Equal(t, tc.wantKeyed, job.Keyed, "job %q Keyed", job.Key)
 			}
-			assert.Equal(t, tc.wantGiven, sel.Jobs()[0].Given.spellings(), "given flags")
+			assert.Equal(t, tc.wantGiven, setsOf(sel.Packages)[0].Given.spellings(), "given flags")
 			assert.Equal(t, tc.wantFile, sel.File != nil, "muxt.json read")
 			if tc.wantKeys[0] == "" {
-				assert.Equal(t, "fallback", sel.Jobs()[0].Config.ReceiverType, "fallback configuration")
+				assert.Equal(t, "fallback", setsOf(sel.Packages)[0].Config.ReceiverType, "fallback configuration")
 			}
 		})
 	}
@@ -136,8 +136,8 @@ func TestSelectJobsCopiesVerboseOntoEveryJob(t *testing.T) {
 	spec := jobSpec{Name: "generate", Scope: eachEntry, Verbose: true}
 	sel, err := selectJobs(spec, base, nil, func(string) string { return "" })
 	require.NoError(t, err)
-	require.Len(t, sel.Jobs(), 3)
-	for _, job := range sel.Jobs() {
+	require.Len(t, setsOf(sel.Packages), 3)
+	for _, job := range setsOf(sel.Packages) {
 		assert.True(t, job.Config.Verbose, "job %q Verbose", job.Key)
 	}
 }
@@ -184,7 +184,7 @@ func TestSelectJobsTakesEverySetUnderAKey(t *testing.T) {
 
 	require.NoError(t, err)
 	var got []string
-	for _, job := range sel.Jobs() {
+	for _, job := range setsOf(sel.Packages) {
 		got = append(got, fmt.Sprintf("%s %d/%d %s", job.Key, job.Index, len(job.Sets), job.Config.RoutesFunction))
 	}
 	want := []string{
@@ -225,7 +225,7 @@ func TestJobNameTellsSetsOfOneKeyApart(t *testing.T) {
 
 			require.NoError(t, err)
 			var got []string
-			for _, job := range sel.Jobs() {
+			for _, job := range setsOf(sel.Packages) {
 				got = append(got, job.Name())
 			}
 			assert.Equal(t, tt.want, got, "job names")
@@ -381,7 +381,7 @@ func TestSelectJobsInAPackageDirectoryTakesEverySetOfItsKey(t *testing.T) {
 
 			require.NoError(t, err)
 			var got []string
-			for _, job := range sel.Jobs() {
+			for _, job := range setsOf(sel.Packages) {
 				got = append(got, fmt.Sprintf("%s %s", job.Key, job.Config.RoutesFunction))
 			}
 			want := []string{"example.com/fieldkit/contacts PublicRoutes", "example.com/fieldkit/contacts AdminRoutes"}
@@ -417,24 +417,24 @@ func TestSelectJobsRejectsTwoKeysWithSeveralEntriesForOneDirectory(t *testing.T)
 // set reads the set's templates variables as configured, nil staying nil and
 // empty staying empty, while several sets that name none read nil.
 func TestTemplatesVariablesOfOneSetIsItsOwnSlice(t *testing.T) {
-	set := func(names []string) setRun {
-		return setRun{routeSet: routeSet{Config: generate.RoutesFileConfiguration{TemplatesVariables: names}}}
+	set := func(names []string) routeSet {
+		return routeSet{Config: generate.RoutesFileConfiguration{TemplatesVariables: names}}
 	}
 	for _, tc := range []struct {
 		name string
-		sets []setRun
+		sets []routeSet
 		want []string
 	}{
-		{name: "one set, nil", sets: []setRun{set(nil)}, want: nil},
-		{name: "one set, empty", sets: []setRun{set([]string{})}, want: []string{}},
-		{name: "one set, named", sets: []setRun{set([]string{"a", "b"})}, want: []string{"a", "b"}},
-		{name: "two sets, none named", sets: []setRun{set([]string{}), set(nil)}, want: nil},
-		{name: "two sets, overlapping", sets: []setRun{set([]string{"a"}), set([]string{"b", "a"})}, want: []string{"a", "b"}},
+		{name: "one set, nil", sets: []routeSet{set(nil)}, want: nil},
+		{name: "one set, empty", sets: []routeSet{set([]string{})}, want: []string{}},
+		{name: "one set, named", sets: []routeSet{set([]string{"a", "b"})}, want: []string{"a", "b"}},
+		{name: "two sets, none named", sets: []routeSet{set([]string{}), set(nil)}, want: nil},
+		{name: "two sets, overlapping", sets: []routeSet{set([]string{"a"}), set([]string{"b", "a"})}, want: []string{"a", "b"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			got := templatesVariables(tc.sets)
+			got := packageRun{Sets: tc.sets}.TemplatesVariables()
 
-			assert.Equal(t, tc.want, got, "templatesVariables(%s)", tc.name)
+			assert.Equal(t, tc.want, got, "TemplatesVariables(%s)", tc.name)
 		})
 	}
 }

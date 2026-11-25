@@ -59,7 +59,7 @@ type testRun struct {
 	Unreadable map[string]error
 }
 
-func (r *testRun) attribute(job setRun) ([]templatecover.Source, error) {
+func (r *testRun) attribute(job packageRun) ([]templatecover.Source, error) {
 	r.Attributed = append(r.Attributed, job.Dir)
 	if err := r.Unreadable[job.Dir]; err != nil {
 		return nil, err
@@ -133,7 +133,7 @@ func (r *testRun) prepare(_ context.Context, tc overlay.Toolchain, dir string) (
 
 // run runs jobs through testRunner and returns what went to stdout and
 // stderr.
-func (r *testRun) run(jobs []setRun, config testConfiguration) (stdout, stderr string, err error) {
+func (r *testRun) run(jobs []packageRun, config testConfiguration) (stdout, stderr string, err error) {
 	r.t.Helper()
 	var out, errOut bytes.Buffer
 	cmd := &cobra.Command{Use: testCommandName}
@@ -156,7 +156,7 @@ func newTestRun(t *testing.T) *testRun {
 // caller's.
 func TestTestRunsGoTestOnTheEngine(t *testing.T) {
 	run := newTestRun(t)
-	_, _, err := run.run([]setRun{{packageRun: &packageRun{Dir: "/work/pkg"}}}, testConfiguration{GoTestArgs: []string{"-run", "TestIndex"}})
+	_, _, err := run.run([]packageRun{{Dir: "/work/pkg"}}, testConfiguration{GoTestArgs: []string{"-run", "TestIndex"}})
 	require.NoError(t, err, "muxt test")
 
 	require.Len(t, run.Calls, 1, "go test runs")
@@ -181,7 +181,7 @@ func TestTestPassesGoTestOutputThrough(t *testing.T) {
 		_, _ = io.WriteString(stderr, "# example.com/pkg\r\nwarning\n")
 		_, _ = io.WriteString(stdout, "no final newline")
 	}
-	stdout, stderr, err := run.run([]setRun{{packageRun: &packageRun{Dir: "/work/pkg"}}}, testConfiguration{})
+	stdout, stderr, err := run.run([]packageRun{{Dir: "/work/pkg"}}, testConfiguration{})
 	require.NoError(t, err, "muxt test")
 
 	assert.Equal(t, "ok  \texample.com/pkg\t0.003s\nno final newline", stdout, "stdout")
@@ -241,10 +241,10 @@ func TestTestStopsAtTheFirstFailingPackage(t *testing.T) {
 		}
 		return nil
 	}
-	jobs := []setRun{
-		{packageRun: &packageRun{Key: "example.com/a", Dir: "/work/a", Keyed: true}},
-		{packageRun: &packageRun{Key: "example.com/b", Dir: "/work/b", Keyed: true}},
-		{packageRun: &packageRun{Key: "example.com/c", Dir: "/work/c", Keyed: true}},
+	jobs := []packageRun{
+		{Key: "example.com/a", Dir: "/work/a", Keyed: true},
+		{Key: "example.com/b", Dir: "/work/b", Keyed: true},
+		{Key: "example.com/c", Dir: "/work/c", Keyed: true},
 	}
 	stdout, _, err := run.run(jobs, testConfiguration{})
 
@@ -259,7 +259,7 @@ func TestTestStopsAtTheFirstFailingPackage(t *testing.T) {
 // test is the command whose -modfile the go command may refuse.
 func TestTestPreparesEachEngineInItsPackageForMuxtTest(t *testing.T) {
 	run := newTestRun(t)
-	_, _, err := run.run([]setRun{{packageRun: &packageRun{Dir: "/work/a"}}, {packageRun: &packageRun{Dir: "/work/b"}}}, testConfiguration{})
+	_, _, err := run.run([]packageRun{{Dir: "/work/a"}, {Dir: "/work/b"}}, testConfiguration{})
 	require.NoError(t, err, "muxt test")
 
 	want := []overlay.Toolchain{
@@ -280,9 +280,9 @@ func TestTestRunsNothingWhenAnEngineCannotBePrepared(t *testing.T) {
 		}
 		return nil
 	}
-	jobs := []setRun{
-		{packageRun: &packageRun{Key: "example.com/a", Dir: "/work/a", Keyed: true}},
-		{packageRun: &packageRun{Key: "example.com/b", Dir: "/work/b", Keyed: true}},
+	jobs := []packageRun{
+		{Key: "example.com/a", Dir: "/work/a", Keyed: true},
+		{Key: "example.com/b", Dir: "/work/b", Keyed: true},
 	}
 	stdout, _, err := run.run(jobs, testConfiguration{})
 
@@ -312,7 +312,7 @@ func TestTestReportsAnInterruptDuringPreparation(t *testing.T) {
 		calls++
 		return nil
 	}
-	err := testRunner(goTest, prepare, nil)(cmd, []setRun{{packageRun: &packageRun{Dir: "/work/pkg"}}}, testConfiguration{})
+	err := testRunner(goTest, prepare, nil)(cmd, []packageRun{{Dir: "/work/pkg"}}, testConfiguration{})
 
 	assert.ErrorIs(t, err, context.Canceled, "muxt test")
 	assert.NotContains(t, err.Error(), "template engine", "error")
@@ -395,7 +395,7 @@ func TestTestRemovesItsScratchDirectory(t *testing.T) {
 				return templatecover.Engine{CoverDir: filepath.Join(dir, "profiles")}, nil
 			}
 			goTest := func(ctx context.Context, _ string, _, _ []string, _, _ io.Writer) error { return tt.result(ctx) }
-			err := testRunner(goTest, prepare, nil)(cmd, []setRun{{packageRun: &packageRun{Dir: "/work/pkg"}}}, testConfiguration{})
+			err := testRunner(goTest, prepare, nil)(cmd, []packageRun{{Dir: "/work/pkg"}}, testConfiguration{})
 			tt.check(t, err)
 
 			require.Len(t, written, 1, "engines written")
@@ -412,7 +412,7 @@ func TestTestRemovesItsScratchDirectory(t *testing.T) {
 // the package's whose go test wrote it.
 func TestTestGivesEachJobItsOwnCoverDirectory(t *testing.T) {
 	run := newTestRun(t)
-	_, _, err := run.run([]setRun{{packageRun: &packageRun{Dir: "/work/a"}}, {packageRun: &packageRun{Dir: "/work/b"}}}, testConfiguration{})
+	_, _, err := run.run([]packageRun{{Dir: "/work/a"}, {Dir: "/work/b"}}, testConfiguration{})
 	require.NoError(t, err, "muxt test")
 
 	require.Len(t, run.Calls, 2, "go test runs")
@@ -433,9 +433,9 @@ func TestTestNamesEachKeyedPackage(t *testing.T) {
 	run.Write = func(call int, stdout, _ io.Writer) {
 		_, _ = io.WriteString(stdout, "ok "+strconv.Itoa(call)+"\n")
 	}
-	jobs := []setRun{
-		{packageRun: &packageRun{Key: "example.com/a", Dir: "/work/a", Keyed: true}},
-		{packageRun: &packageRun{Key: "example.com/b", Dir: "/work/b", Keyed: true}},
+	jobs := []packageRun{
+		{Key: "example.com/a", Dir: "/work/a", Keyed: true},
+		{Key: "example.com/b", Dir: "/work/b", Keyed: true},
 	}
 	stdout, stderr, err := run.run(jobs, testConfiguration{})
 	require.NoError(t, err, "muxt test")
@@ -463,9 +463,9 @@ func TestTestNamesNoKeyWhenGoTestWritesJSON(t *testing.T) {
 			run.Write = func(_ int, stdout, _ io.Writer) {
 				_, _ = io.WriteString(stdout, "{}\n")
 			}
-			jobs := []setRun{
-				{packageRun: &packageRun{Key: "example.com/a", Dir: "/work/a", Keyed: true}},
-				{packageRun: &packageRun{Key: "example.com/b", Dir: "/work/b", Keyed: true}},
+			jobs := []packageRun{
+				{Key: "example.com/a", Dir: "/work/a", Keyed: true},
+				{Key: "example.com/b", Dir: "/work/b", Keyed: true},
 			}
 			stdout, _, err := run.run(jobs, testConfiguration{GoTestArgs: tt.args})
 			require.NoError(t, err, "muxt test")
@@ -485,7 +485,7 @@ func TestTestWritesAnEmptyProfileWhenTheTestsReachNothing(t *testing.T) {
 	// whether or not a template ran.
 	run.Wrote = writesProfile()
 	profile := filepath.Join(t.TempDir(), "cover.out")
-	_, _, err := run.run([]setRun{{packageRun: &packageRun{Dir: "/work/pkg"}}}, testConfiguration{CoverProfile: profile})
+	_, _, err := run.run([]packageRun{{Dir: "/work/pkg"}}, testConfiguration{CoverProfile: profile})
 	require.NoError(t, err, "muxt test")
 
 	got, err := os.ReadFile(profile)
@@ -506,7 +506,7 @@ func TestTestWritesTheBlocksOfEveryPackage(t *testing.T) {
 		"/work/b": {sourceOf("/work/b/index.gohtml")},
 	}
 	profile := filepath.Join(t.TempDir(), "cover.out")
-	_, _, err := run.run([]setRun{{packageRun: &packageRun{Dir: "/work/a"}}, {packageRun: &packageRun{Dir: "/work/b"}}}, testConfiguration{CoverProfile: profile})
+	_, _, err := run.run([]packageRun{{Dir: "/work/a"}, {Dir: "/work/b"}}, testConfiguration{CoverProfile: profile})
 	require.NoError(t, err, "muxt test")
 
 	got, err := os.ReadFile(profile)
@@ -536,7 +536,7 @@ func TestTestWritesTheProfileOfAFailingRun(t *testing.T) {
 		"/work/c": {sourceOf("/work/c/index.gohtml")},
 	}
 	profile := filepath.Join(t.TempDir(), "cover.out")
-	jobs := []setRun{{packageRun: &packageRun{Dir: "/work/a"}}, {packageRun: &packageRun{Dir: "/work/b"}}, {packageRun: &packageRun{Dir: "/work/c"}}}
+	jobs := []packageRun{{Dir: "/work/a"}, {Dir: "/work/b"}, {Dir: "/work/c"}}
 	_, _, err := run.run(jobs, testConfiguration{CoverProfile: profile})
 
 	_, ok := errors.AsType[*goTestFailure](err)
@@ -553,7 +553,7 @@ func TestTestWritesTheProfileOfAFailingRun(t *testing.T) {
 func TestTestWarnsWhenNoTestBinaryRanTheEngine(t *testing.T) {
 	run := newTestRun(t)
 	profile := filepath.Join(t.TempDir(), "cover.out")
-	_, stderr, err := run.run([]setRun{{packageRun: &packageRun{Dir: "/work/pkg"}}}, testConfiguration{CoverProfile: profile})
+	_, stderr, err := run.run([]packageRun{{Dir: "/work/pkg"}}, testConfiguration{CoverProfile: profile})
 	require.NoError(t, err, "muxt test")
 
 	want := "warning: no test binary in /work/pkg ran muxt's template engine; the cover profile has nothing from that package\n"
@@ -575,7 +575,7 @@ func TestTestWarnsWhenAPackageCannotBeAttributed(t *testing.T) {
 	run.Sources = map[string][]templatecover.Source{"/work/b": {sourceOf("/work/b/index.gohtml")}}
 	run.Unreadable = map[string]error{"/work/a": errors.New("reading the templates: no templates variable")}
 	profile := filepath.Join(t.TempDir(), "cover.out")
-	_, stderr, err := run.run([]setRun{{packageRun: &packageRun{Dir: "/work/a"}}, {packageRun: &packageRun{Dir: "/work/b"}}}, testConfiguration{CoverProfile: profile})
+	_, stderr, err := run.run([]packageRun{{Dir: "/work/a"}, {Dir: "/work/b"}}, testConfiguration{CoverProfile: profile})
 	require.NoError(t, err, "muxt test")
 
 	want := "warning: cannot read the template files of /work/a (reading the templates: no templates variable); the cover profile has nothing from that package\n"
@@ -597,7 +597,7 @@ func TestTestWarnsOfAParseNameTwoFilesShare(t *testing.T) {
 		sourceOf("/work/ui/index.gohtml"),
 	}}
 	profile := filepath.Join(t.TempDir(), "cover.out")
-	_, stderr, err := run.run([]setRun{{packageRun: &packageRun{Dir: "/work/pkg"}}}, testConfiguration{CoverProfile: profile})
+	_, stderr, err := run.run([]packageRun{{Dir: "/work/pkg"}}, testConfiguration{CoverProfile: profile})
 
 	_, ok := errors.AsType[*goTestFailure](err)
 	assert.True(t, ok, "the error is a *goTestFailure, got %T: %v", err, err)
@@ -614,7 +614,7 @@ func TestTestWarnsOfAParseNameTwoFilesShare(t *testing.T) {
 func TestTestFailsBeforeGoTestWhenTheProfileDirectoryIsMissing(t *testing.T) {
 	run := newTestRun(t)
 	dir := filepath.Join(t.TempDir(), "missing")
-	_, _, err := run.run([]setRun{{packageRun: &packageRun{Dir: "/work/pkg"}}}, testConfiguration{CoverProfile: filepath.Join(dir, "cover.out")})
+	_, _, err := run.run([]packageRun{{Dir: "/work/pkg"}}, testConfiguration{CoverProfile: filepath.Join(dir, "cover.out")})
 
 	require.Error(t, err, "muxt test")
 	assert.Equal(t, "--output-cover-profile: stat "+dir+": no such file or directory", err.Error(), "error")
@@ -629,7 +629,7 @@ func TestTestFailsBeforeGoTestWhenTheProfileDirectoryIsAFile(t *testing.T) {
 	run := newTestRun(t)
 	dir := filepath.Join(t.TempDir(), "go.mod")
 	require.NoError(t, os.WriteFile(dir, []byte("module example.com/pkg\n"), 0o600), "writing the file")
-	_, _, err := run.run([]setRun{{packageRun: &packageRun{Dir: "/work/pkg"}}}, testConfiguration{CoverProfile: filepath.Join(dir, "cover.out")})
+	_, _, err := run.run([]packageRun{{Dir: "/work/pkg"}}, testConfiguration{CoverProfile: filepath.Join(dir, "cover.out")})
 
 	require.Error(t, err, "muxt test")
 	assert.Equal(t, "--output-cover-profile: "+dir+" is not a directory", err.Error(), "error")
@@ -646,7 +646,7 @@ func TestTestLoadsNoPackageWithoutAProfile(t *testing.T) {
 	run.Sources = map[string][]templatecover.Source{"/work/pkg": {sourceOf("/work/pkg/index.gohtml")}}
 	cwd := t.TempDir()
 	t.Chdir(cwd)
-	_, _, err := run.run([]setRun{{packageRun: &packageRun{Dir: "/work/pkg"}}}, testConfiguration{})
+	_, _, err := run.run([]packageRun{{Dir: "/work/pkg"}}, testConfiguration{})
 	require.NoError(t, err, "muxt test")
 
 	assert.Empty(t, run.Attributed, "packages loaded for attribution")
@@ -659,7 +659,7 @@ func TestTestLoadsNoPackageWithoutAProfile(t *testing.T) {
 // is given no package pattern, so it tests the package in the directory.
 func TestTestPassesNoPackagePattern(t *testing.T) {
 	run := newTestRun(t)
-	_, _, err := run.run([]setRun{{packageRun: &packageRun{Dir: "/work/pkg"}}}, testConfiguration{})
+	_, _, err := run.run([]packageRun{{Dir: "/work/pkg"}}, testConfiguration{})
 	require.NoError(t, err, "muxt test")
 
 	require.Len(t, run.Calls, 1, "go test runs")

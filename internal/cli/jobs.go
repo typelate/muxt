@@ -184,10 +184,6 @@ type selection struct {
 	Packages []packageRun
 }
 
-// Jobs is one setRun per set of every package, in package then set order,
-// for a command that still reads a flat list.
-func (s selection) Jobs() []setRun { return setsOf(s.Packages) }
-
 // EntryFile is the muxt.json job's configuration came from, nil when the
 // command's flags and defaults configured it, so its report names no file.
 func (s selection) EntryFile(job setRun) *composite.File {
@@ -344,44 +340,18 @@ func distinctSetMembers() []setMember {
 	}
 }
 
-// onePerDirectory folds the jobs of each directory into the first, in the
-// order the directories first appear. Several sets of one key are one package,
-// and a command that runs go test acts on a package, not on a route set:
-// running it once per set would repeat every test. The folded job stands for
-// the package, so a caller names it by Key, not Name, which would single out
-// the first set's file. It carries the first set's configuration except for
-// its templates variables, which are the union of every set's, so what a run
-// attributes to the package covers all of its sets' template files. No
-// caller's slice is changed.
-func onePerDirectory(jobs []setRun) []setRun {
-	var dirs []string // in order of first appearance
-	byDir := map[string][]setRun{}
-	for _, job := range jobs {
-		if _, seen := byDir[job.Dir]; !seen {
-			dirs = append(dirs, job.Dir)
-		}
-		byDir[job.Dir] = append(byDir[job.Dir], job)
-	}
-	folded := make([]setRun, 0, len(dirs))
-	for _, dir := range dirs {
-		sets := byDir[dir]
-		job := sets[0]
-		job.Config.TemplatesVariables = templatesVariables(sets)
-		folded = append(folded, job)
-	}
-	return folded
-}
-
-// templatesVariables is the templates variables of sets, the sets of one
-// directory, each once, in the order they are first named. One set answers its
-// own slice as it is, so a package with one set reads nil or empty as its
-// configuration does; several build a new slice, nil when they name none.
-func templatesVariables(sets []setRun) []string {
-	if len(sets) == 1 {
-		return sets[0].Config.TemplatesVariables
+// TemplatesVariables is the templates variables of the package's sets, each
+// once, in the order they are first named. A command that runs go test acts on
+// the package, not on a route set, so what it attributes to the package covers
+// all of its sets' template files. One set answers its own slice as it is, so
+// a package with one set reads nil or empty as its configuration does; several
+// build a new slice, nil when they name none, and change no set's.
+func (p packageRun) TemplatesVariables() []string {
+	if len(p.Sets) == 1 {
+		return p.Sets[0].Config.TemplatesVariables
 	}
 	var union []string
-	for _, set := range sets {
+	for _, set := range p.Sets {
 		for _, name := range set.Config.TemplatesVariables {
 			if !slices.Contains(union, name) {
 				union = append(union, name)
@@ -444,7 +414,7 @@ func entryHook(getEnv func(string) string) func(dir string) (analysis.Entry, err
 		if err != nil {
 			return analysis.Entry{}, err
 		}
-		if sel.Jobs()[0].File == "" {
+		if sel.Packages[0].File == "" {
 			return analysis.Entry{}, nil
 		}
 		entry := analysis.Entry{Configured: true}

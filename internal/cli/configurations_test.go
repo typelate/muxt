@@ -47,7 +47,7 @@ func configurationOf(t *testing.T, commandLine string, env map[string]string) (a
 		calls:     func(_ *cobra.Command, _ []packageRun, c analysis.TemplateCallsConfiguration) error { return record(c) },
 		mutations: func(_ *cobra.Command, _ string, c mutation.Configuration) error { return record(c) },
 		format:    func(_ *cobra.Command, _ string, c formatConfiguration) error { return record(c) },
-		test: func(_ *cobra.Command, jobs []setRun, c testConfiguration) error {
+		test: func(_ *cobra.Command, jobs []packageRun, c testConfiguration) error {
 			if len(jobs) != 1 {
 				return fmt.Errorf("got %d test jobs, want 1", len(jobs))
 			}
@@ -836,7 +836,7 @@ func TestChangeDirectory(t *testing.T) {
 					return record(jobs[0].Dir)
 				},
 				mutations: func(_ *cobra.Command, wd string, _ mutation.Configuration) error { return record(wd) },
-				test: func(_ *cobra.Command, jobs []setRun, _ testConfiguration) error {
+				test: func(_ *cobra.Command, jobs []packageRun, _ testConfiguration) error {
 					if len(jobs) != 1 {
 						return fmt.Errorf("got %d test jobs, want 1", len(jobs))
 					}

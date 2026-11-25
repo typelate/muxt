@@ -61,7 +61,7 @@ type runners struct {
 	calls     func(cmd *cobra.Command, runs []packageRun, config analysis.TemplateCallsConfiguration) error
 	mutations func(cmd *cobra.Command, wd string, config mutation.Configuration) error
 	format    func(cmd *cobra.Command, wd string, config formatConfiguration) error
-	test      func(cmd *cobra.Command, jobs []setRun, config testConfiguration) error
+	test      func(cmd *cobra.Command, runs []packageRun, config testConfiguration) error
 
 	// load is how generate def asks for the package it adds a template to. A
 	// nil load skips the checks that need the package, so a test states what a

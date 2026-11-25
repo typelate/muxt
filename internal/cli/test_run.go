@@ -25,19 +25,19 @@ type goTestFunc func(ctx context.Context, dir string, env, args []string, stdout
 // prepareFunc is templatecover.Prepare, replaced in tests.
 type prepareFunc func(ctx context.Context, tc overlay.Toolchain, dir string) (templatecover.Engine, error)
 
-// attributeFunc reads the template files of a job's package, which is where
+// attributeFunc reads the template files of a package, which is where
 // a profile line's parse name becomes a file. The error says why they
 // cannot be read.
-type attributeFunc func(job setRun) ([]templatecover.Source, error)
+type attributeFunc func(job packageRun) ([]templatecover.Source, error)
 
 // loadSources is attributeFunc loading the package the way muxt check does:
-// the job's directory, then its configured templates variables.
-func loadSources(job setRun) ([]templatecover.Source, error) {
+// the package's directory, then the templates variables of all its sets.
+func loadSources(job packageRun) ([]templatecover.Source, error) {
 	_, pl, err := load.Packages(job.Dir)
 	if err != nil {
 		return nil, fmt.Errorf("loading the package: %w", err)
 	}
-	pkg, err := load.Package(job.Dir, pl, job.Config.TemplatesVariables)
+	pkg, err := load.Package(job.Dir, pl, job.TemplatesVariables())
 	if err != nil {
 		return nil, fmt.Errorf("reading the templates: %w", err)
 	}
@@ -83,11 +83,12 @@ func writesJSON(goTestArgs []string) bool {
 	return json
 }
 
-// testRunner runs each job's tests on muxt's template engine. The go test
-// of a job is separate from the others', so a profile line can be
-// attributed to the files of the package it came from.
-func testRunner(goTest goTestFunc, prepare prepareFunc, attribute attributeFunc) func(*cobra.Command, []setRun, testConfiguration) error {
-	return func(cmd *cobra.Command, jobs []setRun, config testConfiguration) (err error) {
+// testRunner runs each package's tests on muxt's template engine, once per
+// package however many sets it has. The go test of a package is separate from
+// the others', so a profile line can be attributed to the files of the package
+// it came from.
+func testRunner(goTest goTestFunc, prepare prepareFunc, attribute attributeFunc) func(*cobra.Command, []packageRun, testConfiguration) error {
+	return func(cmd *cobra.Command, runs []packageRun, config testConfiguration) (err error) {
 		// An interrupt stops the go test in flight and removes the files
 		// the run wrote; a second one ends the process at once.
 		ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
@@ -118,8 +119,8 @@ func testRunner(goTest goTestFunc, prepare prepareFunc, attribute attributeFunc)
 		}()
 		// Every engine is in place before the first go test runs, so a
 		// package that cannot have one costs no run of the packages before it.
-		engines := make([]templatecover.Engine, len(jobs))
-		for i, job := range jobs {
+		engines := make([]templatecover.Engine, len(runs))
+		for i, job := range runs {
 			engines[i], err = prepare(ctx, overlay.Toolchain{Go: "go", Dir: job.Dir, Purpose: "muxt " + testCommandName}, filepath.Join(scratch, strconv.Itoa(i)))
 			if err != nil {
 				if ctxErr := ctx.Err(); ctxErr != nil {
@@ -128,7 +129,7 @@ func testRunner(goTest goTestFunc, prepare prepareFunc, attribute attributeFunc)
 				return fmt.Errorf("cannot run the tests on muxt's template engine: %w", err)
 			}
 		}
-		runJob := func(job setRun, engine templatecover.Engine) error {
+		runJob := func(job packageRun, engine templatecover.Engine) error {
 			// -count=1 comes first so a caller's own -count wins, and a
 			// replayed pass cannot leave a package out of the profile.
 			args := append([]string{"test", "-count=1"}, engine.Flags()...)
@@ -166,7 +167,7 @@ func testRunner(goTest goTestFunc, prepare prepareFunc, attribute attributeFunc)
 			cmd.SilenceErrors = false
 			return errors.Join(err, failure)
 		}
-		for i, job := range jobs {
+		for i, job := range runs {
 			failure = runJob(job, engines[i])
 			if ctxErr := ctx.Err(); ctxErr != nil {
 				return ctxErr
@@ -190,12 +191,12 @@ func testRunner(goTest goTestFunc, prepare prepareFunc, attribute attributeFunc)
 	}
 }
 
-// addToProfile attributes the template blocks a job's tests reached to the
+// addToProfile attributes the template blocks a package's tests reached to the
 // template files of its package.
 //
 // What cannot be attributed is a warning on warn, not a failure: go test
 // and the engine decide the exit status.
-func addToProfile(warn io.Writer, profile *templatecover.Profile, job setRun, engine templatecover.Engine, attribute attributeFunc) error {
+func addToProfile(warn io.Writer, profile *templatecover.Profile, job packageRun, engine templatecover.Engine, attribute attributeFunc) error {
 	reached, err := templatecover.ReadProfiles(engine.CoverDir)
 	if errors.Is(err, templatecover.ErrNoProfile) {
 		if _, err := fmt.Fprintf(warn, "warning: no test binary in %s ran muxt's template engine; the cover profile has nothing from that package\n", job.Dir); err != nil {

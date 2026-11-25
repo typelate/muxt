@@ -186,7 +186,7 @@ func recordSelection(base, wd string, args ...string) (string, error) {
 			}
 			return nil
 		},
-		test: func(_ *cobra.Command, jobs []setRun, _ testConfiguration) error {
+		test: func(_ *cobra.Command, jobs []packageRun, _ testConfiguration) error {
 			for _, job := range jobs {
 				r.line("test key=%q file=%q dir=%q", job.Key, r.rel(job.File), r.rel(job.Dir))
 			}
@@ -573,9 +573,9 @@ func TestTestSelectsOneDirectoryOutsideTheFilesDirectory(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			base := newFieldkit(t, fieldkitEntries)
-			var got []setRun
+			var got []packageRun
 			err := commands(filepath.Join(base, tt.dir), []string{testCommandName}, func(string) string { return "" }, func() (string, bool) { return "v1.2.3", true }, strings.NewReader(""), new(bytes.Buffer), new(bytes.Buffer), runners{
-				test: func(_ *cobra.Command, jobs []setRun, _ testConfiguration) error {
+				test: func(_ *cobra.Command, jobs []packageRun, _ testConfiguration) error {
 					got = jobs
 					return nil
 				},
@@ -645,24 +645,25 @@ func TestTestProfilesTheTemplateFilesOfEverySetOfOneDirectory(t *testing.T) {
 	}
 }
 
-// TestOnePerDirectoryUnionsTemplatesVariablesWithoutChangingItsInput states
-// that the job kept for a directory reads every set's templates variables,
-// once each and in the order the sets list them, and that the sets the caller
-// holds still read their own.
-func TestOnePerDirectoryUnionsTemplatesVariablesWithoutChangingItsInput(t *testing.T) {
+// TestPackageRunTemplatesVariablesUnionWithoutChangingItsInput states
+// that a package reads every set's templates variables, once each and in the
+// order the sets list them, and that the sets the caller holds still read
+// their own.
+func TestPackageRunTemplatesVariablesUnionWithoutChangingItsInput(t *testing.T) {
 	backing := make([]string, 1, 4)
 	backing[0] = "publicTmpl"
-	jobs := []setRun{
-		{packageRun: &packageRun{Dir: "/m/web", Key: "m/web"}, routeSet: routeSet{Config: generate.RoutesFileConfiguration{TemplatesVariables: backing}}},
-		{packageRun: &packageRun{Dir: "/m/api", Key: "m/api"}, routeSet: routeSet{Config: generate.RoutesFileConfiguration{TemplatesVariables: []string{"apiTmpl"}}}},
-		{packageRun: &packageRun{Dir: "/m/web", Key: "m/web"}, routeSet: routeSet{Config: generate.RoutesFileConfiguration{TemplatesVariables: []string{"adminTmpl", "publicTmpl"}}}},
+	runs := []packageRun{
+		{Dir: "/m/web", Key: "m/web", Sets: []routeSet{
+			{Config: generate.RoutesFileConfiguration{TemplatesVariables: backing}},
+			{Config: generate.RoutesFileConfiguration{TemplatesVariables: []string{"adminTmpl", "publicTmpl"}}},
+		}},
+		{Dir: "/m/api", Key: "m/api", Sets: []routeSet{
+			{Config: generate.RoutesFileConfiguration{TemplatesVariables: []string{"apiTmpl"}}},
+		}},
 	}
 
-	got := onePerDirectory(jobs)
-
-	require.Len(t, got, 2, "jobs")
-	assert.Equal(t, []string{"publicTmpl", "adminTmpl"}, got[0].Config.TemplatesVariables, "templates variables of /m/web")
-	assert.Equal(t, []string{"apiTmpl"}, got[1].Config.TemplatesVariables, "templates variables of /m/api")
-	assert.Equal(t, []string{"publicTmpl"}, jobs[0].Config.TemplatesVariables, "the first job the caller holds")
+	assert.Equal(t, []string{"publicTmpl", "adminTmpl"}, runs[0].TemplatesVariables(), "templates variables of /m/web")
+	assert.Equal(t, []string{"apiTmpl"}, runs[1].TemplatesVariables(), "templates variables of /m/api")
+	assert.Equal(t, []string{"publicTmpl"}, runs[0].Sets[0].Config.TemplatesVariables, "the first set the caller holds")
 	assert.Equal(t, []string{"publicTmpl", "", "", ""}, backing[:4], "the slice behind it")
 }

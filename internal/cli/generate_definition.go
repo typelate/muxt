@@ -70,19 +70,20 @@ The stub is a placeholder to rewrite: it returns any and its body returns nil. I
 			if err != nil {
 				return err
 			}
-			if err := requireAgreeingSets(sel.Jobs()); err != nil {
+			run := sel.Packages[0]
+			if err := requireAgreeingSets(run); err != nil {
 				return err
 			}
 			// A define added to a file one set reads is in the package, so
 			// the checks that read templates variables read all the sets'.
-			job := onePerDirectory(sel.Jobs())[0]
-			config := job.Config
-			if job.File != "" && cmd.Flags().Changed(useReceiverType) {
+			config := run.Sets[0].Config
+			config.TemplatesVariables = run.TemplatesVariables()
+			if run.File != "" && cmd.Flags().Changed(useReceiverType) {
 				// The flag is a second source for what an entry already says, so
 				// in a configured directory it only fills a receiver type the
 				// resolved entry, package_defaults included, leaves unnamed.
 				if config.ReceiverType != "" {
-					return givenSettings{useReceiverType: {useReceiverType}}.configuredDirectory(job.File, spec.Name)
+					return givenSettings{useReceiverType: {useReceiverType}}.configuredDirectory(run.File, spec.Name)
 				}
 				config.ReceiverType = receiverType
 			}
@@ -115,14 +116,13 @@ func (e *ReceiverClashError) Error() string {
 
 // requireAgreeingSets refuses sets that name different receivers. def writes
 // one method stub for the package, and choosing a set's receiver silently
-// would put the stub on a type the other sets do not serve. Every job of a
-// run in one directory is a set of one key, so the first is the one the rest
-// are compared with.
-func requireAgreeingSets(jobs []setRun) error {
-	first := jobs[0]
-	for _, job := range jobs[1:] {
-		if job.Config.ReceiverType != first.Config.ReceiverType || job.Config.ReceiverPackage != first.Config.ReceiverPackage {
-			return &ReceiverClashError{Path: job.File, Key: job.Key, First: first.Index, Second: job.Index}
+// would put the stub on a type the other sets do not serve. The first set is
+// the one the rest are compared with.
+func requireAgreeingSets(run packageRun) error {
+	first := run.Sets[0].Config
+	for i, set := range run.Sets[1:] {
+		if set.Config.ReceiverType != first.ReceiverType || set.Config.ReceiverPackage != first.ReceiverPackage {
+			return &ReceiverClashError{Path: run.File, Key: run.Key, First: 0, Second: i + 1}
 		}
 	}
 	return nil
@@ -137,7 +137,7 @@ func notAPackage(spec jobSpec, sel selection, dir string, err error) error {
 	if _, missing := errors.AsType[*check.VariableNotFoundError](err); !missing {
 		return err
 	}
-	if sel.File == nil || len(sel.File.Packages) == 0 || sel.Jobs()[0].File != "" {
+	if sel.File == nil || len(sel.File.Packages) == 0 || sel.Packages[0].File != "" {
 		return err
 	}
 	abs, absErr := filepath.Abs(dir)
