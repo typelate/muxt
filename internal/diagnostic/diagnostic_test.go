@@ -57,6 +57,14 @@ func TestDiagnosticString(t *testing.T) {
 			want: "no handler; define one",
 		},
 		{
+			name: "a line in no file",
+			d: diagnostic.Diagnostic{
+				Place:   diagnostic.Place{Line: 1, Column: 30},
+				Message: "html/template escapes this",
+			},
+			want: "1:30: html/template escapes this",
+		},
+		{
 			name: "no line",
 			d: diagnostic.Diagnostic{
 				Place:   diagnostic.Place{File: "/m/muxt.json"},

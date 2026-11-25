@@ -67,15 +67,18 @@ func (d Diagnostic) String() string {
 
 // String writes the place as FILE:LINE:COLUMN, or FILE when the line is
 // unknown, followed by ": WITHIN" when the place is inside the file. Without a
-// file it is WITHIN alone, or empty.
+// file it starts at LINE:COLUMN, as token.Position does, since a template
+// parsed from a string has a line but no file; with neither it is WITHIN
+// alone, or empty.
 func (p Place) String() string {
 	var parts []string
-	if p.File != "" {
-		file := p.File
-		if p.Line != 0 {
-			file = fmt.Sprintf("%s:%d:%d", p.File, p.Line, p.Column)
-		}
-		parts = append(parts, file)
+	switch {
+	case p.File != "" && p.Line != 0:
+		parts = append(parts, fmt.Sprintf("%s:%d:%d", p.File, p.Line, p.Column))
+	case p.File != "":
+		parts = append(parts, p.File)
+	case p.Line != 0:
+		parts = append(parts, fmt.Sprintf("%d:%d", p.Line, p.Column))
 	}
 	if p.Within != "" {
 		parts = append(parts, p.Within)
