@@ -3,7 +3,10 @@
 // every package that reports a problem can build one.
 package diagnostic
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // Severity ranks a diagnostic. The zero value is Error.
 type Severity uint8
@@ -47,7 +50,10 @@ type Related struct {
 
 // String writes the diagnostic as one line: FILE:LINE:COLUMN: MESSAGE; FIX.
 func (d Diagnostic) String() string {
-	s := fmt.Sprintf("%s: %s", d.Place, d.Message)
+	s := d.Message
+	if place := d.Place.String(); place != "" {
+		s = place + ": " + s
+	}
 	if d.Fix != "" {
 		s += "; " + d.Fix
 	}
@@ -57,12 +63,16 @@ func (d Diagnostic) String() string {
 // String writes the place as FILE:LINE:COLUMN, or FILE when the line is
 // unknown, followed by ": WITHIN" when the place is inside the file.
 func (p Place) String() string {
-	s := p.File
-	if p.Line != 0 {
-		s = fmt.Sprintf("%s:%d:%d", p.File, p.Line, p.Column)
+	var parts []string
+	if p.File != "" {
+		file := p.File
+		if p.Line != 0 {
+			file = fmt.Sprintf("%s:%d:%d", p.File, p.Line, p.Column)
+		}
+		parts = append(parts, file)
 	}
 	if p.Within != "" {
-		s += ": " + p.Within
+		parts = append(parts, p.Within)
 	}
-	return s
+	return strings.Join(parts, ": ")
 }

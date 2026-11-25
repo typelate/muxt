@@ -30,6 +30,23 @@ func TestDiagnosticString(t *testing.T) {
 			want: "/m/muxt.json:3:7: unknown key",
 		},
 		{
+			name: "no file",
+			d: diagnostic.Diagnostic{
+				Place:   diagnostic.Place{Within: "GET /{id}"},
+				Message: "no handler",
+				Fix:     "define one",
+			},
+			want: "GET /{id}: no handler; define one",
+		},
+		{
+			name: "no place",
+			d: diagnostic.Diagnostic{
+				Message: "no handler",
+				Fix:     "define one",
+			},
+			want: "no handler; define one",
+		},
+		{
 			name: "no line",
 			d: diagnostic.Diagnostic{
 				Place:   diagnostic.Place{File: "/m/muxt.json"},
