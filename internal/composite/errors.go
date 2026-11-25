@@ -55,6 +55,14 @@ func (e *ParseError) Unwrap() error {
 	return e.Err
 }
 
+// Diagnostic places the problem at the byte the parser rejected.
+func (e *ParseError) Diagnostic() diagnostic.Diagnostic {
+	return diagnostic.Diagnostic{
+		Place:   diagnostic.Place{File: e.Path, Line: e.Line, Column: e.Col},
+		Message: fmt.Sprint(e.Err),
+	}
+}
+
 // ShapeError reports a value in a muxt.json that is not an object where the
 // file needs one. Line and Col are the 1-based position of the value. Where
 // names it, such as "packages" or packages["example.com/m"], and Want is what
@@ -70,6 +78,14 @@ type ShapeError struct {
 // line.
 func (e *ShapeError) Error() string {
 	return fmt.Sprintf("%s:%d:%d: %s must be %s", e.Path, e.Line, e.Col, e.Where, e.Want)
+}
+
+// Diagnostic places the problem at the value, and says what it must be.
+func (e *ShapeError) Diagnostic() diagnostic.Diagnostic {
+	return diagnostic.Diagnostic{
+		Place:   diagnostic.Place{File: e.Path, Line: e.Line, Column: e.Col},
+		Message: e.Where + " must be " + e.Want,
+	}
 }
 
 // RepeatedKeyError reports a key written twice in one object of a muxt.json.
@@ -91,6 +107,15 @@ func (e *RepeatedKeyError) Error() string {
 		return fmt.Sprintf("%s:%d:%d: key %q is repeated", e.Path, e.Line, e.Col, e.Key)
 	}
 	return fmt.Sprintf("%s:%d:%d: %s: key %q is repeated", e.Path, e.Line, e.Col, e.Where, e.Key)
+}
+
+// Diagnostic places the problem at the second key, within the object that
+// holds it.
+func (e *RepeatedKeyError) Diagnostic() diagnostic.Diagnostic {
+	return diagnostic.Diagnostic{
+		Place:   diagnostic.Place{File: e.Path, Line: e.Line, Column: e.Col, Within: e.Where},
+		Message: fmt.Sprintf("key %q is repeated", e.Key),
+	}
 }
 
 // UnknownKeyError reports a key in a muxt.json that nothing reads: a key of an
