@@ -2,6 +2,13 @@ package composite_test
 
 import (
 	"errors"
+	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"io/fs"
+	"slices"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -22,13 +29,32 @@ type diagnosed interface {
 // whose Error() the text cannot reproduce byte for byte, so Error() stays as it
 // was written: want is that message, text the diagnostic's.
 func TestDiagnosticText(t *testing.T) {
-	for _, tt := range []struct {
-		name   string
-		err    diagnosed
-		want   string
-		text   string
-		reason string
-	}{
+	for _, tt := range diagnosticRows() {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, tt.err.Error(), "Error()")
+			if tt.reason == "" {
+				assert.Equal(t, tt.want, tt.err.Diagnostic().String(), "diagnostic text")
+				return
+			}
+			assert.Equal(t, tt.text, tt.err.Diagnostic().String(), "diagnostic text")
+			assert.NotEqual(t, tt.want, tt.text, "a row with a reason differs from its message")
+		})
+	}
+}
+
+// diagnosticRow is an error built with representative values, the message it
+// returns and the text of its diagnostic.
+type diagnosticRow struct {
+	name   string
+	err    diagnosed
+	want   string
+	text   string
+	reason string
+}
+
+// diagnosticRows lists every error type of the package.
+func diagnosticRows() []diagnosticRow {
+	return []diagnosticRow{
 		{
 			name: "ParseError",
 			err:  &composite.ParseError{Path: "/m/muxt.json", Line: 4, Col: 9, Err: errors.New("invalid character '}' looking for beginning of object key string")},
@@ -231,16 +257,6 @@ func TestDiagnosticText(t *testing.T) {
 			err:  &composite.ValueError{Key: "output_max_size", Err: errors.New("invalid byte size")},
 			want: "output_max_size: invalid byte size",
 		},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, tt.err.Error(), "Error()")
-			if tt.reason == "" {
-				assert.Equal(t, tt.want, tt.err.Diagnostic().String(), "diagnostic text")
-				return
-			}
-			assert.Equal(t, tt.text, tt.err.Diagnostic().String(), "diagnostic text")
-			assert.NotEqual(t, tt.want, tt.text, "a row with a reason differs from its message")
-		})
 	}
 }
 
@@ -395,4 +411,42 @@ func TestDiagnosticFixIsNotMessage(t *testing.T) {
 			assert.Equal(t, tt.wantFix, d.Fix, "fix")
 		})
 	}
+}
+
+// TestDiagnosticTableNamesEveryErrorType states that no error type of the
+// package is left out of TestDiagnosticText: a new one must be given a row, and
+// a reason when its Error() cannot be its diagnostic's text.
+func TestDiagnosticTableNamesEveryErrorType(t *testing.T) {
+	fset := token.NewFileSet()
+	pkgs, err := parser.ParseDir(fset, ".", func(fi fs.FileInfo) bool { return !strings.HasSuffix(fi.Name(), "_test.go") }, 0)
+	if err != nil {
+		t.Fatalf("parsing the package: %v", err)
+	}
+	var declared []string
+	for _, pkg := range pkgs {
+		for _, file := range pkg.Files {
+			for _, decl := range file.Decls {
+				gen, ok := decl.(*ast.GenDecl)
+				if !ok {
+					continue
+				}
+				for _, spec := range gen.Specs {
+					ts, ok := spec.(*ast.TypeSpec)
+					if !ok {
+						continue
+					}
+					if _, isStruct := ts.Type.(*ast.StructType); isStruct && ts.Name.IsExported() && strings.HasSuffix(ts.Name.Name, "Error") {
+						declared = append(declared, ts.Name.Name)
+					}
+				}
+			}
+		}
+	}
+	var listed []string
+	for _, row := range diagnosticRows() {
+		listed = append(listed, strings.TrimPrefix(fmt.Sprintf("%T", row.err), "*composite."))
+	}
+	slices.Sort(declared)
+	slices.Sort(listed)
+	assert.Equal(t, declared, slices.Compact(listed), "error types of the package, and those in the table")
 }
