@@ -54,10 +54,15 @@ func (d Diagnostic) String() string {
 	return s
 }
 
-// String writes the place as FILE:LINE:COLUMN, or FILE when the line is unknown.
+// String writes the place as FILE:LINE:COLUMN, or FILE when the line is
+// unknown, followed by ": WITHIN" when the place is inside the file.
 func (p Place) String() string {
-	if p.Line == 0 {
-		return p.File
+	s := p.File
+	if p.Line != 0 {
+		s = fmt.Sprintf("%s:%d:%d", p.File, p.Line, p.Column)
 	}
-	return fmt.Sprintf("%s:%d:%d", p.File, p.Line, p.Column)
+	if p.Within != "" {
+		s += ": " + p.Within
+	}
+	return s
 }
