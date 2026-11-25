@@ -112,18 +112,18 @@ func TestSelectJobs(t *testing.T) {
 			}
 			require.NoError(t, err)
 			var keys []string
-			for _, job := range sel.Jobs {
+			for _, job := range sel.Jobs() {
 				keys = append(keys, job.Key)
 				assert.Equal(t, job.Key == "", sel.EntryFile(job) == nil, "EntryFile(%q) is nil only for a fallback job", job.Key)
 			}
 			assert.Equal(t, tc.wantKeys, keys, "job keys")
-			for _, job := range sel.Jobs {
+			for _, job := range sel.Jobs() {
 				assert.Equal(t, tc.wantKeyed, job.Keyed, "job %q Keyed", job.Key)
 			}
-			assert.Equal(t, tc.wantGiven, sel.Jobs[0].Given.spellings(), "given flags")
+			assert.Equal(t, tc.wantGiven, sel.Jobs()[0].Given.spellings(), "given flags")
 			assert.Equal(t, tc.wantFile, sel.File != nil, "muxt.json read")
 			if tc.wantKeys[0] == "" {
-				assert.Equal(t, "fallback", sel.Jobs[0].Config.ReceiverType, "fallback configuration")
+				assert.Equal(t, "fallback", sel.Jobs()[0].Config.ReceiverType, "fallback configuration")
 			}
 		})
 	}
@@ -136,8 +136,8 @@ func TestSelectJobsCopiesVerboseOntoEveryJob(t *testing.T) {
 	spec := jobSpec{Name: "generate", Scope: eachEntry, Verbose: true}
 	sel, err := selectJobs(spec, base, nil, func(string) string { return "" })
 	require.NoError(t, err)
-	require.Len(t, sel.Jobs, 3)
-	for _, job := range sel.Jobs {
+	require.Len(t, sel.Jobs(), 3)
+	for _, job := range sel.Jobs() {
 		assert.True(t, job.Config.Verbose, "job %q Verbose", job.Key)
 	}
 }
@@ -184,7 +184,7 @@ func TestSelectJobsTakesEverySetUnderAKey(t *testing.T) {
 
 	require.NoError(t, err)
 	var got []string
-	for _, job := range sel.Jobs {
+	for _, job := range sel.Jobs() {
 		got = append(got, fmt.Sprintf("%s %d/%d %s", job.Key, job.Index, job.SetCount(), job.Config.RoutesFunction))
 	}
 	want := []string{
@@ -225,7 +225,7 @@ func TestJobNameTellsSetsOfOneKeyApart(t *testing.T) {
 
 			require.NoError(t, err)
 			var got []string
-			for _, job := range sel.Jobs {
+			for _, job := range sel.Jobs() {
 				got = append(got, job.Name())
 			}
 			assert.Equal(t, tt.want, got, "job names")
@@ -381,7 +381,7 @@ func TestSelectJobsInAPackageDirectoryTakesEverySetOfItsKey(t *testing.T) {
 
 			require.NoError(t, err)
 			var got []string
-			for _, job := range sel.Jobs {
+			for _, job := range sel.Jobs() {
 				got = append(got, fmt.Sprintf("%s %s", job.Key, job.Config.RoutesFunction))
 			}
 			want := []string{"example.com/fieldkit/contacts PublicRoutes", "example.com/fieldkit/contacts AdminRoutes"}

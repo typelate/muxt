@@ -22,8 +22,8 @@ type routesJob struct {
 // newRoutesJobs is a routesJob for each job sel chose, each with the report of
 // its configuration: the muxt.json it came from, or the flags and defaults.
 func newRoutesJobs(sel selection) []routesJob {
-	jobs := make([]routesJob, len(sel.Jobs))
-	for i, job := range sel.Jobs {
+	jobs := make([]routesJob, len(sel.Jobs()))
+	for i, job := range sel.Jobs() {
 		report := newConfigurationReport(sel.EntryFile(job), job)
 		jobs[i] = routesJob{packageJob: job, Report: report}
 	}

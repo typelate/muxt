@@ -66,7 +66,7 @@ func testCommand(workingDirectory *string, getEnv func(string) string, run func(
 			if err != nil {
 				return err
 			}
-			return run(cmd, onePerDirectory(sel.Jobs), config)
+			return run(cmd, onePerDirectory(sel.Jobs()), config)
 		},
 	}
 

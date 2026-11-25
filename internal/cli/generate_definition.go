@@ -70,12 +70,12 @@ The stub is a placeholder to rewrite: it returns any and its body returns nil. I
 			if err != nil {
 				return err
 			}
-			if err := requireAgreeingSets(sel.Jobs); err != nil {
+			if err := requireAgreeingSets(sel.Jobs()); err != nil {
 				return err
 			}
 			// A define added to a file one set reads is in the package, so
 			// the checks that read templates variables read all the sets'.
-			job := onePerDirectory(sel.Jobs)[0]
+			job := onePerDirectory(sel.Jobs())[0]
 			config := job.Config
 			if job.File != "" && cmd.Flags().Changed(useReceiverType) {
 				// The flag is a second source for what an entry already says, so
@@ -137,7 +137,7 @@ func notAPackage(spec jobSpec, sel selection, dir string, err error) error {
 	if _, missing := errors.AsType[*check.VariableNotFoundError](err); !missing {
 		return err
 	}
-	if sel.File == nil || len(sel.File.Packages) == 0 || sel.Jobs[0].File != "" {
+	if sel.File == nil || len(sel.File.Packages) == 0 || sel.Jobs()[0].File != "" {
 		return err
 	}
 	abs, absErr := filepath.Abs(dir)

@@ -47,7 +47,7 @@ func generateCommand(workingDirectory *string, getEnv func(string) string, versi
 			if err != nil {
 				return err
 			}
-			return run(cmd, sel.Jobs)
+			return run(cmd, sel.Jobs())
 		},
 	}
 

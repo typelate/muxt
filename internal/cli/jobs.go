@@ -189,8 +189,18 @@ func newRoutePathsTarget(f *composite.File) (*routePathsTarget, error) {
 type selection struct {
 	// File is the muxt.json read, nil when there is none.
 	File *composite.File
-	// Jobs is never empty on success, and is in key order.
-	Jobs []packageJob
+	// Packages is never empty on success, and is in key order.
+	Packages []packageRun
+}
+
+// Jobs is one packageJob per set of every package, in package then set order,
+// for a command that still reads a flat list.
+func (s selection) Jobs() []packageJob {
+	var jobs []packageJob
+	for _, run := range s.Packages {
+		jobs = append(jobs, run.jobs()...)
+	}
+	return jobs
 }
 
 // EntryFile is the muxt.json job's configuration came from, nil when the
@@ -323,11 +333,7 @@ func selectJobs(spec jobSpec, dir string, flags *pflag.FlagSet, getEnv func(stri
 		}
 		runs = append(runs, run)
 	}
-	var jobs []packageJob
-	for _, run := range runs {
-		jobs = append(jobs, run.jobs()...)
-	}
-	return selection{File: f, Jobs: jobs}, nil
+	return selection{File: f, Packages: runs}, nil
 }
 
 // setMember is a muxt.json member whose resolved value must differ between the
@@ -423,7 +429,7 @@ func fallbackSelection(spec jobSpec, dir string, f *composite.File, given givenS
 	}
 	config.Verbose = spec.Verbose
 	run := packageRun{Dir: dir, Given: given, Sets: []routeSet{{Config: config}}}
-	return selection{File: f, Jobs: run.jobs()}, nil
+	return selection{File: f, Packages: []packageRun{run}}, nil
 }
 
 // entryVariableError returns the error naming job's muxt.json entry when err
@@ -453,7 +459,7 @@ func entryHook(getEnv func(string) string) func(dir string) (analysis.Entry, err
 		if err != nil {
 			return analysis.Entry{}, err
 		}
-		if sel.Jobs[0].File == "" {
+		if sel.Jobs()[0].File == "" {
 			return analysis.Entry{}, nil
 		}
 		entry := analysis.Entry{Configured: true}
