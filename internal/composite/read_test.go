@@ -218,6 +218,57 @@ func TestFindRejectsAWrongOuterShape(t *testing.T) {
 	}
 }
 
+// TestFindShapeErrorOffersItsFixApart states that where a wrong shape has one
+// edit that mends it, the edit is the diagnostic's Fix and the message says
+// only what the value must be.
+func TestFindShapeErrorOffersItsFixApart(t *testing.T) {
+	for _, tt := range []struct {
+		name, file, wantMessage, wantFix string
+	}{
+		{
+			name:        "key holds an object",
+			file:        `{"packages": {"example.com/m": {"use_receiver_type": "T"}}}`,
+			wantMessage: `packages["example.com/m"] must be an array of JSON objects`,
+			wantFix:     "wrap the entry in [ ]",
+		},
+		{
+			name:        "key holds an empty list",
+			file:        `{"packages": {"example.com/m": []}}`,
+			wantMessage: `packages["example.com/m"] must be an array of JSON objects with at least one entry`,
+			wantFix:     "add an entry or delete the key",
+		},
+		{
+			name:        "key holds a string",
+			file:        `{"packages": {"example.com/m": "T"}}`,
+			wantMessage: `packages["example.com/m"] must be an array of JSON objects with at least one entry`,
+			wantFix:     "add an entry or delete the key",
+		},
+		{
+			name:        "element is null",
+			file:        `{"packages": {"example.com/m": [{}, null]}}`,
+			wantMessage: `packages["example.com/m"][1] must be a JSON object, not null`,
+			wantFix:     "delete the element",
+		},
+		{
+			name:        "file is a list",
+			file:        `[]`,
+			wantMessage: `muxt.json must be a JSON object`,
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := writeFile(t, tt.file)
+
+			_, _, err := composite.Find(dir, testKeys())
+
+			var typed *composite.ShapeError
+			require.ErrorAs(t, err, &typed, "Find error %v", err)
+			d := typed.Diagnostic()
+			assert.Equal(t, tt.wantMessage, d.Message, "message")
+			assert.Equal(t, tt.wantFix, d.Fix, "fix")
+		})
+	}
+}
+
 // TestFindRejectsARepeatedKey states that a key written twice in one object,
 // at the top, in packages, in package_defaults or in an entry, is an error
 // naming the key and the position of the second one, not a silent last-wins.

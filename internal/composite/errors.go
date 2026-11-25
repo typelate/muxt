@@ -84,12 +84,14 @@ func (e *ParseError) Diagnostic() diagnostic.Diagnostic {
 // ShapeError reports a value in a muxt.json that is not an object where the
 // file needs one. Line and Col are the 1-based position of the value. Where
 // names it, such as "packages" or packages["example.com/m"], and Want is what
-// it must be, finishing the sentence that starts with Where.
+// it must be, finishing the sentence that starts with Where. Fix is the one
+// edit that mends it, empty where the value could be several things.
 type ShapeError struct {
 	Path      string
 	Line, Col int
 	Where     string
 	Want      string
+	Fix       string
 }
 
 // Error returns the diagnostic as one line of text.
@@ -102,6 +104,7 @@ func (e *ShapeError) Diagnostic() diagnostic.Diagnostic {
 	return diagnostic.Diagnostic{
 		Place:   diagnostic.Place{File: e.Path, Line: e.Line, Column: e.Col},
 		Message: e.Where + " must be " + e.Want,
+		Fix:     e.Fix,
 	}
 }
 

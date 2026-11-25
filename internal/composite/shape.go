@@ -53,31 +53,34 @@ func (w *shapeWalker) file() error {
 // object is refused, with the fix, because it was the form before a key held
 // a list and a file still written that way needs one edit.
 func (w *shapeWalker) sets(key string) error {
-	const atLeastOne = "an array of JSON objects with at least one entry; add an entry or delete the key"
+	const (
+		atLeastOne    = "an array of JSON objects with at least one entry"
+		addOrDeleteIt = "add an entry or delete the key"
+	)
 	where := fmt.Sprintf("packages[%q]", key)
 	start := w.valueStart()
 	switch w.dec.PeekKind() {
 	case '[':
 	case '{':
 		line, col := position(w.data, start+1)
-		return &ShapeError{Path: w.path, Line: line, Col: col, Where: where, Want: "an array of JSON objects; wrap the entry in [ ]"}
+		return &ShapeError{Path: w.path, Line: line, Col: col, Where: where, Want: "an array of JSON objects", Fix: "wrap the entry in [ ]"}
 	default:
 		line, col := position(w.data, start+1)
-		return &ShapeError{Path: w.path, Line: line, Col: col, Where: where, Want: atLeastOne}
+		return &ShapeError{Path: w.path, Line: line, Col: col, Where: where, Want: atLeastOne, Fix: addOrDeleteIt}
 	}
 	if _, err := w.dec.ReadToken(); err != nil {
 		return fmt.Errorf("reading %s: %w", w.path, err)
 	}
 	if w.dec.PeekKind() == ']' {
 		line, col := position(w.data, start+1)
-		return &ShapeError{Path: w.path, Line: line, Col: col, Where: where, Want: atLeastOne}
+		return &ShapeError{Path: w.path, Line: line, Col: col, Where: where, Want: atLeastOne, Fix: addOrDeleteIt}
 	}
 	for i := 0; w.dec.PeekKind() != ']'; i++ {
 		if w.dec.PeekKind() == 'n' {
 			// A null entry would be read as an empty one, a set of defaults
 			// nobody wrote.
 			line, col := position(w.data, w.valueStart()+1)
-			return &ShapeError{Path: w.path, Line: line, Col: col, Where: SetWhere(key, i), Want: "a JSON object, not null; delete the element"}
+			return &ShapeError{Path: w.path, Line: line, Col: col, Where: SetWhere(key, i), Want: "a JSON object, not null", Fix: "delete the element"}
 		}
 		if err := w.object(SetWhere(key, i), "a JSON object", w.skipMember); err != nil {
 			return err

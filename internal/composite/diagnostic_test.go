@@ -62,8 +62,8 @@ func diagnosticRows() []diagnosticRow {
 		},
 		{
 			name: "ShapeError",
-			err:  &composite.ShapeError{Path: "/m/muxt.json", Line: 2, Col: 15, Where: `packages["example.com/m"]`, Want: "an object or an array of objects"},
-			want: `/m/muxt.json:2:15: packages["example.com/m"] must be an object or an array of objects`,
+			err:  &composite.ShapeError{Path: "/m/muxt.json", Line: 2, Col: 15, Where: `packages["example.com/m"]`, Want: "an array of JSON objects", Fix: "wrap the entry in [ ]"},
+			want: `/m/muxt.json:2:15: packages["example.com/m"] must be an array of JSON objects; wrap the entry in [ ]`,
 		},
 		{
 			name: "RepeatedKeyError in an object",
