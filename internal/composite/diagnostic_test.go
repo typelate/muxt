@@ -50,6 +50,61 @@ func TestDiagnosticText(t *testing.T) {
 			want: `/m/muxt.json:5:3: key "packages" is repeated`,
 		},
 		{
+			name: "UnknownKeyError in an entry with a suggestion",
+			err:  &composite.UnknownKeyError{Path: "/m/muxt.json", Where: `packages["."]`, Key: "output_fle", Suggestion: "output_file"},
+			want: `/m/muxt.json: packages["."]: unknown key "output_fle"; did you mean "output_file"?`,
+		},
+		{
+			name: "UnknownKeyError at the top without one",
+			err:  &composite.UnknownKeyError{Path: "/m/muxt.json", Key: "pakages"},
+			want: `/m/muxt.json: unknown key "pakages"`,
+		},
+		{
+			name: "MissingDirectoryError for a missing directory",
+			err:  &composite.MissingDirectoryError{Path: "/m/muxt.json", Key: "example.com/m/a", Dir: "/m/a"},
+			want: `/m/muxt.json: packages["example.com/m/a"]: directory /m/a does not exist`,
+		},
+		{
+			name: "MissingDirectoryError for a file",
+			err:  &composite.MissingDirectoryError{Path: "/m/muxt.json", Key: "example.com/m/a", Dir: "/m/a", IsFile: true},
+			want: `/m/muxt.json: packages["example.com/m/a"]: /m/a is not a directory`,
+		},
+		{
+			name: "OutsideDirectoryError",
+			err:  &composite.OutsideDirectoryError{Path: "/m/muxt.json", Key: "example.com/m/a", Dir: "/m/a"},
+			want: `/m/muxt.json: packages["example.com/m/a"]: directory /m/a resolves outside the file's directory`,
+		},
+		{
+			name: "InvalidEntryError",
+			err:  &composite.InvalidEntryError{Path: "/m/muxt.json", Where: `packages["."][0]`, Err: errors.New("flags output-htmx and output-datastar are mutually exclusive")},
+			want: `/m/muxt.json: packages["."][0]: flags output-htmx and output-datastar are mutually exclusive`,
+		},
+		{
+			name: "NoVariableError",
+			err:  &composite.NoVariableError{Path: "/m/muxt.json", Key: "example.com/m/a", Set: 1, Package: "example.com/m/a", Variable: "templates"},
+			want: `/m/muxt.json: packages["example.com/m/a"][1]: package example.com/m/a declares no variable "templates"; declare it, or remove the entry`,
+		},
+		{
+			name: "DeprecatedKeyError",
+			err:  &composite.DeprecatedKeyError{Path: "/m/muxt.json", Where: `packages["."]`, Key: "templates_variable", Replacement: "use_templates_variable"},
+			want: `/m/muxt.json: packages["."]: key "templates_variable" is deprecated; write "use_templates_variable"`,
+		},
+		{
+			name: "DashedKeyError",
+			err:  &composite.DashedKeyError{Path: "/m/muxt.json", Where: `packages["."]`, Key: "use-receiver-type", Underscored: "use_receiver_type"},
+			want: `/m/muxt.json: packages["."]: key "use-receiver-type" uses dashes; write "use_receiver_type"`,
+		},
+		{
+			name: "ValueTypeError",
+			err:  &composite.ValueTypeError{Path: "/m/muxt.json", Where: `packages["."]`, Key: "output_htmx", Want: composite.KindBool},
+			want: `/m/muxt.json: packages["."]: key "output_htmx" takes a JSON boolean`,
+		},
+		{
+			name: "RouteValueError",
+			err:  &composite.RouteValueError{Path: "/m/muxt.json", Where: "route_paths", Key: "output_file", Value: "../x.go", Rule: "must be a Go file name in this directory"},
+			want: `/m/muxt.json: route_paths: output_file "../x.go" must be a Go file name in this directory`,
+		},
+		{
 			name: "ValueError",
 			err:  &composite.ValueError{Key: "output_max_size", Err: errors.New("invalid byte size")},
 			want: "output_max_size: invalid byte size",
@@ -84,6 +139,38 @@ func TestDiagnosticPlaceOfShapeAndParseErrors(t *testing.T) {
 			name: "RepeatedKeyError keeps its object within the file",
 			err:  &composite.RepeatedKeyError{Path: path, Line: 4, Col: 9, Where: "packages", Key: "a"},
 			want: diagnostic.Place{File: path, Line: 4, Column: 9, Within: "packages"},
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, tt.err.Diagnostic().Place, "place")
+		})
+	}
+}
+
+// TestDiagnosticPlaceWithinEntry states that an error about one entry of the
+// file places its diagnostic at that entry, written as the file's own
+// notation, so the place is not part of the message.
+func TestDiagnosticPlaceWithinEntry(t *testing.T) {
+	const path = "/m/muxt.json"
+	for _, tt := range []struct {
+		name string
+		err  diagnosed
+		want diagnostic.Place
+	}{
+		{
+			name: "an entry of a key with several",
+			err:  &composite.NoVariableError{Path: path, Key: "example.com/m/a", Set: 1, Package: "example.com/m/a", Variable: "templates"},
+			want: diagnostic.Place{File: path, Within: `packages["example.com/m/a"][1]`},
+		},
+		{
+			name: "the entry of a key",
+			err:  &composite.MissingDirectoryError{Path: path, Key: "example.com/m/a", Dir: "/m/a"},
+			want: diagnostic.Place{File: path, Within: `packages["example.com/m/a"]`},
+		},
+		{
+			name: "a top-level key is in no entry",
+			err:  &composite.UnknownKeyError{Path: path, Key: "pakages"},
+			want: diagnostic.Place{File: path},
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {

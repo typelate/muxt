@@ -139,6 +139,19 @@ func (e *UnknownKeyError) Error() string {
 	return msg
 }
 
+// Diagnostic places the problem at the entry, or the file for a top-level key,
+// and offers the suggestion as the fix.
+func (e *UnknownKeyError) Diagnostic() diagnostic.Diagnostic {
+	d := diagnostic.Diagnostic{
+		Place:   diagnostic.Place{File: e.Path, Within: e.Where},
+		Message: fmt.Sprintf("unknown key %q", e.Key),
+	}
+	if e.Suggestion != "" {
+		d.Fix = fmt.Sprintf("did you mean %q?", e.Suggestion)
+	}
+	return d
+}
+
 // KeyFormError reports a packages key that is not an import path in the clean
 // form Go names a package by: a directory relative to the file, such as
 // "workspace" or "./workspace/", which keys used to be, or an import path with
@@ -182,6 +195,18 @@ func (e *MissingDirectoryError) Error() string {
 	return fmt.Sprintf("%s: packages[%q]: directory %s does not exist", e.Path, e.Key, e.Dir)
 }
 
+// Diagnostic places the problem at the entry of the key.
+func (e *MissingDirectoryError) Diagnostic() diagnostic.Diagnostic {
+	message := fmt.Sprintf("directory %s does not exist", e.Dir)
+	if e.IsFile {
+		message = fmt.Sprintf("%s is not a directory", e.Dir)
+	}
+	return diagnostic.Diagnostic{
+		Place:   diagnostic.Place{File: e.Path, Within: fmt.Sprintf("packages[%q]", e.Key)},
+		Message: message,
+	}
+}
+
 // OutsideDirectoryError reports a muxt.json entry whose directory is a symbolic
 // link that resolves outside the directory holding the file. Key is the
 // packages key and Dir the key's absolute directory.
@@ -192,6 +217,14 @@ type OutsideDirectoryError struct {
 // Error returns the path, the entry, and the directory on one line.
 func (e *OutsideDirectoryError) Error() string {
 	return fmt.Sprintf("%s: packages[%q]: directory %s resolves outside the file's directory", e.Path, e.Key, e.Dir)
+}
+
+// Diagnostic places the problem at the entry of the key.
+func (e *OutsideDirectoryError) Diagnostic() diagnostic.Diagnostic {
+	return diagnostic.Diagnostic{
+		Place:   diagnostic.Place{File: e.Path, Within: fmt.Sprintf("packages[%q]", e.Key)},
+		Message: fmt.Sprintf("directory %s resolves outside the file's directory", e.Dir),
+	}
 }
 
 // SameDirectoryError reports two packages keys whose directories are one
@@ -272,6 +305,14 @@ func (e *InvalidEntryError) Unwrap() error {
 	return e.Err
 }
 
+// Diagnostic places the problem at the entry, and says what the flag said.
+func (e *InvalidEntryError) Diagnostic() diagnostic.Diagnostic {
+	return diagnostic.Diagnostic{
+		Place:   diagnostic.Place{File: e.Path, Within: e.Where},
+		Message: fmt.Sprint(e.Err),
+	}
+}
+
 // NoVariableError reports a muxt.json entry whose package does not declare the
 // templates variable the entry names, or the default one. Path is the file's
 // absolute path, Key the entry's packages key, Package the package's import
@@ -286,6 +327,16 @@ type NoVariableError struct {
 // line.
 func (e *NoVariableError) Error() string {
 	return fmt.Sprintf("%s: %s: package %s declares no variable %q; declare it, or remove the entry", e.Path, SetWhere(e.Key, e.Set), e.Package, e.Variable)
+}
+
+// Diagnostic places the problem at the entry, and offers the two fixes apart
+// from what is wrong.
+func (e *NoVariableError) Diagnostic() diagnostic.Diagnostic {
+	return diagnostic.Diagnostic{
+		Place:   diagnostic.Place{File: e.Path, Within: SetWhere(e.Key, e.Set)},
+		Message: fmt.Sprintf("package %s declares no variable %q", e.Package, e.Variable),
+		Fix:     "declare it, or remove the entry",
+	}
 }
 
 // ConfiguredDirectoryError reports generate flags given in a directory whose
@@ -330,6 +381,16 @@ func (e *DeprecatedKeyError) Error() string {
 	return fmt.Sprintf("%s: %s: key %q is deprecated; write %q", e.Path, e.Where, e.Key, e.Replacement)
 }
 
+// Diagnostic places the problem at the entry, and names the replacement as the
+// fix.
+func (e *DeprecatedKeyError) Diagnostic() diagnostic.Diagnostic {
+	return diagnostic.Diagnostic{
+		Place:   diagnostic.Place{File: e.Path, Within: e.Where},
+		Message: fmt.Sprintf("key %q is deprecated", e.Key),
+		Fix:     fmt.Sprintf("write %q", e.Replacement),
+	}
+}
+
 // DashedKeyError reports a key in a muxt.json entry written with dashes, such
 // as "use-receiver-type", where the same key with underscores is a known key.
 // Underscored is that key with underscores, the form to write instead. Where
@@ -342,6 +403,16 @@ type DashedKeyError struct {
 // line.
 func (e *DashedKeyError) Error() string {
 	return fmt.Sprintf("%s: %s: key %q uses dashes; write %q", e.Path, e.Where, e.Key, e.Underscored)
+}
+
+// Diagnostic places the problem at the entry, and names the underscore form as
+// the fix.
+func (e *DashedKeyError) Diagnostic() diagnostic.Diagnostic {
+	return diagnostic.Diagnostic{
+		Place:   diagnostic.Place{File: e.Path, Within: e.Where},
+		Message: fmt.Sprintf("key %q uses dashes", e.Key),
+		Fix:     fmt.Sprintf("write %q", e.Underscored),
+	}
 }
 
 // OtherModuleError reports a packages key that is an import path outside the
@@ -504,6 +575,14 @@ func (e *ValueTypeError) Error() string {
 	return fmt.Sprintf("%s: %s: key %q takes %s", e.Path, e.Where, e.Key, e.Want.description())
 }
 
+// Diagnostic places the problem at the entry.
+func (e *ValueTypeError) Diagnostic() diagnostic.Diagnostic {
+	return diagnostic.Diagnostic{
+		Place:   diagnostic.Place{File: e.Path, Within: e.Where},
+		Message: fmt.Sprintf("key %q takes %s", e.Key, e.Want.description()),
+	}
+}
+
 // description is the kind as a phrase: "a JSON boolean".
 func (k Kind) description() string {
 	switch k {
@@ -527,6 +606,14 @@ type RouteValueError struct {
 // Error returns the path, the member, the value and the rule on one line.
 func (e *RouteValueError) Error() string {
 	return fmt.Sprintf("%s: %s: %s %q %s", e.Path, e.Where, e.Key, e.Value, e.Rule)
+}
+
+// Diagnostic places the problem at the object that holds the member.
+func (e *RouteValueError) Diagnostic() diagnostic.Diagnostic {
+	return diagnostic.Diagnostic{
+		Place:   diagnostic.Place{File: e.Path, Within: e.Where},
+		Message: fmt.Sprintf("%s %q %s", e.Key, e.Value, e.Rule),
+	}
 }
 
 // ValueError reports a value of a muxt.json key that its setting's parser
