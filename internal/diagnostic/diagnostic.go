@@ -54,7 +54,10 @@ func (d Diagnostic) String() string {
 	return s
 }
 
-// String writes the place as FILE:LINE:COLUMN.
+// String writes the place as FILE:LINE:COLUMN, or FILE when the line is unknown.
 func (p Place) String() string {
+	if p.Line == 0 {
+		return p.File
+	}
 	return fmt.Sprintf("%s:%d:%d", p.File, p.Line, p.Column)
 }

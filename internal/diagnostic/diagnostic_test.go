@@ -21,6 +21,15 @@ func TestDiagnosticString(t *testing.T) {
 			},
 			want: "/m/muxt.json:3:7: unknown key; remove it",
 		},
+		{
+			name: "no line",
+			d: diagnostic.Diagnostic{
+				Place:   diagnostic.Place{File: "/m/muxt.json"},
+				Message: "unknown key",
+				Fix:     "remove it",
+			},
+			want: "/m/muxt.json: unknown key; remove it",
+		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := tt.d.String(); got != tt.want {
