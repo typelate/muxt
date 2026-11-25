@@ -63,9 +63,9 @@ type ParseError struct {
 	Err       error
 }
 
-// Error returns the path, the position, and the JSON error on one line.
+// Error returns the diagnostic as one line of text.
 func (e *ParseError) Error() string {
-	return fmt.Sprintf("%s:%d:%d: %v", e.Path, e.Line, e.Col, e.Err)
+	return e.Diagnostic().String()
 }
 
 // Unwrap returns the JSON error, so errors.As finds the *json.SyntaxError.
@@ -92,10 +92,9 @@ type ShapeError struct {
 	Want      string
 }
 
-// Error returns the path, the position, and what the value must be on one
-// line.
+// Error returns the diagnostic as one line of text.
 func (e *ShapeError) Error() string {
-	return fmt.Sprintf("%s:%d:%d: %s must be %s", e.Path, e.Line, e.Col, e.Where, e.Want)
+	return e.Diagnostic().String()
 }
 
 // Diagnostic places the problem at the value, and says what it must be.
@@ -119,12 +118,9 @@ type RepeatedKeyError struct {
 	Key       string
 }
 
-// Error returns the path, the position, the object and the key on one line.
+// Error returns the diagnostic as one line of text.
 func (e *RepeatedKeyError) Error() string {
-	if e.Where == "" {
-		return fmt.Sprintf("%s:%d:%d: key %q is repeated", e.Path, e.Line, e.Col, e.Key)
-	}
-	return fmt.Sprintf("%s:%d:%d: %s: key %q is repeated", e.Path, e.Line, e.Col, e.Where, e.Key)
+	return e.Diagnostic().String()
 }
 
 // Diagnostic places the problem at the second key, within the object that
@@ -844,8 +840,10 @@ type ValueError struct {
 	Err error
 }
 
-// Error returns the key and the parser's error on one line.
-func (e *ValueError) Error() string { return e.Key + ": " + e.Err.Error() }
+// Error returns the diagnostic as one line of text.
+func (e *ValueError) Error() string {
+	return e.Diagnostic().String()
+}
 
 // Unwrap returns the parser's error, so a caller can match what it was.
 func (e *ValueError) Unwrap() error { return e.Err }
