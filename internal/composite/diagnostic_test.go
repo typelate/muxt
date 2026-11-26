@@ -462,3 +462,55 @@ func TestDiagnosticTableNamesEveryErrorType(t *testing.T) {
 	slices.Sort(listed)
 	assert.Equal(t, declared, slices.Compact(listed), "error types of the package, and those in the table")
 }
+
+// TestDiagnosticTextWithEmptyParts pins the text of an error about an entry
+// when its path, place or key is empty, so a later change to what a missing
+// part prints is seen.
+func TestDiagnosticTextWithEmptyParts(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		err  diagnosed
+		want string
+	}{
+		{
+			name: "InvalidEntryError without a place",
+			err:  &composite.InvalidEntryError{Path: "/m/muxt.json", Err: errors.New("flags output-htmx and output-datastar are mutually exclusive")},
+			want: "/m/muxt.json: flags output-htmx and output-datastar are mutually exclusive",
+		},
+		{
+			name: "InvalidEntryError without a path",
+			err:  &composite.InvalidEntryError{Where: `packages["."][0]`, Err: errors.New("flags output-htmx and output-datastar are mutually exclusive")},
+			want: `packages["."][0]: flags output-htmx and output-datastar are mutually exclusive`,
+		},
+		{
+			name: "InvalidEntryError without a path or a place",
+			err:  &composite.InvalidEntryError{Err: errors.New("flags output-htmx and output-datastar are mutually exclusive")},
+			want: "flags output-htmx and output-datastar are mutually exclusive",
+		},
+		{
+			name: "NoVariableError without a key",
+			err:  &composite.NoVariableError{Path: "/m/muxt.json", Package: "example.com/m", Variable: "templates"},
+			want: `/m/muxt.json: packages[""][0]: package example.com/m declares no variable "templates"; declare it, or remove the entry`,
+		},
+		{
+			name: "NoVariableError without a path",
+			err:  &composite.NoVariableError{Key: "example.com/m", Package: "example.com/m", Variable: "templates"},
+			want: `packages["example.com/m"][0]: package example.com/m declares no variable "templates"; declare it, or remove the entry`,
+		},
+		{
+			name: "MissingEntryError without a key",
+			err:  &composite.MissingEntryError{Path: "/m/muxt.json"},
+			want: `/m/muxt.json: no packages entry ""; add one to generate this directory`,
+		},
+		{
+			name: "MissingEntryError without a path",
+			err:  &composite.MissingEntryError{Key: "example.com/m/a"},
+			want: `no packages entry "example.com/m/a"; add one to generate this directory`,
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, tt.err.Diagnostic().String(), "diagnostic text")
+			assert.Equal(t, tt.want, tt.err.Error(), "Error()")
+		})
+	}
+}
