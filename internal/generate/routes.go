@@ -15,6 +15,7 @@ import (
 	"github.com/ettle/strcase"
 
 	"github.com/typelate/muxt/internal/astgen"
+	"github.com/typelate/muxt/internal/diagnostic"
 	"github.com/typelate/muxt/internal/muxt"
 	"github.com/typelate/muxt/internal/source"
 )
@@ -392,7 +393,11 @@ func logResolutionNotes(defs []muxt.Definition, config RoutesFileConfiguration, 
 		if !config.SilenceHTTPResponseWarning && def.HasResponseWriterArg() {
 			// Taking over the http.ResponseWriter is an escape hatch:
 			// muxt then leaves the response entirely to the method.
-			logger.Printf("warning: %s uses the response argument, so muxt does not manage this route's status codes, headers, or rendering; silence with MUXT_SILENCE_WARNING_HTTP_RESPONSE_ARGUMENT=true", def.Pattern())
+			logWarning(logger, diagnostic.Diagnostic{
+				Severity: diagnostic.Warning,
+				Message:  def.Pattern() + " uses the response argument, so muxt does not manage this route's status codes, headers, or rendering",
+				Fix:      "silence with MUXT_SILENCE_WARNING_HTTP_RESPONSE_ARGUMENT=true",
+			})
 		}
 		if config.ReceiverType == "" {
 			continue
