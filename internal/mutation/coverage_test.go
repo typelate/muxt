@@ -180,6 +180,24 @@ func TestWarnRaisedGoLine(t *testing.T) {
 	}
 }
 
+// TestWarningsOfAnUnreadableModfile states the words of the warnings that
+// say muxt could not read the go.mod files it compares, so a change to how
+// they are built is seen.
+func TestWarningsOfAnUnreadableModfile(t *testing.T) {
+	dir := t.TempDir()
+	missing := filepath.Join(dir, "missing.mod")
+	engine := overlay.Files{Target: missing, ModFile: missing}
+	reason := "open " + missing + ": no such file or directory"
+
+	var goLine strings.Builder
+	warnRaisedGoLine(&goLine, engine)
+	assert.Equal(t, "warning: cannot tell the go line template coverage was computed at: reading the go line: "+reason+"\n", goLine.String(), "go line warning")
+
+	var upgrades strings.Builder
+	warnUpgrades(&upgrades, engine)
+	assert.Equal(t, "warning: cannot tell which module versions template coverage was computed with: reading the requirements: "+reason+"\n", upgrades.String(), "upgrades warning")
+}
+
 // TestTemplateCoverageWarnsOfNewerSharedModules states that a pre-pass in
 // which the go command raised a module both the engine and the test
 // target require, here golang.org/x/net in htt's go.mod, warns once,
