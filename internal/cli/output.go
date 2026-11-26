@@ -11,6 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/typelate/muxt/internal/diagnostic"
 	"github.com/typelate/muxt/internal/muxt"
 )
 
@@ -25,7 +26,11 @@ func warnPartialAST(logger *log.Logger, hasParseErrors bool) {
 	if logger == nil || !hasParseErrors {
 		return
 	}
-	logger.Printf("warning: package has syntax errors, so these checks ran against a partial AST; run go build for the full picture")
+	logger.Print(warningLine(diagnostic.Diagnostic{
+		Severity: diagnostic.Warning,
+		Message:  "package has syntax errors, so these checks ran against a partial AST",
+		Fix:      "run go build for the full picture",
+	}))
 }
 
 // checkFailure reports why muxt check could not finish: a multi-line
