@@ -199,7 +199,7 @@ func TemplateRoutesFiles(wd string, config RoutesFileConfiguration, hub *Hub, pk
 	logResolutionNotes(groups.all, config, logs.Notes)
 	if logs.Notes != nil && !config.SilenceHTTPResponseWarning {
 		for _, warning := range muxt.ResponseStatusWarnings(groups.all, pkg.Files, config.TemplateDataType) {
-			logs.Notes.Print(warning)
+			logWarning(logs.Notes, warning)
 		}
 	}
 	if config.StaticAssetsDirectory != "" {

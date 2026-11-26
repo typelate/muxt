@@ -5,6 +5,8 @@ import (
 
 	"github.com/typelate/htt"
 	html "github.com/typelate/htt/template"
+
+	"github.com/typelate/muxt/internal/diagnostic"
 )
 
 // responseStateMethods finds the methods a package declares on its
@@ -130,9 +132,9 @@ func rootsAtReceiver(expr ast.Expr, receiver string) bool {
 //
 // files are the package's syntax and templateDataType the name of the
 // generated TemplateData type the methods are declared on.
-func ResponseStatusWarnings(defs []Definition, files []*ast.File, templateDataType string) []string {
+func ResponseStatusWarnings(defs []Definition, files []*ast.File, templateDataType string) []diagnostic.Diagnostic {
 	var methods map[string]string
-	var warnings []string
+	var warnings []diagnostic.Diagnostic
 	for i := range defs {
 		if !defs[i].hasResponseWriterArg || defs[i].template == nil || defs[i].template.Tree == nil {
 			continue
@@ -151,7 +153,11 @@ func ResponseStatusWarnings(defs []Definition, files []*ast.File, templateDataTy
 		if isRedirectMethod(methods[name]) {
 			remedy = "http.Redirect"
 		}
-		warnings = append(warnings, "warning: "+defs[i].Pattern()+" calls ."+name+", which sets the status through ."+methods[name]+"; on a route that takes response the receiver method must call "+remedy+", or drop response")
+		warnings = append(warnings, diagnostic.Diagnostic{
+			Severity: diagnostic.Warning,
+			Message:  defs[i].Pattern() + " calls ." + name + ", which sets the status through ." + methods[name],
+			Fix:      "on a route that takes response the receiver method must call " + remedy + ", or drop response",
+		})
 	}
 	return warnings
 }

@@ -141,7 +141,7 @@ func warnResponseStatusMethods(logger *log.Logger, files []*ast.File, variable s
 		return
 	}
 	for _, warning := range muxt.ResponseStatusWarnings(defs, files, generatedTemplateDataType) {
-		logger.Print(warning)
+		logger.Print("warning: " + warning.String())
 	}
 }
 
