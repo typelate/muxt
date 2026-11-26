@@ -7,6 +7,7 @@ import (
 	"go/parser"
 	"go/token"
 	"io/fs"
+	"os"
 	"slices"
 	"strings"
 	"testing"
@@ -424,26 +425,31 @@ func TestDiagnosticFixIsNotMessage(t *testing.T) {
 // a reason when its Error() cannot be its diagnostic's text.
 func TestDiagnosticTableNamesEveryErrorType(t *testing.T) {
 	fset := token.NewFileSet()
-	pkgs, err := parser.ParseDir(fset, ".", func(fi fs.FileInfo) bool { return !strings.HasSuffix(fi.Name(), "_test.go") }, 0)
+	names, err := fs.Glob(os.DirFS("."), "*.go")
 	if err != nil {
-		t.Fatalf("parsing the package: %v", err)
+		t.Fatalf("listing the package's files: %v", err)
 	}
 	var declared []string
-	for _, pkg := range pkgs {
-		for _, file := range pkg.Files {
-			for _, decl := range file.Decls {
-				gen, ok := decl.(*ast.GenDecl)
+	for _, name := range names {
+		if strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+		file, err := parser.ParseFile(fset, name, nil, 0)
+		if err != nil {
+			t.Fatalf("parsing %s: %v", name, err)
+		}
+		for _, decl := range file.Decls {
+			gen, ok := decl.(*ast.GenDecl)
+			if !ok {
+				continue
+			}
+			for _, spec := range gen.Specs {
+				ts, ok := spec.(*ast.TypeSpec)
 				if !ok {
 					continue
 				}
-				for _, spec := range gen.Specs {
-					ts, ok := spec.(*ast.TypeSpec)
-					if !ok {
-						continue
-					}
-					if _, isStruct := ts.Type.(*ast.StructType); isStruct && ts.Name.IsExported() && strings.HasSuffix(ts.Name.Name, "Error") {
-						declared = append(declared, ts.Name.Name)
-					}
+				if _, isStruct := ts.Type.(*ast.StructType); isStruct && ts.Name.IsExported() && strings.HasSuffix(ts.Name.Name, "Error") {
+					declared = append(declared, ts.Name.Name)
 				}
 			}
 		}
