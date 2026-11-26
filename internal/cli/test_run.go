@@ -14,6 +14,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/typelate/muxt/internal/diagnostic"
 	"github.com/typelate/muxt/internal/load"
 	"github.com/typelate/muxt/internal/overlay"
 	"github.com/typelate/muxt/internal/templatecover"
@@ -199,24 +200,27 @@ func testRunner(goTest goTestFunc, prepare prepareFunc, attribute attributeFunc)
 func addToProfile(warn io.Writer, profile *templatecover.Profile, job packageRun, engine templatecover.Engine, attribute attributeFunc) error {
 	reached, err := templatecover.ReadProfiles(engine.CoverDir)
 	if errors.Is(err, templatecover.ErrNoProfile) {
-		if _, err := fmt.Fprintf(warn, "warning: no test binary in %s ran muxt's template engine; the cover profile has nothing from that package\n", job.Dir); err != nil {
-			return fmt.Errorf("writing a warning: %w", err)
-		}
-		return nil
+		return writeWarning(warn, diagnostic.Diagnostic{
+			Severity: diagnostic.Warning,
+			Message:  fmt.Sprintf("no test binary in %s ran muxt's template engine; the cover profile has nothing from that package", job.Dir),
+		})
 	}
 	if err != nil {
 		return fmt.Errorf("reading the template coverage of %s: %w", job.Dir, err)
 	}
 	sources, err := attribute(job)
 	if err != nil {
-		if _, err := fmt.Fprintf(warn, "warning: cannot read the template files of %s (%v); the cover profile has nothing from that package\n", job.Dir, err); err != nil {
-			return fmt.Errorf("writing a warning: %w", err)
-		}
-		return nil
+		return writeWarning(warn, diagnostic.Diagnostic{
+			Severity: diagnostic.Warning,
+			Message:  fmt.Sprintf("cannot read the template files of %s (%v); the cover profile has nothing from that package", job.Dir, err),
+		})
 	}
 	for _, ambiguous := range profile.Add(reached, sources) {
-		if _, err := fmt.Fprintf(warn, "warning: %v\n", ambiguous); err != nil {
-			return fmt.Errorf("writing a warning: %w", err)
+		if err := writeWarning(warn, diagnostic.Diagnostic{
+			Severity: diagnostic.Warning,
+			Message:  ambiguous.Error(),
+		}); err != nil {
+			return err
 		}
 	}
 	return nil
