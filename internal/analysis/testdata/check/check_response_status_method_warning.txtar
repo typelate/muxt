@@ -1,0 +1,64 @@
+A route that takes the response, whose template calls a TemplateData method
+of the package's own that sets the status, gets a warning naming the method
+and the built-in it reaches; check still passes.
+
+Command line: muxt check
+-- config.json --
+{
+	"Verbose": false,
+	"TemplatesVariables": [
+		"templates"
+	]
+}
+-- index.gohtml --
+{{define "GET /missing/{id} Find(ctx, id, response)"}}{{.ErrorStatusCode}}{{end}}
+{{define "GET /moved Moved(ctx, response)"}}{{.MovedElsewhere}}{{end}}
+-- server.go --
+package server
+
+import (
+	"context"
+	"io"
+	"net/http"
+)
+
+type T struct{}
+
+func (T) Find(ctx context.Context, id string, response http.ResponseWriter) string { return id }
+func (T) Moved(ctx context.Context, response http.ResponseWriter) string           { return "" }
+
+func Render(w io.Writer) error {
+	if err := templates.ExecuteTemplate(w, "GET /missing/{id} Find(ctx, id, response)", &TemplateData[T, string]{}); err != nil {
+		return err
+	}
+	return templates.ExecuteTemplate(w, "GET /moved Moved(ctx, response)", &TemplateData[T, string]{})
+}
+-- template_data.go --
+package server
+
+// TemplateData stands in for the generated type, which check looks for by
+// its default name.
+type TemplateData[R, T any] struct{}
+
+func (*TemplateData[R, T]) StatusCode(int) *TemplateData[R, T] { return nil }
+
+func (*TemplateData[R, T]) RedirectSeeOther(string) *TemplateData[R, T] { return nil }
+
+func (data *TemplateData[R, T]) ErrorStatusCode() string {
+	data.StatusCode(404)
+	return ""
+}
+
+func (data *TemplateData[R, T]) MovedElsewhere() string {
+	return data.sendAway("/elsewhere")
+}
+
+func (data *TemplateData[R, T]) sendAway(url string) string {
+	data.RedirectSeeOther(url)
+	return ""
+}
+-- want/checked.txt --
+2
+-- want/log.txt --
+warning: GET /missing/{id} calls .ErrorStatusCode, which sets the status through .StatusCode; on a route that takes response the receiver method must call response.WriteHeader, or drop response
+warning: GET /moved calls .MovedElsewhere, which sets the status through .RedirectSeeOther; on a route that takes response the receiver method must call http.Redirect, or drop response

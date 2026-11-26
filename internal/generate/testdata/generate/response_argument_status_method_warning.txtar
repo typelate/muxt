@@ -1,0 +1,290 @@
+A route that takes the response, whose template calls a TemplateData method
+of the package's own that sets the status, gets a warning naming the method
+and the built-in it reaches, after the warning every such route gets.
+
+Command line: muxt generate --use-receiver-type=T
+-- config.json --
+{
+	"MuxtVersion": "v1.2.3",
+	"PackageName": "main",
+	"PackagePath": "",
+	"RoutesFunction": "TemplateRoutes",
+	"ReceiverType": "T",
+	"ReceiverPackage": "",
+	"ReceiverInterface": "RoutesReceiver",
+	"TemplateDataType": "TemplateData",
+	"SSETemplateDataType": "SSETemplateData",
+	"TemplateRoutePathsTypeName": "TemplateRoutePaths",
+	"TemplatesVariables": [
+		"templates"
+	],
+	"OutputFileName": "template_routes.go",
+	"PathPrefix": false,
+	"Logger": false,
+	"Middleware": false,
+	"Verbose": false,
+	"OutputMultipleFiles": false,
+	"OutputHTMX": false,
+	"OutputDatastar": false,
+	"OutputExportedDefaultIdentifiers": true,
+	"OutputMuxtVersion": true,
+	"MultipartMaxMemory": 0,
+	"SilenceHTTPResponseWarning": false
+}
+-- index.gohtml --
+{{define "GET /missing/{id} Find(ctx, id, response)"}}{{.ErrorStatusCode}}{{end}}
+{{define "GET /moved Moved(ctx, response)"}}{{.MovedElsewhere}}{{end}}
+-- server.go --
+package server
+
+import (
+	"context"
+	"net/http"
+)
+
+type T struct{}
+
+func (T) Find(ctx context.Context, id string, response http.ResponseWriter) string { return id }
+func (T) Moved(ctx context.Context, response http.ResponseWriter) string           { return "" }
+-- template_data.go --
+package server
+
+// TemplateData stands in for the generated type, which the archive's
+// package does not have before generating.
+type TemplateData[R, T any] struct{}
+
+func (*TemplateData[R, T]) StatusCode(int) *TemplateData[R, T] { return nil }
+
+func (*TemplateData[R, T]) RedirectSeeOther(string) *TemplateData[R, T] { return nil }
+
+func (data *TemplateData[R, T]) ErrorStatusCode() string {
+	data.StatusCode(404)
+	return ""
+}
+
+func (data *TemplateData[R, T]) MovedElsewhere() string {
+	return data.sendAway("/elsewhere")
+}
+
+func (data *TemplateData[R, T]) sendAway(url string) string {
+	data.RedirectSeeOther(url)
+	return ""
+}
+-- want/log.txt --
+warning: GET /missing/{id} uses the response argument, so muxt does not manage this route's status codes, headers, or rendering; silence with MUXT_SILENCE_WARNING_HTTP_RESPONSE_ARGUMENT=true
+warning: GET /moved uses the response argument, so muxt does not manage this route's status codes, headers, or rendering; silence with MUXT_SILENCE_WARNING_HTTP_RESPONSE_ARGUMENT=true
+warning: GET /missing/{id} calls .ErrorStatusCode, which sets the status through .StatusCode; on a route that takes response the receiver method must call response.WriteHeader, or drop response
+warning: GET /moved calls .MovedElsewhere, which sets the status through .RedirectSeeOther; on a route that takes response the receiver method must call http.Redirect, or drop response
+-- want/template_routes.go --
+package server
+
+import (
+	"bytes"
+	"cmp"
+	"context"
+	"errors"
+	"fmt"
+	"log/slog"
+	"net/http"
+	"net/url"
+	"path"
+	"slices"
+	"strings"
+	"sync"
+)
+
+type RoutesReceiver interface {
+	Find(ctx context.Context, id string, response http.ResponseWriter) string
+	Moved(ctx context.Context, response http.ResponseWriter) string
+}
+
+func TemplateRoutes(mux *http.ServeMux, receiver RoutesReceiver) TemplateRoutePaths {
+	pathsPrefix := ""
+	bytesBufferPool := sync.Pool{New: func() any {
+		return bytes.NewBuffer(nil)
+	}}
+	mux.HandleFunc("GET /missing/{id}", func(response http.ResponseWriter, request *http.Request) {
+		var td = TemplateData[RoutesReceiver, string]{receiver: receiver, response: response, request: request, pathsPrefix: pathsPrefix}
+		ctx := request.Context()
+		idPathParam := request.PathValue("id")
+		buf := bytesBufferPool.Get().(*bytes.Buffer)
+		buf.Reset()
+		defer bytesBufferPool.Put(buf)
+		if len(td.errList) == 0 {
+			td.result = receiver.Find(ctx, idPathParam, response)
+			td.okay = true
+		}
+		if err := templates.ExecuteTemplate(buf, "GET /missing/{id} Find(ctx, id, response)", &td); err != nil {
+			slog.ErrorContext(request.Context(), "failed to render page", slog.String("path", request.URL.Path), slog.String("pattern", request.Pattern), slog.String("error", err.Error()))
+			http.Error(response, "failed to render page", http.StatusInternalServerError)
+			return
+		}
+		_, _ = buf.WriteTo(response)
+	})
+	mux.HandleFunc("GET /moved", func(response http.ResponseWriter, request *http.Request) {
+		var td = TemplateData[RoutesReceiver, string]{receiver: receiver, response: response, request: request, pathsPrefix: pathsPrefix}
+		ctx := request.Context()
+		buf := bytesBufferPool.Get().(*bytes.Buffer)
+		buf.Reset()
+		defer bytesBufferPool.Put(buf)
+		if len(td.errList) == 0 {
+			td.result = receiver.Moved(ctx, response)
+			td.okay = true
+		}
+		if err := templates.ExecuteTemplate(buf, "GET /moved Moved(ctx, response)", &td); err != nil {
+			slog.ErrorContext(request.Context(), "failed to render page", slog.String("path", request.URL.Path), slog.String("pattern", request.Pattern), slog.String("error", err.Error()))
+			http.Error(response, "failed to render page", http.StatusInternalServerError)
+			return
+		}
+		_, _ = buf.WriteTo(response)
+	})
+	return TemplateRoutePaths{routes: TemplateRouteBuilder{pathsPrefix: pathsPrefix}}
+}
+
+type TemplateData[R any, T any] struct {
+	receiver      R
+	response      http.ResponseWriter
+	request       *http.Request
+	result        T
+	statusCode    int
+	errStatusCode int
+	okay          bool
+	errList       []error
+	redirectURL   string
+	pathsPrefix   string
+}
+
+func (data *TemplateData[R, T]) MuxtVersion() string {
+	const muxtVersion = "v1.2.3"
+	return muxtVersion
+}
+
+func (data *TemplateData[R, T]) Path() TemplateRoutePaths {
+	return TemplateRoutePaths{routes: TemplateRouteBuilder{pathsPrefix: data.pathsPrefix}}
+}
+
+func (data *TemplateData[R, T]) Route() TemplateRouteBuilder {
+	return TemplateRouteBuilder{pathsPrefix: data.pathsPrefix}
+}
+
+func (data *TemplateData[R, T]) Result() T {
+	return data.result
+}
+
+func (data *TemplateData[R, T]) Request() *http.Request {
+	return data.request
+}
+
+func (data *TemplateData[R, T]) StatusCode(statusCode int) *TemplateData[R, T] {
+	data.statusCode = statusCode
+	return data
+}
+
+func (data *TemplateData[R, T]) Header(key, value string) *TemplateData[R, T] {
+	data.response.Header().Set(key, value)
+	return data
+}
+
+func (data *TemplateData[R, T]) Vary(headers ...string) *TemplateData[R, T] {
+	for _, name := range headers {
+		if !slices.ContainsFunc(data.response.Header().Values("Vary"), func(value string) bool {
+			return strings.EqualFold(value, name)
+		}) {
+			data.response.Header().Add("Vary", name)
+		}
+	}
+	return data
+}
+
+func (data *TemplateData[R, T]) Ok() bool {
+	return data.okay
+}
+
+func (data *TemplateData[R, T]) Err() error {
+	return errors.Join(data.errList...)
+}
+
+func (data *TemplateData[R, T]) Receiver() R {
+	return data.receiver
+}
+
+func (data *TemplateData[R, T]) Redirect(url string, code int) (*TemplateData[R, T], error) {
+	if code < 300 || code >= 400 {
+		return data, fmt.Errorf("invalid status code %d for redirect", code)
+	}
+	data.redirectURL = url
+	return data.StatusCode(code), nil
+}
+
+func (data *TemplateData[R, T]) RedirectMultipleChoices(url string) (*TemplateData[R, T], error) {
+	return data.Redirect(url, http.StatusMultipleChoices)
+}
+
+func (data *TemplateData[R, T]) RedirectMovedPermanently(url string) (*TemplateData[R, T], error) {
+	return data.Redirect(url, http.StatusMovedPermanently)
+}
+
+func (data *TemplateData[R, T]) RedirectFound(url string) (*TemplateData[R, T], error) {
+	return data.Redirect(url, http.StatusFound)
+}
+
+func (data *TemplateData[R, T]) RedirectSeeOther(url string) (*TemplateData[R, T], error) {
+	return data.Redirect(url, http.StatusSeeOther)
+}
+
+func (data *TemplateData[R, T]) String() string {
+	return ""
+}
+
+type TemplateRoutePaths struct {
+	routes TemplateRouteBuilder
+}
+type TemplateRouteBuilder struct {
+	pathsPrefix string
+}
+type TemplateRoute struct {
+	method string
+	path   string
+}
+
+func (route TemplateRoute) Path() string {
+	return route.path
+}
+
+func (route TemplateRoute) String() string {
+	return route.Path()
+}
+
+func (route TemplateRoute) Method() string {
+	return route.method
+}
+
+func (route TemplateRoute) HasMethod() bool {
+	return route.method != ""
+}
+
+func (routes TemplateRouteBuilder) Find(idPathParam string) TemplateRoute {
+	return TemplateRoute{method: http.MethodGet, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "missing", routes.escapePathSegment(idPathParam))}
+}
+
+func (routePaths TemplateRoutePaths) Find(idPathParam string) string {
+	return routePaths.routes.Find(idPathParam).Path()
+}
+
+func (routes TemplateRouteBuilder) Moved() TemplateRoute {
+	return TemplateRoute{method: http.MethodGet, path: path.Join(cmp.Or(routes.pathsPrefix, "/"), "moved")}
+}
+
+func (routePaths TemplateRoutePaths) Moved() string {
+	return routePaths.routes.Moved().Path()
+}
+
+func (routes TemplateRouteBuilder) escapePathSegment(value string) string {
+	switch value {
+	case ".":
+		return "%2E"
+	case "..":
+		return "%2E%2E"
+	}
+	return url.PathEscape(value)
+}
