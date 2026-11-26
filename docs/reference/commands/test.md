@@ -59,7 +59,7 @@ A package that does not load, or has no templates variable, cannot be attributed
 warning: cannot read the template files of /abs/pkg (reading the templates: variable templates not found in package example.com/pkg); the cover profile has nothing from that package
 ```
 
-A parse name is a file's base name. When a local file and a shared fragment from another package's `embed.FS` have the same one, blocks reached under it cannot be placed in one file. They are left out with a warning naming both files, and the exit status is `go test`'s:
+A parse name is a file's base name. When two files have the same one, as `index.gohtml` and `sub/index.gohtml` do, or a local file and a shared fragment from another package's `embed.FS`, blocks reached under it cannot be placed in one file. They are left out with a warning naming both files, and the exit status is `go test`'s ([reference_template_coverage_same_base_name.txt](../../../cmd/muxt/testdata/reference_template_coverage_same_base_name.txt)):
 
 ```text
 warning: /abs/pkg/index.gohtml and /abs/ui/index.gohtml share the parse name index.gohtml; the cover profile leaves out its blocks

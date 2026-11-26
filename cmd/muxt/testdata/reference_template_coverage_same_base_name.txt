@@ -1,0 +1,63 @@
+# Two template files of one package have the same base name, index.gohtml.
+# html/template keeps what both define, and so does muxt's template engine:
+# the tests pass under go test and under muxt test. Blocks reached under the
+# shared name cannot be placed in one file, so the cover profile leaves them
+# out and muxt test says so.
+
+exec go test ./...
+stdout '^ok  \texample.com/amb\t'
+
+muxt test --output-cover-profile cover.out
+stdout '^ok  \texample.com/amb\t'
+cmpenv stderr want-stderr.txt
+cmp cover.out want-cover.txt
+
+-- go.mod --
+module example.com/amb
+
+go 1.24
+-- index.gohtml --
+{{define "a"}}{{if .}}top{{end}}{{end}}
+-- sub/index.gohtml --
+{{define "b"}}{{if .}}sub{{end}}{{end}}
+-- template.go --
+package amb
+
+import (
+	"embed"
+	"html/template"
+	"io"
+)
+
+//go:embed *.gohtml sub/*.gohtml
+var templateFiles embed.FS
+
+var templates = template.Must(template.Must(template.ParseFS(templateFiles, "*.gohtml")).ParseFS(templateFiles, "sub/*.gohtml"))
+
+func Render(w io.Writer, v bool) error {
+	if err := templates.ExecuteTemplate(w, "a", v); err != nil {
+		return err
+	}
+	return templates.ExecuteTemplate(w, "b", v)
+}
+-- render_test.go --
+package amb
+
+import (
+	"strings"
+	"testing"
+)
+
+func TestRender(t *testing.T) {
+	var buf strings.Builder
+	if err := Render(&buf, true); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := buf.String(), "topsub"; got != want {
+		t.Errorf("Render = %q, want %q", got, want)
+	}
+}
+-- want-stderr.txt --
+warning: $WORK/index.gohtml and $WORK/sub/index.gohtml share the parse name index.gohtml; the cover profile leaves out its blocks
+-- want-cover.txt --
+mode: set
