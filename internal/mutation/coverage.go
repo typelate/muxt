@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/typelate/muxt/internal/diagnostic"
 	"github.com/typelate/muxt/internal/overlay"
 	"github.com/typelate/muxt/internal/templatecover"
 )
@@ -117,10 +118,22 @@ func warnRaisedGoLine(warn io.Writer, engine overlay.Files) {
 	target, used, err := engine.GoLines()
 	switch {
 	case err != nil:
-		_, _ = fmt.Fprintf(warn, "warning: cannot tell the go line template coverage was computed at: %v\n", err)
+		writeWarning(warn, warning(fmt.Sprintf("cannot tell the go line template coverage was computed at: %v", err)))
 	case version.Lang("go"+used) != version.Lang("go"+target):
-		_, _ = fmt.Fprintf(warn, "warning: template coverage was computed at go %s (your go.mod says go %s): branches that depend on the older language semantics may be reported unreached\n", used, target)
+		writeWarning(warn, warning(fmt.Sprintf("template coverage was computed at go %s (your go.mod says go %s): branches that depend on the older language semantics may be reported unreached", used, target)))
 	}
+}
+
+// warning is a diagnostic of severity Warning that says message. None of the
+// warnings of a run is about one file: they are about the toolchain.
+func warning(message string) diagnostic.Diagnostic {
+	return diagnostic.Diagnostic{Severity: diagnostic.Warning, Message: message}
+}
+
+// writeWarning writes d as a warning line. A warning is not a failure, so a
+// write error is not reported: the run goes on without it.
+func writeWarning(warn io.Writer, d diagnostic.Diagnostic) {
+	_, _ = fmt.Fprintf(warn, "warning: %s\n", d)
 }
 
 // warnUpgrades writes one warning when the go command selected, in the
@@ -135,7 +148,7 @@ func warnUpgrades(warn io.Writer, engine overlay.Files) {
 	}
 	upgrades, err := engine.Upgrades()
 	if err != nil {
-		_, _ = fmt.Fprintf(warn, "warning: cannot tell which module versions template coverage was computed with: %v\n", err)
+		writeWarning(warn, warning(fmt.Sprintf("cannot tell which module versions template coverage was computed with: %v", err)))
 		return
 	}
 	if len(upgrades) == 0 {
@@ -145,7 +158,7 @@ func warnUpgrades(warn io.Writer, engine overlay.Files) {
 	for i, u := range upgrades {
 		raised[i] = u.Path + " " + u.From + " → " + u.To
 	}
-	_, _ = fmt.Fprintf(warn, "warning: the coverage pre-pass selected newer versions of modules your go.mod requires: %s; tests exercising them may take other paths\n", strings.Join(raised, ", "))
+	writeWarning(warn, warning(fmt.Sprintf("the coverage pre-pass selected newer versions of modules your go.mod requires: %s; tests exercising them may take other paths", strings.Join(raised, ", "))))
 }
 
 // engineFailure is why coverage is unknown when the tests fail, or do not
@@ -165,7 +178,7 @@ func engineFailure(out *goTestOutput, err error) string {
 func coverageUnknown(warn io.Writer, why string) coverage {
 	if warn != nil {
 		why = strings.Join(strings.Fields(why), " ")
-		_, _ = fmt.Fprintf(warn, "warning: template coverage unknown: %s\n", why)
+		writeWarning(warn, warning("template coverage unknown: "+why))
 	}
 	return nil
 }
