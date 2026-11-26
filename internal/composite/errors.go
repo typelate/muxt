@@ -670,12 +670,14 @@ func (e *AlreadyConfiguredError) Error() string {
 	return fmt.Sprintf("%s already configures this directory; add a package with: muxt generate package NAME", e.Path)
 }
 
-// Diagnostic places the problem at the found file, and names the command that
-// adds a package as the fix.
+// Diagnostic places the problem at the found file, which is the subject of the
+// message, and names the command that adds a package as the fix. The message
+// keeps the words of Error() so that "this directory" is never read as the
+// file's own directory.
 func (e *AlreadyConfiguredError) Diagnostic() diagnostic.Diagnostic {
 	return diagnostic.Diagnostic{
 		Place:   diagnostic.Place{File: e.Path},
-		Message: "this directory is already configured",
+		Message: "already configures this directory",
 		Fix:     "add a package with: muxt generate package NAME",
 	}
 }

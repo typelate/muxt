@@ -249,7 +249,7 @@ func diagnosticRows() []diagnosticRow {
 			name:   "AlreadyConfiguredError",
 			err:    &composite.AlreadyConfiguredError{Path: "/m/muxt.json"},
 			want:   "/m/muxt.json already configures this directory; add a package with: muxt generate package NAME",
-			text:   "/m/muxt.json: this directory is already configured; add a package with: muxt generate package NAME",
+			text:   "/m/muxt.json: already configures this directory; add a package with: muxt generate package NAME",
 			reason: "the message continues the path without a colon, and a place is always followed by one",
 		},
 		{
@@ -393,6 +393,12 @@ func TestDiagnosticFixIsNotMessage(t *testing.T) {
 			err:         &composite.SeveralPackagesError{Path: path, Command: "check", Task: "checks one package", Where: "pass one of", Dirs: []string{"a", "b"}},
 			wantMessage: "check checks one package",
 			wantFix:     "pass one of: a b",
+		},
+		{
+			name:        "the words of Error() stay, with the file as the place",
+			err:         &composite.AlreadyConfiguredError{Path: path},
+			wantMessage: "already configures this directory",
+			wantFix:     "add a package with: muxt generate package NAME",
 		},
 		{
 			name:        "an explanation before the instruction stays whole",
